@@ -1,0 +1,3 @@
+[submodule "AOBuddy20/Network/Shared"]
+	path = AOtomation.Messaging
+	url = https://github.com/Algorithman/AOtomation.Messaging

@@ -1,0 +1,22 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AOBuddy20", "AOBuddy20\AOBuddy20.csproj", "{589A9173-F00A-4B88-9EDA-64FF07C7C59C}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SmokeLounge.AOtomation.Messaging", "AOtomation.Messaging\src\SmokeLounge.AOtomation.Messaging\SmokeLounge.AOtomation.Messaging.csproj", "{3CEAC898-BFCA-45EA-BF34-C4BBB85D2DA4}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{589A9173-F00A-4B88-9EDA-64FF07C7C59C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{589A9173-F00A-4B88-9EDA-64FF07C7C59C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{589A9173-F00A-4B88-9EDA-64FF07C7C59C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{589A9173-F00A-4B88-9EDA-64FF07C7C59C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3CEAC898-BFCA-45EA-BF34-C4BBB85D2DA4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3CEAC898-BFCA-45EA-BF34-C4BBB85D2DA4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3CEAC898-BFCA-45EA-BF34-C4BBB85D2DA4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3CEAC898-BFCA-45EA-BF34-C4BBB85D2DA4}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
