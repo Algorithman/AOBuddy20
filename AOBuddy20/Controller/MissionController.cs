@@ -9,9 +9,11 @@
 // Copyright: 2026 Algorithman
 // ---------------------------------------------------------------------------------------
 
+using AOBuddy20.Interfaces;
+
 namespace AOBuddy20.Controlling;
 
-public class MissionController
+public class MissionController : IPacketConsumer
 {
-    
 }
+
