@@ -15,5 +15,20 @@ namespace AOBuddy20.Controlling;
 
 public class MissionController : IPacketConsumer
 {
-}
+    public async Task RollMission(CancellationToken ct)
+    {
+    }
+    
+    public async Task AcceptMission(int missionId, CancellationToken ct)
+    {
+    }
+    
+    public async Task WorkGoal(CancellationToken ct)
+    {
+    } 
 
+    // Finish the mission and get your reward
+    public async Task FinishMission(CancellationToken ct)
+    {
+    }
+}
