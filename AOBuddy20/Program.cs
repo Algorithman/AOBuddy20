@@ -34,13 +34,13 @@ internal class Program
 
     public static async Task Main(string[] args)
     {
-        int index = Array.IndexOf(args, "--logfile");
+        int index = Array.IndexOf(args.Select(x => x.ToLower()).ToArray(), "--logfile");
         string logfile = "AOBuddy.log";
         if (index >= 0)
         {
             logfile = args[index + 1];
         }
-        
+
         var loggerConfiguration = new LoggerConfiguration();
         loggerConfiguration.MinimumLevel.Verbose();
         foreach (var type in Assembly.GetExecutingAssembly().GetTypes())
@@ -77,12 +77,10 @@ internal class Program
         // --config <file> (owner, 2026-09-28): one config per character, e.g. --config dadbod.json. Relative to Build\.
         // The same name is handed to plugins (AOBUDDY_CONFIG) so Plugins\<name>\dadbod.json is read if it exists.
         var configName = "config.json";
-        for (var i = 0; i + 1 < args.Length; i++)
+        index = Array.IndexOf(args.Select(x => x.ToLower()).ToArray(), "--config");
+        if (index >= 0)
         {
-            if (string.Equals(args[i], "--config", StringComparison.OrdinalIgnoreCase))
-            {
-                configName = args[i + 1];
-            }
+            configName = args[index + 1];
         }
 
         Environment.SetEnvironmentVariable("AOBUDDY_CONFIG", configName);
