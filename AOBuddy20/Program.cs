@@ -39,7 +39,7 @@ internal class Program
         {
             var attr = type.GetCustomAttribute<MinLogLevelAttribute>();
             if (attr != null)
-                loggerConfiguration.MinimumLevel.Override(type.FullName, attr.Level);
+                loggerConfiguration.MinimumLevel.Override(type.FullName!, attr.Level);
         }
 
         Log.Logger = loggerConfiguration
