@@ -10,7 +10,7 @@
     <ItemGroup>
         <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.12"/>
         <PackageReference Include="Serilog" Version="4.4.0"/>
-        <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
+        <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1"/>
     </ItemGroup>
 
     <ItemGroup>
@@ -27,7 +27,9 @@
 
     <ItemGroup>
         <!-- The starting point for Build\config.json, dropped beside the host so it is where you look. -->
-        <None Update="config.example.json"><CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory></None>
+        <None Update="config.example.json">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
     </ItemGroup>
 
 </Project>
