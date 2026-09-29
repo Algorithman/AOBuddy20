@@ -10,6 +10,7 @@
 // ---------------------------------------------------------------------------------------
 
 using System.Reflection;
+using System.Security;
 using AOBuddy20.Configuration;
 using AOBuddy20.Controlling;
 using AOBuddy20.Network;
@@ -86,18 +87,62 @@ internal class Program
         Environment.SetEnvironmentVariable("AOBUDDY_CONFIG", configName);
         var configPath = Path.IsPathRooted(configName) ? configName : AppDomain.CurrentDomain.BaseDirectory + configName;
 
-        if (!File.Exists(configPath))
+        AccountInfo? config = null;
+        try
         {
+            config = JsonConvert.DeserializeObject<AccountInfo>(File.ReadAllText(configPath));
+        }
+        catch (PathTooLongException exception)
+        {
+            // The specified path, file name, or both exceed the system-defined maximum length.
+            Log.Fatal($"Config file path is too long: {configPath}{Environment.NewLine}{exception.Message}");
+            Console.ReadLine();
+            return;
+        }
+        catch (DirectoryNotFoundException exception)
+        {
+            // The specified path is invalid (for example, it is on an unmapped drive).
             Log.Fatal($"Config file not found at '{configPath}'.");
             Console.ReadLine();
             return;
         }
-
-        var config = JsonConvert.DeserializeObject<AccountInfo>(File.ReadAllText(configPath));
+        catch (UnauthorizedAccessException exception)
+        {
+            // 'path' specified a file that is read-only.
+            // -or-
+            // This operation is not supported on the current platform.
+            // -or-
+            // 'path' specified a directory.
+            // -or-
+            // The caller does not have the required permission.
+            Log.Fatal("Unauthorized access", exception);
+            Console.ReadLine();
+            return;
+        }
+        catch (FileNotFoundException exception)
+        {
+            // The file specified in 'path' was not found.
+            Log.Fatal($"Config file not found at '{configPath}'.");
+            Console.ReadLine();
+            return;
+        }
+        catch (SecurityException exception)
+        {
+            // The caller does not have the required permission.
+            Log.Fatal("Security exception", exception);
+            Console.ReadLine();
+            return;
+        }
+        catch (IOException exception)
+        {
+            Log.Fatal($"IO Exception: {exception.Message}");
+            Console.ReadLine();
+            return;
+        }
 
         if (config == null)
         {
-            Log.Fatal("Deserialization of config file failed. Please check your configuration file.");
+            Log.Fatal($"Deserialization of config file {configName} failed. Please check your configuration file.");
             Console.ReadLine();
             return;
         }
