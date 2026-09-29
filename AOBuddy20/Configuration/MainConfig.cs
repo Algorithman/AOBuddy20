@@ -13,5 +13,5 @@ namespace AOBuddy20.Configuration;
 
 public class MainConfig
 {
-    public List<AccountInfo> Accounts = new List<AccountInfo>();
+    public AccountInfo Account = new AccountInfo();
 }

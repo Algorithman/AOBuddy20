@@ -3,8 +3,8 @@
 // Project: AOBuddy20
 // Filename: Program.cs
 // 
-// Last modified: 2026-09-29 13:47
-// Created:       2026-09-28 16:09
+// Last modified: 2026-09-29 18:53
+// Created:       2026-09-29 15:09
 // 
 // Long live OmniCell and AOBuddy20
 // ---------------------------------------------------------------------------------------
@@ -38,7 +38,7 @@ internal class Program
         var provider = services.BuildServiceProvider();
         // init packet router first
         provider.GetService<PacketRouter>().Init();
-        
+
         WirePackets(provider);
 
         string configFile;
@@ -69,7 +69,7 @@ internal class Program
 
         var config = JsonConvert.DeserializeObject<MainConfig>(configFile);
 
-        if (config == null || config.Accounts == null || config.Accounts.Count == 0)
+        if (config == null)
         {
             Console.WriteLine($"'{configPath}' has no Accounts. Copy config.example.json over it and fill it in.");
             Console.ReadLine();
@@ -81,35 +81,26 @@ internal class Program
         // we may run a few at a time").
         try
         {
-            Console.Title = string.Join(", ", config.Accounts.Select(a => a.Character).Where(c => !string.IsNullOrEmpty(c))) + " - AOBuddy";
+            Console.Title = config.Account.Character + " - AOBuddy";
         }
         catch
         {
         }
-        
+
         Client.SuppressItemDataLoad();
 
-        foreach (var acc in config.Accounts)
-        {
-            _domains.Add(CreateBot(acc));
-        }
+        CreateBot(config.Account);
 
         Console.ReadLine();
-
-        foreach (var domain in _domains)
-        {
-            domain.Unload();
-        }
     }
 
     private static void WirePackets(ServiceProvider provider)
     {
         var router = provider.GetService<PacketRouter>();
         provider.GetService<Awareness>().RegisterPackets(router);
-        
     }
 
-    private static ClientDomain CreateBot(AccountInfo accInfo)
+    private static void CreateBot(AccountInfo accInfo)
     {
         var logger = new LoggerConfiguration().WriteTo.Console().MinimumLevel.Debug().CreateLogger();
 
@@ -119,7 +110,6 @@ internal class Program
 
         Client.SuppressItemDataLoad(false);
         instance.Start();
-        return instance;
     }
 
 
