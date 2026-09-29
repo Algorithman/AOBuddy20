@@ -29,7 +29,7 @@ namespace AOSharp.Clientless
             => MeetsUseReqs(target, ignoreTargetReqs, false);
 
         /// <param name="ignorePetLimit">Treat the summon "pet slot is free" gate (TestNumPets) as met.</param>
-        public bool MeetsUseReqs(SimpleChar target, bool ignoreTargetReqs, bool ignorePetLimit)
+        public bool MeetsUseReqs(SimpleChar target, bool ignoreTargetReqs = false, bool ignorePetLimit = false)
         {
             if (!Criteria.TryGetValue(ItemActionInfo.UseCriteria, out List<RequirementCriterion> useCriteria))
                 return true; // no gate = usable

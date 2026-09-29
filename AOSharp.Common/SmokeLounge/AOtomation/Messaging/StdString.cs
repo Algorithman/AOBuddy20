@@ -1,11 +1,21 @@
-﻿using System;
-using System.Text;
+﻿// ---------------------------------------------------------------------------------------
+// Solution: AOBuddy20
+// Project: AOSharp.Common
+// Filename: StdString.cs
+// 
+// Last modified: 2026-09-29 12:35
+// Created:       2026-09-29 12:09
+// 
+// Long live OmniCell and AOBuddy20
+// ---------------------------------------------------------------------------------------
+
 using System.Runtime.InteropServices;
+using System.Text;
 using AOSharp.Common.Unmanaged.Imports;
 
-namespace AOSharp.Common.Unmanaged.DataTypes
-{
-    public class StdString : IDisposable
+namespace AOSharp.Common.SmokeLounge.AOtomation.Messaging;
+
+   public class StdString : IDisposable
     {
         public readonly IntPtr Pointer;
         public unsafe int Length => ((StdStringStruct*)Pointer)->Length;
@@ -16,6 +26,11 @@ namespace AOSharp.Common.Unmanaged.DataTypes
         {
             Pointer = pointer;
             _shouldDispose = shouldDispose;
+        }
+
+        public override int GetHashCode()
+        {
+            return ToString().GetHashCode();
         }
 
         public static StdString FromPointer(IntPtr pointer, bool shouldDispose = true)
@@ -137,4 +152,3 @@ namespace AOSharp.Common.Unmanaged.DataTypes
             }
         }
     }
-}

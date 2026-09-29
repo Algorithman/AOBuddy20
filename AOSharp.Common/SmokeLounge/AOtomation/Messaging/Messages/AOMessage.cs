@@ -14,7 +14,7 @@
 
 namespace SmokeLounge.AOtomation.Messaging.Messages
 {
-    public class Message
+    public class AOMessage
     {
         #region Public Properties
 

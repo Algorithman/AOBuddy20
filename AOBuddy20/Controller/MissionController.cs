@@ -3,10 +3,10 @@
 // Project: AOBuddy20
 // Filename: MissionController.cs
 // 
-// Last modified: 2026-09-28 17:00
+// Last modified: 2026-09-29 13:47
 // Created:       2026-09-28 17:09
 // 
-// Copyright: 2026 Algorithman
+// Long live OmniCell and AOBuddy20
 // ---------------------------------------------------------------------------------------
 
 using AOBuddy20.Interfaces;
@@ -18,14 +18,14 @@ public class MissionController : IPacketConsumer
     public async Task RollMission(CancellationToken ct)
     {
     }
-    
+
     public async Task AcceptMission(int missionId, CancellationToken ct)
     {
     }
-    
+
     public async Task WorkGoal(CancellationToken ct)
     {
-    } 
+    }
 
     // Finish the mission and get your reward
     public async Task FinishMission(CancellationToken ct)

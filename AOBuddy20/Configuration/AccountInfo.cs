@@ -1,23 +1,20 @@
 ﻿// ---------------------------------------------------------------------------------------
 // Solution: AOBuddy20
 // Project: AOBuddy20
-// Filename: ControlPriority.cs
+// Filename: AccountInfo.cs
 // 
 // Last modified: 2026-09-29 13:47
-// Created:       2026-09-28 18:09
+// Created:       2026-09-29 09:09
 // 
 // Long live OmniCell and AOBuddy20
 // ---------------------------------------------------------------------------------------
 
-namespace AOBuddy20.Enums;
+namespace AOBuddy20.Configuration;
 
-public enum ControlPriority
+public class AccountInfo
 {
-    None = 0,
-    Travel = 1,
-    Resupply = 2,
-    Selling = 3,
-    Mission = 4,
-    Combat = 5, // interrupts everything below it
-    Emergency = 6, // e.g. player dying, disconnect
+    public string Character = "";
+    public string Dimension = ""; // "RubiKa" (default) or "RubiKa2019"
+    public string Password = "";
+    public string Username = "";
 }

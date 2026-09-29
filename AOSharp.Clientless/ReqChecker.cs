@@ -1,11 +1,4 @@
 ﻿using AOSharp.Common.GameData;
-using AOSharp.Common.Helpers;
-using AOSharp.Common.Unmanaged.DataTypes;
-using AOSharp.Common.Unmanaged.Imports;
-using System;
-using System.Linq;
-using System.Runtime.InteropServices;
-using System.Collections.Generic;
 
 namespace AOSharp.Clientless
 {

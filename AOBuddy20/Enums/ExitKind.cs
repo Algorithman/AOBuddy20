@@ -1,7 +1,7 @@
 ﻿// ---------------------------------------------------------------------------------------
 // Solution: AOBuddy20
 // Project: AOBuddy20
-// Filename: ControlPriority.cs
+// Filename: ExitKind.cs
 // 
 // Last modified: 2026-09-29 13:47
 // Created:       2026-09-28 18:09
@@ -11,13 +11,11 @@
 
 namespace AOBuddy20.Enums;
 
-public enum ControlPriority
+public enum ExitKind
 {
-    None = 0,
-    Travel = 1,
-    Resupply = 2,
-    Selling = 3,
-    Mission = 4,
-    Combat = 5, // interrupts everything below it
-    Emergency = 6, // e.g. player dying, disconnect
+    ZoneLine,
+    Teleport,
+    Line,
+    Proxy,
+    Scotty,
 }

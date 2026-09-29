@@ -61,14 +61,14 @@ namespace AOSharp.Clientless
         private static bool _isFirstPlayshift = true;
 
         internal static Logger Logger;
-        internal static HostProxy HostProxy;
+        internal static HostProxy HostProxy = null;
         internal static bool LogDeserializationErrors = false;
         internal static bool ItemDataLoaded = true;
 
         public static ChatClient Chat;
 
         public static EventHandler<double> OnUpdate;
-        public static EventHandler<Message> MessageReceived;
+        public static EventHandler<AOMessage> MessageReceived;
         public static EventHandler<byte[]> PacketReceived;
         public static Action<CharacterSelect> CharacterSelect;
         public static Action<bool> CharacterInPlay;
@@ -117,7 +117,7 @@ namespace AOSharp.Clientless
 
         public static void Send(MessageBody msgBody) => _netSession.Send(msgBody);
 
-        public static void Send(Message message) => _netSession.Send(message);
+        public static void Send(AOMessage aoMessage) => _netSession.Send(aoMessage);
 
         public static void Send(ChatMessageBody msgBody) => Chat.Send(msgBody);
 

@@ -103,7 +103,7 @@ namespace AOSharp.Common.GameData
         }
         public static bool operator == (Identity identity1, IdentityType Type)
         {
-            return identity1 != null && identity1.TypeEquals(Type);
+            return identity1.TypeEquals(Type);
         }
 
         public static bool operator != (Identity identity1, IdentityType Type)

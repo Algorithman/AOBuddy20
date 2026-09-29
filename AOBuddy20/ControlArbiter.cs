@@ -3,10 +3,10 @@
 // Project: AOBuddy20
 // Filename: ControlArbiter.cs
 // 
-// Last modified: 2026-09-28 17:00
+// Last modified: 2026-09-29 13:47
 // Created:       2026-09-28 17:09
 // 
-// Copyright: 2026 Algorithman
+// Long live OmniCell and AOBuddy20
 // ---------------------------------------------------------------------------------------
 
 using AOBuddy20.Enums;
@@ -16,11 +16,11 @@ namespace AOBuddy20;
 public sealed class ControlArbiter
 {
     private int _activePriority = (int)ControlPriority.None;
-    private TaskCompletionSource _resume;
+    private TaskCompletionSource? _resume = null;
 
     /// <summary>
-    /// Runs a step. If a higher-priority system is active (or becomes active),
-    /// the step suspends until control is released back down.
+    ///     Runs a step. If a higher-priority system is active (or becomes active),
+    ///     the step suspends until control is released back down.
     /// </summary>
     public async Task RunStepAsync(ControlPriority priority, Func<Task> step, CancellationToken ct)
     {
@@ -29,8 +29,8 @@ public sealed class ControlArbiter
     }
 
     /// <summary>
-    /// For long-running steps that tick (e.g. "clear mission" over many heartbeats).
-    /// Each tick checks if control is still available.
+    ///     For long-running steps that tick (e.g. "clear mission" over many heartbeats).
+    ///     Each tick checks if control is still available.
     /// </summary>
     public async Task RunTicksAsync(ControlPriority priority, Func<Task> tick,
         Func<bool> shouldContinue, CancellationToken ct)
@@ -50,7 +50,10 @@ public sealed class ControlArbiter
             _resume = tcs;
             // re-check after registering (avoid missed signal)
             if (Volatile.Read(ref _activePriority) < (int)priority)
+            {
                 return;
+            }
+
             await tcs.Task.WaitAsync(ct);
         }
     }
@@ -68,5 +71,7 @@ public sealed class ControlArbiter
     }
 
     public bool HasControl(ControlPriority priority)
-        => Volatile.Read(ref _activePriority) < (int)priority;
+    {
+        return Volatile.Read(ref _activePriority) < (int)priority;
+    }
 }

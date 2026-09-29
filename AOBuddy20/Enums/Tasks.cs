@@ -3,10 +3,10 @@
 // Project: AOBuddy20
 // Filename: Tasks.cs
 // 
-// Last modified: 2026-09-28 16:58
+// Last modified: 2026-09-29 13:47
 // Created:       2026-09-28 16:09
 // 
-// Copyright: 2026 Algorithman
+// Long live OmniCell and AOBuddy20
 // ---------------------------------------------------------------------------------------
 
 namespace AOBuddy20.Enums;
@@ -18,5 +18,5 @@ public enum Tasks
     Mission,
     Resupply,
     SellGoods,
-    Buff
+    Buff,
 }

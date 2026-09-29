@@ -1,23 +1,17 @@
 ﻿// ---------------------------------------------------------------------------------------
 // Solution: AOBuddy20
 // Project: AOBuddy20
-// Filename: ControlPriority.cs
+// Filename: MainConfig.cs
 // 
 // Last modified: 2026-09-29 13:47
-// Created:       2026-09-28 18:09
+// Created:       2026-09-29 09:09
 // 
 // Long live OmniCell and AOBuddy20
 // ---------------------------------------------------------------------------------------
 
-namespace AOBuddy20.Enums;
+namespace AOBuddy20.Configuration;
 
-public enum ControlPriority
+public class MainConfig
 {
-    None = 0,
-    Travel = 1,
-    Resupply = 2,
-    Selling = 3,
-    Mission = 4,
-    Combat = 5, // interrupts everything below it
-    Emergency = 6, // e.g. player dying, disconnect
+    public List<AccountInfo> Accounts = new List<AccountInfo>();
 }

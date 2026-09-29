@@ -50,13 +50,13 @@ namespace SmokeLounge.AOtomation.Messaging.Serialization
 
         #region Public Methods and Operators
 
-        public Message Deserialize(Stream stream)
+        public AOMessage Deserialize(Stream stream)
         {
             SerializationContext ignore;
             return this.Deserialize(stream, out ignore);
         }
 
-        public Message Deserialize(byte[] datablock)
+        public AOMessage Deserialize(byte[] datablock)
         {
             using (MemoryStream buffer = new MemoryStream(datablock))
             {
@@ -64,7 +64,7 @@ namespace SmokeLounge.AOtomation.Messaging.Serialization
             }
         }
 
-        public Message Deserialize(Stream stream, out SerializationContext serializationContext)
+        public AOMessage Deserialize(Stream stream, out SerializationContext serializationContext)
         {
             serializationContext = null;
             var reader = new StreamReader(stream) { Position = 0 };
@@ -84,7 +84,7 @@ namespace SmokeLounge.AOtomation.Messaging.Serialization
             reader.Position = 0;
             serializationContext = new SerializationContext(this.serializerResolver);
 
-            return new Message
+            return new AOMessage
             {
                 Header = (Header)this.headerSerializer.Deserialize(reader, serializationContext),
                 Body = (MessageBody)serializer.Deserialize(reader, serializationContext),
@@ -114,16 +114,16 @@ namespace SmokeLounge.AOtomation.Messaging.Serialization
             }
         }
 
-        public void Serialize(Stream stream, Message message)
+        public void Serialize(Stream stream, AOMessage aoMessage)
         {
             SerializationContext ignore;
-            this.Serialize(stream, message, out ignore);
+            this.Serialize(stream, aoMessage, out ignore);
         }
 
-        public void Serialize(Stream stream, Message message, out SerializationContext serializationContext)
+        public void Serialize(Stream stream, AOMessage aoMessage, out SerializationContext serializationContext)
         {
             serializationContext = null;
-            var serializer = this.serializerResolver.GetSerializer(message.Body.GetType());
+            var serializer = this.serializerResolver.GetSerializer(aoMessage.Body.GetType());
             if (serializer == null)
             {
                 return;
@@ -131,8 +131,8 @@ namespace SmokeLounge.AOtomation.Messaging.Serialization
 
             serializationContext = new SerializationContext(this.serializerResolver);
             var writer = new StreamWriter(stream) { Position = 0 };
-            this.headerSerializer.Serialize(writer, serializationContext, message.Header);
-            serializer.Serialize(writer, serializationContext, message.Body);
+            this.headerSerializer.Serialize(writer, serializationContext, aoMessage.Header);
+            serializer.Serialize(writer, serializationContext, aoMessage.Body);
 
             int length = (int)writer.Position;
             int padding = length % 4 == 0 ? 0 : 4 - length % 4;

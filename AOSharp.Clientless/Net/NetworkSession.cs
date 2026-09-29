@@ -43,8 +43,8 @@ namespace AOSharp.Clientless.Net
 
         private Logger _logger;
 
-        private System.Timers.Timer _reconnectTimer;
-        private System.Timers.Timer _pingTimer;
+        // private System.Timers.Timer _reconnectTimer; - never used
+        // private System.Timers.Timer _pingTimer; - never used
 
         internal Action<StateMachine<State, Trigger>.Transition> NetworkStateChanged;
 
@@ -134,7 +134,7 @@ namespace AOSharp.Clientless.Net
             if (messageBody is N3Message n3Message)
                 n3Message.Identity = new Identity(IdentityType.SimpleChar, Client.LocalDynelId);
 
-            Message message = new Message
+            AOMessage aoMessage = new AOMessage
             {
                 Body = messageBody,
                 Header = new Header
@@ -145,16 +145,16 @@ namespace AOSharp.Clientless.Net
                 }
             };
 
-            Send(message);
+            Send(aoMessage);
         }
 
-        public void Send(Message message)
+        public void Send(AOMessage aoMessage)
         {
-            message.Header.MessageId = _messageId;
+            aoMessage.Header.MessageId = _messageId;
 
             using (MemoryStream stream = new MemoryStream())
             {
-                _serializer.Serialize(stream, message);
+                _serializer.Serialize(stream, aoMessage);
                 var bytes = stream.ToArray();
                 Client.RaisePacketRaw(bytes, false);
                 _tcpClient.Send(bytes);
@@ -179,8 +179,8 @@ namespace AOSharp.Clientless.Net
                 // them with our corrected reader (see SimpleCharFullUpdateReader),
                 // then let the result flow through the normal dispatch below. Every
                 // other packet takes the unchanged MessageSerializer path.
-                Message message;
-                if (!TryDeserializeSimpleCharFullUpdate(packet, out message))
+                AOMessage aoMessage;
+                if (!TryDeserializeSimpleCharFullUpdate(packet, out aoMessage))
                 {
                     // WORKAROUND (AOSharpSDK 1.0.89): the ChestFullUpdate reader baked into the NuGet
                     // AOSharp.Common.dll is an older, broken version that throws OverflowException on the
@@ -213,29 +213,29 @@ namespace AOSharp.Clientless.Net
 
                     // FullCharacter: try the stock serializer first (correct for the common no-pet case); only
                     // fall back to the corrected reader when it throws (a pet is up — see FullCharacterReader).
-                    if (!TryDeserializeFullCharacter(packet, out message))
-                        message = _serializer.Deserialize(packet);
+                    if (!TryDeserializeFullCharacter(packet, out aoMessage))
+                        aoMessage = _serializer.Deserialize(packet);
                 }
 
-                if (message == null)
+                if (aoMessage == null)
                     return;
 
-                if (message.Header.Sender != Client.ServerId)
-                    Client.ServerId = message.Header.Sender;
+                if (aoMessage.Header.Sender != Client.ServerId)
+                    Client.ServerId = aoMessage.Header.Sender;
 
-                Client.MessageReceived?.Invoke(null, message);
+                Client.MessageReceived?.Invoke(null, aoMessage);
 
-                if (message.Header.PacketType == PacketType.InitiateCompressionMessage)
+                if (aoMessage.Header.PacketType == PacketType.InitiateCompressionMessage)
                 {
                     OnInitiateCompressionMessage();
                 }
-                else if (message.Header.PacketType == PacketType.PingMessage)
+                else if (aoMessage.Header.PacketType == PacketType.PingMessage)
                 {
-                    Pong(message);
+                    Pong(aoMessage);
                 }
-                else if (message.Header.PacketType == PacketType.SystemMessage)
+                else if (aoMessage.Header.PacketType == PacketType.SystemMessage)
                 {
-                    SystemMessage sysMsg = (SystemMessage)message.Body;
+                    SystemMessage sysMsg = (SystemMessage)aoMessage.Body;
 
                     if (_sysMsgCallbacks.TryGetValue(sysMsg.SystemMessageType, out Action<SystemMessage> callback))
                         callback.Invoke(sysMsg);
@@ -243,11 +243,11 @@ namespace AOSharp.Clientless.Net
                     if (_internalSysMsgCallbacks.TryGetValue(sysMsg.SystemMessageType, out Action<SystemMessage> internalCallback))
                         internalCallback.Invoke(sysMsg);
                 }
-                else if (message.Header.PacketType == PacketType.N3Message)
+                else if (aoMessage.Header.PacketType == PacketType.N3Message)
                 {
                     Client.PacketReceived?.Invoke(null, packet);
 
-                    N3Message n3Msg = (N3Message)message.Body;
+                    N3Message n3Msg = (N3Message)aoMessage.Body;
 
                     if (_n3MsgCallbacks.TryGetValue(n3Msg.N3MessageType, out Action<N3Message> callback))
                         callback.Invoke(n3Msg);
@@ -297,9 +297,9 @@ namespace AOSharp.Clientless.Net
         /// falls back to the stock MessageSerializer. See SimpleCharFullUpdateReader
         /// for why this workaround exists.
         /// </summary>
-        private bool TryDeserializeSimpleCharFullUpdate(byte[] packet, out Message message)
+        private bool TryDeserializeSimpleCharFullUpdate(byte[] packet, out AOMessage aoMessage)
         {
-            message = null;
+            aoMessage = null;
 
             // Need at least a 16-byte header plus the 4-byte N3 message type.
             if (packet == null || packet.Length < 20)
@@ -339,7 +339,7 @@ namespace AOSharp.Clientless.Net
             {
                 bodyReader.Position = 16;
                 SimpleCharFullUpdateMessage body = SimpleCharFullUpdateReader.Read(bodyReader);
-                message = new Message { Header = header, Body = body };
+                aoMessage = new AOMessage { Header = header, Body = body };
             }
 
             return true;
@@ -352,15 +352,15 @@ namespace AOSharp.Clientless.Net
         /// whenever the character has a pet up (the trailing pet identity is mis-read as a TeamMember struct
         /// and it reads past the end). The fallback keeps our stats + spell list and extracts the pet list.
         /// </summary>
-        private bool TryDeserializeFullCharacter(byte[] packet, out Message message)
+        private bool TryDeserializeFullCharacter(byte[] packet, out AOMessage aoMessage)
         {
-            message = null;
+            aoMessage = null;
             if (!IsN3MessageType(packet, N3MessageType.FullCharacter))
                 return false;
 
             try
             {
-                message = _serializer.Deserialize(packet);
+                aoMessage = _serializer.Deserialize(packet);
                 return true;
             }
             catch
@@ -371,7 +371,7 @@ namespace AOSharp.Clientless.Net
                 {
                     bodyReader.Position = 16;
                     FullCharacterMessage body = FullCharacterReader.Read(bodyReader, packet.Length);
-                    message = new Message { Header = header, Body = body };
+                    aoMessage = new AOMessage { Header = header, Body = body };
                 }
                 return true;
             }
@@ -524,11 +524,11 @@ namespace AOSharp.Clientless.Net
                 .Permit(Trigger.Disconnect, State.Disconnected);
         }
 
-        private void Pong(Message pingMsg)
+        private void Pong(AOMessage pingMsg)
         {
             PingMessage pingBody = (PingMessage)pingMsg.Body;
 
-            Message pongMsg = new Message
+            AOMessage pongMsg = new AOMessage
             {
                 Body = new PingMessage
                 {

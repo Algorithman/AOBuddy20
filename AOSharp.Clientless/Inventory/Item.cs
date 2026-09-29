@@ -186,13 +186,5 @@ namespace AOSharp.Clientless
                 Target = Slot,
             });
         }
-
-        public bool MeetsUseReqs(SimpleChar target = null, bool ignoreTargetReqs = false)
-        {
-            if (!Criteria.TryGetValue(ItemActionInfo.UseCriteria, out List<RequirementCriterion> useCriteria))
-                return false;
-
-            return new ReqChecker(useCriteria).MeetsReqs(target, ignoreTargetReqs);
-        }
-    }
+   }
 }

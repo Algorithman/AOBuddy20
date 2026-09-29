@@ -3,46 +3,109 @@
 // Project: AOBuddy20
 // Filename: PacketRouter.cs
 // 
-// Last modified: 2026-09-28 17:55
+// Last modified: 2026-09-29 13:47
 // Created:       2026-09-28 17:09
 // 
 // Long live OmniCell and AOBuddy20
 // ---------------------------------------------------------------------------------------
 
 using AOBuddy20.Extensions;
+using AOSharp.Clientless;
 using SmokeLounge.AOtomation.Messaging.Messages;
 
 namespace AOBuddy20.Network;
 
 public sealed class PacketRouter
 {
-    private readonly Dictionary<Type, List<PacketHandlerEntry>> _handlers
-        = new Dictionary<Type, List<PacketHandlerEntry>>();
+    private readonly Dictionary<ChatMessageType, List<ChatPacketHandlerEntry>> _chatHandlers
+        = new Dictionary<ChatMessageType, List<ChatPacketHandlerEntry>>();
 
-    public void Register<T>(Action<T> handler, bool endSequence = false) where T : IPacket
+    private readonly Dictionary<N3MessageType, List<PacketHandlerEntry>> _n3Handlers
+        = new Dictionary<N3MessageType, List<PacketHandlerEntry>>();
+
+    private readonly Dictionary<SystemMessageType, List<SystemPacketHandlerEntry>> _systemHandlers
+        = new Dictionary<SystemMessageType, List<SystemPacketHandlerEntry>>();
+
+    public void Init()
     {
-        Action<IPacket> wrapped = p => handler((T)p);
-        _handlers.GetOrAdd(typeof(T), _ => new List<PacketHandlerEntry>()).Add(new PacketHandlerEntry(wrapped, endSequence));
+        Client.Chat.NetworkMessageReceived += DispatchChatMessage;
+        Client.MessageReceived += Dispatch;
     }
 
-    public void Dispatch(IPacket packet)
+    private void DispatchChatMessage(object? sender, ChatMessage e)
     {
-        if (!_handlers.TryGetValue(packet.GetType(), out var list))
+        if (_chatHandlers.TryGetValue(e.Header.PacketType, out var list))
         {
-            return;
-        }
-
-        foreach (var entry in list)
-        {
-            entry.Handler(packet);
-            if (entry.canEndSequence)
+            foreach (var entry in list)
             {
-                break; // ← handled=true, stop propagation
+                var end = entry.Handler(e);
+                if (entry.canEndSequence && end)
+                {
+                    break; // ← handled=true, stop propagation
+                }
             }
         }
     }
 
-    public record PacketHandlerEntry(Action<IPacket> Handler, bool canEndSequence)
+
+    public void RegisterChatHandler(Func<ChatMessage, bool> handler, ChatMessageType type, bool endSequence = false)
+    {
+        _chatHandlers.GetOrAdd(type, _ => new List<ChatPacketHandlerEntry>()).Add(new ChatPacketHandlerEntry(handler, endSequence));
+    }
+
+    public void RegisterSystemHandler(Func<SystemMessage, bool> handler, SystemMessageType type, bool endSequence = false)
+    {
+        _systemHandlers.GetOrAdd(type, _ => new List<SystemPacketHandlerEntry>()).Add(new SystemPacketHandlerEntry(handler, endSequence));
+    }
+
+    public void Register(Func<AOMessage, bool> handler, N3MessageType type, bool endSequence = false)
+    {
+        _n3Handlers.GetOrAdd(type, _ => new List<PacketHandlerEntry>()).Add(new PacketHandlerEntry(handler, endSequence));
+    }
+
+
+    public void Dispatch(object? sender, AOMessage e)
+    {
+        if (e.Body is N3Message n3Message)
+        {
+            if (_n3Handlers.TryGetValue(n3Message.N3MessageType, out var list))
+            {
+                foreach (var entry in list)
+                {
+                    var end = entry.Handler(e);
+                    if (entry.canEndSequence && end)
+                    {
+                        break; // ← handled=true, stop propagation
+                    }
+                }
+            }
+        }
+
+        if (e.Body is SystemMessage system)
+        {
+            if (_systemHandlers.TryGetValue(system.SystemMessageType, out var list))
+            {
+                foreach (var entry in list)
+                {
+                    var end = entry.Handler(system);
+                    if (entry.canEndSequence && end)
+                    {
+                        break; // ← handled=true, stop propagation
+                    }
+                }
+            }
+        }
+    }
+
+    public record PacketHandlerEntry(Func<AOMessage, bool> Handler, bool canEndSequence)
+    {
+    }
+
+    public record SystemPacketHandlerEntry(Func<SystemMessage, bool> Handler, bool canEndSequence)
+    {
+    }
+
+    public record ChatPacketHandlerEntry(Func<ChatMessage, bool> Handler, bool canEndSequence)
     {
     }
 }

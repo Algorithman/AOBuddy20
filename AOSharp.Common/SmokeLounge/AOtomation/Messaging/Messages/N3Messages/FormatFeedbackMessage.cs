@@ -12,10 +12,11 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
+using AOSharp.Common.SmokeLounge.AOtomation.Messaging;
+using AOSharp.Common.Unmanaged.Imports;
+
 namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages
 {
-    using AOSharp.Common.Unmanaged.DataTypes;
-    using AOSharp.Common.Unmanaged.Imports;
     using SmokeLounge.AOtomation.Messaging.Serialization;
     using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
     using System.Text;

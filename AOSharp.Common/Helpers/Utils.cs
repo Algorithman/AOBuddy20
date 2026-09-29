@@ -1,7 +1,7 @@
-﻿using AOSharp.Common.Unmanaged.Imports;
-using System;
+﻿using System;
 using System.Linq;
 using System.Text;
+using AOSharp.Common.Unmanaged.Imports;
 
 namespace AOSharp.Common.Helpers
 {
@@ -37,6 +37,7 @@ namespace AOSharp.Common.Helpers
             return true;
         }
 
+        /*
         public static unsafe IntPtr FindPattern(string module, string pattern)
         {
             IntPtr moduleHandle = Kernel32.GetModuleHandle(module);
@@ -61,6 +62,7 @@ namespace AOSharp.Common.Helpers
 
             return IntPtr.Zero;
         }
+        */
 
         public static byte[] StringToByteArray(string hex)
         {

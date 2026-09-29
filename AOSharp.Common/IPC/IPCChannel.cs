@@ -10,7 +10,6 @@ using SmokeLounge.AOtomation.Messaging.Serialization.Serializers;
 using StreamWriter = SmokeLounge.AOtomation.Messaging.Serialization.StreamWriter;
 using StreamReader = SmokeLounge.AOtomation.Messaging.Serialization.StreamReader;
 using TypeInfo = SmokeLounge.AOtomation.Messaging.Serialization.TypeInfo;
-using AOSharp.Common.Unmanaged.Imports;
 using System.Reflection;
 using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
 
@@ -64,8 +63,9 @@ namespace AOSharp.Core.IPC
                 foreach (IPCChannelBase ipcChannel in _ipcChannels)
                     ipcChannel.ProcessQueue();
             }
-            catch (Exception e)
+            catch (Exception)
             {
+                // ignored
             }
         }
 
@@ -132,8 +132,9 @@ namespace AOSharp.Core.IPC
                             callback?.Invoke(charId, message);
                 }
             }
-            catch (Exception e)
+            catch (Exception)
             {
+                // ignored
             }
         }
 

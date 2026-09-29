@@ -3,7 +3,7 @@
 // Project: AOBuddy20
 // Filename: BotLoop.cs
 // 
-// Last modified: 2026-09-28 17:55
+// Last modified: 2026-09-29 13:47
 // Created:       2026-09-28 16:09
 // 
 // Long live OmniCell and AOBuddy20
@@ -11,13 +11,17 @@
 
 using AOBuddy20.Controlling;
 using AOBuddy20.Enums;
+using AOSharp.Clientless;
+using SmokeLounge.AOtomation.Messaging.Serialization;
 
 namespace AOBuddy20;
 
-public sealed class BotLoop
+public sealed class BotLoop : ClientlessPluginEntry
 {
     private readonly ControlArbiter _controlArbiter;
     private readonly MissionController _missionController;
+
+    private readonly Tasks CurrentTask = Tasks.Nothing;
 
     public BotLoop(ControlArbiter controlArbiter, MissionController missionController)
     {
@@ -25,9 +29,7 @@ public sealed class BotLoop
         _missionController = missionController;
     }
 
-    private Tasks CurrentTask = Tasks.Nothing;
-    
-    
+
     public async Task RunAsync(CancellationToken ct)
     {
         while (!ct.IsCancellationRequested)
@@ -49,11 +51,22 @@ public sealed class BotLoop
             {
                 break;
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 // log, back off, retry
                 await Task.Delay(TimeSpan.FromSeconds(1), ct);
             }
         }
+    }
+
+    public override void Init(string pluginDir)
+    {
+        Client.PacketRaw += DeserializePacket;
+    }
+
+    private void DeserializePacket(byte[] data, bool fromServer)
+    {
+        var msg = new MessageSerializer();
+        msg.Deserialize(data);
     }
 }

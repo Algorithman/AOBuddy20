@@ -2,8 +2,6 @@
 Microsoft Visual Studio Solution File, Format Version 12.00
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AOBuddy20", "AOBuddy20\AOBuddy20.csproj", "{589A9173-F00A-4B88-9EDA-64FF07C7C59C}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SmokeLounge.AOtomation.Messaging", "AOtomation.Messaging\src\SmokeLounge.AOtomation.Messaging\SmokeLounge.AOtomation.Messaging.csproj", "{3CEAC898-BFCA-45EA-BF34-C4BBB85D2DA4}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AOSharp.Common", "AOSharp.Common\AOSharp.Common.csproj", "{0F4100B7-13AB-4784-9DDE-8396968E345C}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AOSharp.Clientless", "AOSharp.Clientless\AOSharp.Clientless.csproj", "{95CEC9F5-EB5F-415B-8430-E5983DB90AB7}"

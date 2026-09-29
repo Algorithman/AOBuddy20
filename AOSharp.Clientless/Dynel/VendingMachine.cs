@@ -12,7 +12,7 @@ namespace AOSharp.Clientless
 {
     public class VendingMachine : SimpleItem
     {
-        public string Name { get; internal set; }
+        public new string Name { get; internal set; }
 
         public VendingMachine(Identity identity, Vector3? pos, Quaternion? rot, GameTuple<Stat, int>[] stats) : base(identity, pos, rot, stats.ToDict())
         {

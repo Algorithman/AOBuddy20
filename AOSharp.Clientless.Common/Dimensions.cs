@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.IO;
+using System.Runtime.CompilerServices;
 
 namespace AOSharp.Clientless.Common
 {
@@ -40,7 +41,14 @@ namespace AOSharp.Clientless.Common
         public string Version { get; set; }
         public DnsEndPoint ChatServerEndpoint { get; set; }
         public DnsEndPoint GameServerEndpoint { get; set; }
-
+        
+        private static List<DimensionInfo> GetDimensions(
+            string dimensionListUrl = dimensionListUrl)
+        {
+            return GetDimensionsAsync(dimensionListUrl).ToListAsync()
+                .GetAwaiter().GetResult(); // IAsyncEnumerable extension
+        }
+        
         public static DimensionInfo GetDimension(string name, string dimensionListUrl = dimensionListUrl)
         {
             IEnumerable<DimensionInfo> dimensions = GetDimensions();
@@ -55,52 +63,59 @@ namespace AOSharp.Clientless.Common
             return dimension;
         }
 
-        private static IEnumerable<DimensionInfo> GetDimensions(string dimensionListUrl = dimensionListUrl)
+        private static readonly HttpClient _httpClient = new()
         {
-            using (WebClient client = new WebClient())
+            Timeout = TimeSpan.FromSeconds(30)
+        };
+
+        private static async IAsyncEnumerable<DimensionInfo> GetDimensionsAsync(
+            string dimensionListUrl = dimensionListUrl,
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            using var response = await _httpClient.GetAsync(
+                dimensionListUrl,
+                HttpCompletionOption.ResponseHeadersRead,
+                cancellationToken);
+
+            response.EnsureSuccessStatusCode();
+
+            await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+            using var reader = new StreamReader(stream);
+
+            DimensionInfo dimension = new();
+            string host = "";
+            int port = 0;
+
+            string line;
+            while ((line = await reader.ReadLineAsync(cancellationToken)) != null)
             {
-                using (Stream infoStream = client.OpenRead(dimensionListUrl))
+                if (line.StartsWith('#') || line.Length == 0) continue;
+
+                string[] lineKv = line.Split('=');
+                string key = lineKv[0].Trim();
+                string value = lineKv.Length > 1 ? lineKv[1].Trim() : key;
+
+                switch (key)
                 {
-                    using (StreamReader reader = new StreamReader(infoStream ?? throw new InvalidOperationException()))
-                    {
-                        DimensionInfo dimension = new DimensionInfo();
-                        string host = "";
-                        int port = 0;
-
-                        while (!reader.EndOfStream)
-                        {
-                            string line = reader.ReadLine();
-
-                            if (line == null || line.StartsWith("#") || line == "") continue;
-
-                            string[] lineKv = line.Split('=');
-                            string key = lineKv[0].Trim();
-                            string value = lineKv.Length > 1 ? lineKv[1].Trim() : key;
-
-                            switch (key)
-                            {
-                                case "displayname":
-                                    dimension.Name = value;
-                                    break;
-                                case "connect":
-                                    host = value;
-                                    break;
-                                case "ports":
-                                    port = int.Parse(value);
-                                    break;
-                                case "version":
-                                    dimension.Version = value + "_EP1";
-                                    break;
-                                case "STARTINFO":
-                                    dimension = new DimensionInfo();
-                                    break;
-                                case "ENDINFO":
-                                    dimension.GameServerEndpoint = new DnsEndPoint(host, port);
-                                    yield return dimension;
-                                    break;
-                            }
-                        }
-                    }
+                    case "displayname":
+                        dimension.Name = value;
+                        break;
+                    case "connect":
+                        host = value;
+                        break;
+                    case "ports":
+                        port = int.Parse(value);
+                        break;
+                    case "version":
+                        dimension.Version = value + "_EP1";
+                        break;
+                    case "STARTINFO":
+                        dimension = new DimensionInfo();
+                        break;
+                    case "ENDINFO":
+                        dimension.GameServerEndpoint = new DnsEndPoint(host, port);
+                        yield return dimension;
+                        break;
                 }
             }
         }

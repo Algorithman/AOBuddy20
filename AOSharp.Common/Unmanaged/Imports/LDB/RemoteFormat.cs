@@ -1,6 +1,5 @@
-﻿using System;
-using System.Runtime.InteropServices;
-using AOSharp.Common.Unmanaged.DataTypes;
+﻿using System.Runtime.InteropServices;
+
 
 namespace AOSharp.Common.Unmanaged.Imports
 {

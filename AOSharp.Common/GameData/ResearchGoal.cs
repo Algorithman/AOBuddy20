@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Text;
 using System.Runtime.InteropServices;
-using AOSharp.Common.Unmanaged.Interfaces;
 
 namespace AOSharp.Common.GameData
 {

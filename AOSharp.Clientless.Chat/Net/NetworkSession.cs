@@ -92,7 +92,7 @@ namespace AOSharp.Clientless.Chat.Net
                 _tcpClient.EndConnect(result);
                 _stateMachine.Fire(Trigger.OnTcpConnected);
             }
-            catch (Exception exception)
+            catch (Exception)
             {
                 IPEndPoint endpoint = result.AsyncState as IPEndPoint;
 
