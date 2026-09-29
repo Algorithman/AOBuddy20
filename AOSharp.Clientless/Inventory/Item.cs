@@ -65,21 +65,42 @@ namespace AOSharp.Clientless
 
                 for (int i = 0; i < lowCriteria.Count; i++)
                 {
-                    var param2Low = lowCriteria[i].Param2;
-                    var param2High = highCriteria[i].Param2;
-
-                    if (ql == lowTemplate.Ql)
-                        interpolatedCriteria = lowCriteria;
-                    else if (ql == highTemplate.Ql)
-                        interpolatedCriteria = highCriteria;
-                    else
+                    try
                     {
-                        interpolatedCriteria.Add(new RequirementCriterion
+                        var param2Low = lowCriteria[i].Param2;
+
+                        var highCrit = highCriteria.FirstOrDefault(x => x.Param1 == lowCriteria[i].Param1);
+                        if (highCrit!=null)
                         {
-                            Operator = lowCriteria[i].Operator,
-                            Param1 = lowCriteria[i].Param1,
-                            Param2 = (int)Math.Round(param2Low + ((float)ql - lowTemplate.Ql) * (param2High - param2Low) / (highTemplate.Ql - lowTemplate.Ql))
-                        });
+                            var param2High = highCrit.Param2;
+
+                            if (ql == lowTemplate.Ql)
+                                interpolatedCriteria = lowCriteria;
+                            else if (ql == highTemplate.Ql)
+                                interpolatedCriteria = highCriteria;
+                            else
+                            {
+                                interpolatedCriteria.Add(new RequirementCriterion
+                                {
+                                    Operator = lowCriteria[i].Operator,
+                                    Param1 = lowCriteria[i].Param1,
+                                    Param2 = (int)Math.Round(param2Low +
+                                                             ((float)ql - lowTemplate.Ql) *
+                                                             (param2High - param2Low) /
+                                                             (highTemplate.Ql - lowTemplate.Ql))
+                                });
+                            }
+                        }
+                        else
+                        {
+                            interpolatedCriteria.Add(lowCriteria[i]);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.Error($"i: {i} - Length lowCriteria: {lowCriteria.Count} Length HighCriteria {highCriteria.Count} - {lowTemplate.Id}/{highTemplate.Id}");
+                        Logger.Error(ex.Message);
+                        Logger.Error(ex.StackTrace);
                     }
                 }
 

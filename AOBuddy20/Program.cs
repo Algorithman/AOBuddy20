@@ -80,6 +80,8 @@ internal class Program
         catch
         {
         }
+        
+        Client.SuppressItemDataLoad();
 
         foreach (var acc in config.Accounts)
         {
@@ -106,6 +108,7 @@ internal class Program
         logger.Information($"Logging {accInfo.Character} into dimension {dimension}.");
         var instance = Client.CreateInstance(accInfo.Username, accInfo.Password, accInfo.Character, dimension, logger);
 
+        Client.SuppressItemDataLoad(false);
         instance.Start();
         return instance;
     }
