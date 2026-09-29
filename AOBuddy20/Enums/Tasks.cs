@@ -16,6 +16,7 @@ public enum Tasks
     Nothing,
     Assist,
     Mission,
+    LootBody,
     Resupply,
     SellGoods,
     Buff,
