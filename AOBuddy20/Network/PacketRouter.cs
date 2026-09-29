@@ -48,19 +48,19 @@ public sealed class PacketRouter
     }
 
 
-    public void RegisterChatHandler(Func<ChatMessage, bool> handler, ChatMessageType type, bool endSequence = false)
+    public void RegisterChatHandler(Func<ChatMessage, bool> handler, ChatMessageType type, int receivePriority, bool endSequence = false)
     {
-        _chatHandlers.GetOrAdd(type, _ => new List<ChatPacketHandlerEntry>()).Add(new ChatPacketHandlerEntry(handler, endSequence));
+        _chatHandlers.GetOrAdd(type, _ => new List<ChatPacketHandlerEntry>()).Add(new ChatPacketHandlerEntry(handler, endSequence, receivePriority));
     }
 
-    public void RegisterSystemHandler(Func<SystemMessage, bool> handler, SystemMessageType type, bool endSequence = false)
+    public void RegisterSystemHandler(Func<SystemMessage, bool> handler, SystemMessageType type, int receivePriority, bool endSequence = false)
     {
-        _systemHandlers.GetOrAdd(type, _ => new List<SystemPacketHandlerEntry>()).Add(new SystemPacketHandlerEntry(handler, endSequence));
+        _systemHandlers.GetOrAdd(type, _ => new List<SystemPacketHandlerEntry>()).Add(new SystemPacketHandlerEntry(handler, endSequence, receivePriority));
     }
 
-    public void Register(Func<AOMessage, bool> handler, N3MessageType type, bool canEndSequence = false)
+    public void Register(Func<AOMessage, bool> handler, N3MessageType type, int receivePriority, bool canEndSequence = false)
     {
-        _n3Handlers.GetOrAdd(type, _ => new List<PacketHandlerEntry>()).Add(new PacketHandlerEntry(handler, canEndSequence));
+        _n3Handlers.GetOrAdd(type, _ => new List<PacketHandlerEntry>()).Add(new PacketHandlerEntry(handler, canEndSequence, receivePriority));
     }
 
 
@@ -70,7 +70,7 @@ public sealed class PacketRouter
         {
             if (_n3Handlers.TryGetValue(n3Message.N3MessageType, out var list))
             {
-                foreach (var entry in list)
+                foreach (var entry in list.OrderBy(x=>x.receivePriority))
                 {
                     var end = entry.Handler(e);
                     if (entry.canEndSequence && end)
@@ -85,7 +85,7 @@ public sealed class PacketRouter
         {
             if (_systemHandlers.TryGetValue(system.SystemMessageType, out var list))
             {
-                foreach (var entry in list)
+                foreach (var entry in list.OrderBy(x=>x.receivePriority))
                 {
                     var end = entry.Handler(system);
                     if (entry.canEndSequence && end)
@@ -97,15 +97,15 @@ public sealed class PacketRouter
         }
     }
 
-    public record PacketHandlerEntry(Func<AOMessage, bool> Handler, bool canEndSequence)
+    public record PacketHandlerEntry(Func<AOMessage, bool> Handler, bool canEndSequence, int receivePriority)
     {
     }
 
-    public record SystemPacketHandlerEntry(Func<SystemMessage, bool> Handler, bool canEndSequence)
+    public record SystemPacketHandlerEntry(Func<SystemMessage, bool> Handler, bool canEndSequence, int receivePriority)
     {
     }
 
-    public record ChatPacketHandlerEntry(Func<ChatMessage, bool> Handler, bool canEndSequence)
+    public record ChatPacketHandlerEntry(Func<ChatMessage, bool> Handler, bool canEndSequence, int receivePriority)
     {
     }
 }

@@ -3,7 +3,7 @@
 // Project: AOBuddy20
 // Filename: Program.cs
 // 
-// Last modified: 2026-09-29 18:53
+// Last modified: 2026-09-29 20:40
 // Created:       2026-09-29 15:09
 // 
 // Long live OmniCell and AOBuddy20
@@ -37,7 +37,7 @@ internal class Program
 
         var provider = services.BuildServiceProvider();
         // init packet router first
-        provider.GetService<PacketRouter>().Init();
+        provider.GetService<PacketRouter>()?.Init();
 
         WirePackets(provider);
 
@@ -97,7 +97,10 @@ internal class Program
     private static void WirePackets(ServiceProvider provider)
     {
         var router = provider.GetService<PacketRouter>();
-        provider.GetService<Awareness>().RegisterPackets(router);
+        if (router != null)
+        {
+            provider.GetService<Awareness>()?.RegisterPackets(router);
+        }
     }
 
     private static void CreateBot(AccountInfo accInfo)

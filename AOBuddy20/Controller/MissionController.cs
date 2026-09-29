@@ -36,9 +36,9 @@ public class MissionController : IPacketConsumer
 
     public void RegisterPackets(PacketRouter router)
     {
-        router.Register(QuestMessageHandler, N3MessageType.Quest);
-        router.Register(QuestAlternativeMessageHandler, N3MessageType.QuestAlternative);
-        router.Register(CreateQuestMessageHandler, N3MessageType.CreateQuest);
+        router.Register(QuestMessageHandler, N3MessageType.Quest, 0);
+        router.Register(QuestAlternativeMessageHandler, N3MessageType.QuestAlternative, 0);
+        router.Register(CreateQuestMessageHandler, N3MessageType.CreateQuest,0);
     }
 
     private bool CreateQuestMessageHandler(AOMessage arg)

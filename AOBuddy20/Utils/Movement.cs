@@ -184,7 +184,7 @@ namespace AOBuddy20.Utils;
         }
 
         /// <summary>Diagnostic tap for our own outbound movement packets (see MOVEDBG in Main).</summary>
-        public event Action<CharDCMoveMessage> Sent;
+        public event Action<CharDCMoveMessage>? Sent;
 
         // ---- MIRROR: replay the owner's own movement packets as ours ----------------
         // Once the bot stands on his spot with his facing, the cheapest perfect follow is to say exactly

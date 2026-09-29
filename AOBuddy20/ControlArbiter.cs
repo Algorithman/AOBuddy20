@@ -10,6 +10,7 @@
 // ---------------------------------------------------------------------------------------
 
 using AOBuddy20.Enums;
+using System.Linq;
 
 namespace AOBuddy20;
 
@@ -18,6 +19,20 @@ public sealed class ControlArbiter
     private int _activePriority = (int)ControlPriority.None;
     private TaskCompletionSource? _resume = null;
 
+    private Dictionary<ControlPriority, int> _priorityLevels = new Dictionary<ControlPriority, int>();
+
+    public ControlArbiter()
+    {
+        // Priority levels init
+        foreach (var value in Enum.GetValues(typeof(ControlPriority)))
+        {
+            _priorityLevels.Add((ControlPriority)value, 0);
+        }
+
+        _priorityLevels[ControlPriority.None]++;
+    }
+        
+    
     /// <summary>
     ///     Runs a step. If a higher-priority system is active (or becomes active),
     ///     the step suspends until control is released back down.
@@ -52,6 +67,8 @@ public sealed class ControlArbiter
                 _resume = tcs;
             }
 
+            _priorityLevels[priority]++;
+            
             // re-check after registering (avoid missed signal)
             if (Volatile.Read(ref _activePriority) < (int)priority)
             {
@@ -72,6 +89,7 @@ public sealed class ControlArbiter
     {
         Volatile.Write(ref _activePriority, (int)ControlPriority.None);
         _resume?.TrySetResult();
+        _resume = null;
     }
 
     public bool HasControl(ControlPriority priority)

@@ -9,6 +9,7 @@
 // Long live OmniCell and AOBuddy20
 // ---------------------------------------------------------------------------------------
 
+using AOBuddy20.Enums;
 using AOBuddy20.Interfaces;
 using AOBuddy20.Network;
 using AOSharp.Clientless;
@@ -32,7 +33,7 @@ public sealed class Awareness : IPacketConsumer
 {
     public sealed class Seen
     {
-        public SimpleChar Mob;
+        public SimpleChar? Mob;
         public float Dist;
         public int Level;
         public bool OnUs, Following;
@@ -274,12 +275,12 @@ public sealed class Awareness : IPacketConsumer
     public string Summary() => $"{OnUsCount} on us, {FollowingCount} following, {Near.Count} near";
 
     /// <summary>The nearest one fighting him/a pet or following him, or null.</summary>
-    public SimpleChar Chaser() => Near.FirstOrDefault(s => s.OnUs || s.Following)?.Mob;
+    public SimpleChar? Chaser() => Near.FirstOrDefault(s => s.OnUs || s.Following)?.Mob;
 
     public void RegisterPackets(PacketRouter router)
     {
-        router.Register(ProcessAttackMessage, N3MessageType.Attack, false);
-        router.Register(ProcessAttackInfoMessage, N3MessageType.AttackInfo, false);
+        router.Register(ProcessAttackMessage, N3MessageType.Attack, (int)ControlPriority.Combat);
+        router.Register(ProcessAttackInfoMessage, N3MessageType.AttackInfo, (int)ControlPriority.Combat);
         
     }
 
