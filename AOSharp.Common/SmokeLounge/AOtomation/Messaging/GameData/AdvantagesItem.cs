@@ -12,28 +12,21 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-using AOSharp.Common.GameData;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
 
-namespace SmokeLounge.AOtomation.Messaging.GameData
+namespace SmokeLounge.AOtomation.Messaging.GameData;
+
+public class AdvantagesItem
 {
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region AoMember Properties
 
-    public class AdvantagesItem
-    {
-        #region AoMember Properties
+    [AoMember(0)] public int LowId { get; set; }
 
-        [AoMember(0)]
-        public int LowId { get; set; }
+    [AoMember(1)] public int HighId { get; set; }
 
-        [AoMember(1)]
-        public int HighId { get; set; }
+    [AoMember(2)] public int Ql { get; set; }
 
-        [AoMember(2)]
-        public int Ql { get; set; }
+    [AoMember(3)] public int Status { get; set; }
 
-        [AoMember(3)]
-        public int Status { get; set; }
-
-        #endregion
-    }
+    #endregion
 }

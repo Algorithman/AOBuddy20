@@ -1,927 +1,1086 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using Serilog.Core;
-using AOSharp.Clientless.Net;
-using SmokeLounge.AOtomation.Messaging.Messages;
-using AOSharp.Clientless.Common;
 using AOSharp.Clientless.Chat;
+using AOSharp.Clientless.Common;
+using AOSharp.Clientless.Net;
 using AOSharp.Common.GameData;
+using AOSharp.Common.SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
+using Serilog;
+using SmokeLounge.AOtomation.Messaging.GameData;
+using SmokeLounge.AOtomation.Messaging.Messages;
 using SmokeLounge.AOtomation.Messaging.Messages.ChatMessages;
 using SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
-using SmokeLounge.AOtomation.Messaging.GameData;
-using AOSharp.Common.SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
 using SmokeLounge.AOtomation.Messaging.Messages.SystemMessages;
-using System.Threading.Tasks;
-using Serilog;
 using Stateless;
 
-namespace AOSharp.Clientless
+namespace AOSharp.Clientless;
+
+public class ClientConfig
 {
-    public class ClientConfig
+    public bool AutoReconnect = true;
+    public int ReconnectDelay = 30000; //TODO: implement exponential backoff
+}
+
+public static class Client
+{
+    internal static Credentials Credentials;
+    public static ClientConfig Config = new ClientConfig();
+
+    private static NetworkSession _netSession;
+    private static UpdateLoop _updateLoop;
+    private static bool _isFirstPlayshift = true;
+
+    internal static ILogger Logger;
+    internal static HostProxy HostProxy = null;
+    internal static bool LogDeserializationErrors;
+    internal static bool ItemDataLoaded = true;
+
+    public static ChatClient Chat;
+
+    public static EventHandler<double> OnUpdate;
+    public static EventHandler<AOMessage> MessageReceived;
+    public static EventHandler<byte[]> PacketReceived;
+    public static Action<CharacterSelect> CharacterSelect;
+    public static Action<bool> CharacterInPlay;
+    public static Action Died;
+    public static Action Disconnected;
+
+    // Pet lifecycle, straight from the server (AddPet / RemovePet / PetToMaster). PetAttached
+    // also states what the pet is for; the same value is on the pet's own character update as
+    // NpcChar.PetTypeId, so either source works and they agree.
+    // Server feedback: the reason it refused something. Category 110 is the feedback/error channel and
+    // MessageId keys into the client's message table, so the id alone identifies the message even
+    // without its text ("you already have that pet", "you cannot do that while in combat", ...).
+    // Decoded and dropped until now, which is why a refused cast or item use looked identical to a
+    // successful one from the log.
+    public static Action<int, int> Feedback;
+
+    /// <summary>The server confirming a sit/stand actually happened (action 0x57, echoed back).</summary>
+    public static Action<Identity> PostureToggled;
+
+    public static Action<Identity> PetAdded;
+    public static Action<Identity> PetRemoved;
+    public static Action<Identity, PetType> PetAttached;
+
+    private static Dictionary<SystemMessageType, Action<SystemMessage>> _sysMsgCallbacks;
+    private static Dictionary<N3MessageType, Action<N3Message>> _n3MsgCallbacks;
+    public static string CharacterName { get; internal set; }
+    public static Dimension Dimension { get; internal set; }
+    public static int LocalDynelId { get; internal set; }
+    public static int OrgId { get; internal set; }
+    public static string OrgName { get; internal set; }
+    public static int ServerId { get; internal set; }
+
+    public static bool InPlay => _netSession.InPlay;
+    public static bool Connected => _netSession.Connected;
+
+    /// <summary>
+    ///     ChestFullUpdate packets, raw (header included). The stock reader throws on them, so they
+    ///     are never deserialized; listeners read the fixed-position fields they need (identity at 20, position
+    ///     floats at 41) - see NetworkSession.
+    /// </summary>
+    public static event Action<byte[]> ChestFullUpdateRaw;
+
+    // N3 Action (0x2049527C) has no class in the SDK; handed on raw (a door unlocked by a lock pick is action 115).
+    public static event Action<byte[]> ActionRaw;
+
+    // Every packet, both ways (true = from the server), for the mission recorder.
+    public static event Action<byte[], bool> PacketRaw;
+
+    internal static void RaisePacketRaw(byte[] packet, bool fromServer)
     {
-        public bool AutoReconnect = true;
-        public int ReconnectDelay = 30000; //TODO: implement exponential backoff
+        try
+        {
+            PacketRaw?.Invoke(packet, fromServer);
+        }
+        catch
+        {
+        }
     }
 
-    public static class Client
+    internal static void RaiseActionRaw(byte[] packet)
     {
-        /// <summary>ChestFullUpdate packets, raw (header included). The stock reader throws on them, so they
-        /// are never deserialized; listeners read the fixed-position fields they need (identity at 20, position
-        /// floats at 41) - see NetworkSession.</summary>
-        public static event Action<byte[]> ChestFullUpdateRaw;
-        // N3 Action (0x2049527C) has no class in the SDK; handed on raw (a door unlocked by a lock pick is action 115).
-        public static event Action<byte[]> ActionRaw;
-        // Every packet, both ways (true = from the server), for the mission recorder.
-        public static event Action<byte[], bool> PacketRaw;
-        internal static void RaisePacketRaw(byte[] packet, bool fromServer) { try { PacketRaw?.Invoke(packet, fromServer); } catch { } }
-        internal static void RaiseActionRaw(byte[] packet) { try { ActionRaw?.Invoke(packet); } catch { } }
-        // DoorFullUpdate, raw, whether or not the SDK reader copes: the lock flag is read from the bytes.
-        public static event Action<byte[]> DoorFullUpdateRaw;
-        internal static void RaiseDoorFullUpdateRaw(byte[] packet) { try { DoorFullUpdateRaw?.Invoke(packet); } catch { } }
-        internal static void RaiseChestFullUpdateRaw(byte[] packet)
+        try
         {
-            try { Inventory.OnChestItemRaw(packet); } catch { }
-            try { ChestFullUpdateRaw?.Invoke(packet); } catch { }
+            ActionRaw?.Invoke(packet);
+        }
+        catch
+        {
+        }
+    }
+
+    // DoorFullUpdate, raw, whether or not the SDK reader copes: the lock flag is read from the bytes.
+    public static event Action<byte[]> DoorFullUpdateRaw;
+
+    internal static void RaiseDoorFullUpdateRaw(byte[] packet)
+    {
+        try
+        {
+            DoorFullUpdateRaw?.Invoke(packet);
+        }
+        catch
+        {
+        }
+    }
+
+    internal static void RaiseChestFullUpdateRaw(byte[] packet)
+    {
+        try
+        {
+            Inventory.OnChestItemRaw(packet);
+        }
+        catch
+        {
         }
 
-        internal static Credentials Credentials;
-        public static string CharacterName { get; internal set; }
-        public static Dimension Dimension { get; internal set; }
-        public static int LocalDynelId { get; internal set; }
-        public static int OrgId { get; internal set; }
-        public static string OrgName { get; internal set; }
-        public static int ServerId { get; internal set; }
-        public static ClientConfig Config = new ClientConfig();
-
-        public static bool InPlay => _netSession.InPlay;
-        public static bool Connected => _netSession.Connected;
-
-        private static NetworkSession _netSession;
-        private static UpdateLoop _updateLoop;
-        private static bool _isFirstPlayshift = true;
-
-        internal static ILogger Logger;
-        internal static HostProxy HostProxy = null;
-        internal static bool LogDeserializationErrors = false;
-        internal static bool ItemDataLoaded = true;
-
-        public static ChatClient Chat;
-
-        public static EventHandler<double> OnUpdate;
-        public static EventHandler<AOMessage> MessageReceived;
-        public static EventHandler<byte[]> PacketReceived;
-        public static Action<CharacterSelect> CharacterSelect;
-        public static Action<bool> CharacterInPlay;
-        public static Action Died;
-        public static Action Disconnected;
-
-        // Pet lifecycle, straight from the server (AddPet / RemovePet / PetToMaster). PetAttached
-        // also states what the pet is for; the same value is on the pet's own character update as
-        // NpcChar.PetTypeId, so either source works and they agree.
-        // Server feedback: the reason it refused something. Category 110 is the feedback/error channel and
-        // MessageId keys into the client's message table, so the id alone identifies the message even
-        // without its text ("you already have that pet", "you cannot do that while in combat", ...).
-        // Decoded and dropped until now, which is why a refused cast or item use looked identical to a
-        // successful one from the log.
-        public static Action<int, int> Feedback;
-
-        /// <summary>The server confirming a sit/stand actually happened (action 0x57, echoed back).</summary>
-        public static Action<Identity> PostureToggled;
-        public static Action<Identity> PetAdded;
-        public static Action<Identity> PetRemoved;
-        public static Action<Identity, PetType> PetAttached;
-
-        private static Dictionary<SystemMessageType, Action<SystemMessage>> _sysMsgCallbacks;
-        private static Dictionary<N3MessageType, Action<N3Message>> _n3MsgCallbacks;
-
-        public static ClientDomain CreateInstance(string username, string password, string characterName, Dimension dimension, ILogger logger)
+        try
         {
-            //TODO: Validate params
+            ChestFullUpdateRaw?.Invoke(packet);
+        }
+        catch
+        {
+        }
+    }
 
-            return ClientDomain.CreateDomain(username, password, characterName, dimension, logger);
+    public static ClientDomain CreateInstance(string username, string password, string characterName, Dimension dimension, ILogger logger)
+    {
+        //TODO: Validate params
+
+        return ClientDomain.CreateDomain(username, password, characterName, dimension, logger);
+    }
+
+    public static void UseCurrentDomain(string username, string password, string characterName, Dimension dimension, ILogger logger,
+        bool useBuiltInLooper = true, bool useChat = true)
+    {
+        Credentials = new Credentials(username, password);
+        CharacterName = characterName;
+        Dimension = dimension;
+        Logger = logger;
+
+        if (useChat)
+        {
+            CreateChatClient();
         }
 
-        public static void UseCurrentDomain(string username, string password, string characterName, Dimension dimension, ILogger logger, bool useBuiltInLooper = true, bool useChat = true)
+        Init(useBuiltInLooper);
+    }
+
+
+    public static void Send(MessageBody msgBody)
+    {
+        _netSession.Send(msgBody);
+    }
+
+    public static void Send(AOMessage aoMessage)
+    {
+        _netSession.Send(aoMessage);
+    }
+
+    public static void Send(ChatMessageBody msgBody)
+    {
+        Chat.Send(msgBody);
+    }
+
+    public static void SendPrivateMessage(int charId, string message, bool logMessage = true)
+    {
+        SendPrivateMessage((uint)charId, message, logMessage);
+    }
+
+    public static void SendPrivateMessage(uint charId, string message, bool logMessage = true)
+    {
+        if (Chat == null)
         {
-            Credentials = new Credentials(username, password);
-            CharacterName = characterName;
-            Dimension = dimension;
-            Logger = logger;
-
-            if(useChat)
-                CreateChatClient();
-
-            Init(useBuiltInLooper);
+            return;
         }
 
+        Chat.SendPrivateMessage(charId, message, logMessage);
+    }
 
-        public static void Send(MessageBody msgBody) => _netSession.Send(msgBody);
-
-        public static void Send(AOMessage aoMessage) => _netSession.Send(aoMessage);
-
-        public static void Send(ChatMessageBody msgBody) => Chat.Send(msgBody);
-
-        public static void SendPrivateMessage(int charId, string message, bool logMessage = true) => SendPrivateMessage((uint)charId, message, logMessage);
-
-        public static void SendPrivateMessage(uint charId, string message, bool logMessage = true)
+    public static void SendTeamMessage(string message, bool logMessage = true)
+    {
+        if (!DynelManager.LocalPlayer.TryGetStat(Stat.Team, out var teamId) || teamId == 0)
         {
-            if (Chat == null)
-                return;
-
-            Chat.SendPrivateMessage(charId, message, logMessage);
+            Logger.Error("Team channel id is not valid.");
+            return;
         }
 
-        public static void SendTeamMessage(string message, bool logMessage = true)
+        Send(new GroupMsgMessage
         {
-            if (!DynelManager.LocalPlayer.TryGetStat(Stat.Team, out int teamId) || teamId == 0)
+            MessageType = GroupMessageType.Team,
+            ChannelId = teamId,
+            Text = message,
+        });
+
+        if (logMessage)
+        {
+            Logger.Information(message);
+        }
+    }
+
+    public static void SendChannelMessage(ChannelType channel, string message, bool logMessage = true)
+    {
+        if (Chat == null)
+        {
+            return;
+        }
+
+        Chat.SendChannelMessage(channel, message, logMessage);
+    }
+
+    public static void SendOrgMessage(string message, bool logMessage = true)
+    {
+        if (!DynelManager.LocalPlayer.TryGetStat(Stat.Clan, out var clanId) || clanId == 0)
+        {
+            Logger.Error("Could not obtain LocalPlayer org stat.");
+            return;
+        }
+
+        Send(new GroupMsgMessage
+        {
+            MessageType = GroupMessageType.Org,
+            ChannelId = clanId,
+            Text = message,
+        });
+
+        if (logMessage)
+        {
+            Logger.Information(message);
+        }
+    }
+
+    public static void InfoRequest(Identity identity)
+    {
+        Send(new CharacterActionMessage
+        {
+            Action = CharacterActionType.InfoRequest,
+            Identity = DynelManager.LocalPlayer.Identity,
+            Target = identity,
+        });
+    }
+
+    public static void Disconnect()
+    {
+        Teardown();
+    }
+
+    public static void SuppressItemDataLoad(bool shouldSuppress = true)
+    {
+        ItemDataLoaded = !shouldSuppress;
+    }
+
+    public static void SuppressDeserializationErrors()
+    {
+        LogDeserializationErrors = true;
+    }
+
+    internal static void CreateChatClient()
+    {
+        Chat = new ChatClient(Credentials, CharacterName, Dimension, Logger);
+    }
+
+    internal static void Init(bool useBuiltInLooper = true)
+    {
+        Playfield.LoadPlayfieldNames();
+
+        RegisterSystemMessageHandlers();
+        RegisterN3MessageHandlers();
+
+        _netSession = new NetworkSession(Logger, _sysMsgCallbacks, _n3MsgCallbacks);
+
+        if (useBuiltInLooper)
+        {
+            _updateLoop = new UpdateLoop(Update);
+            _updateLoop.Start();
+        }
+
+        _netSession.Connect();
+        _netSession.NetworkStateChanged += OnNetworkStateTransition;
+
+        Chat?.Init(false);
+    }
+
+    internal static void Teardown()
+    {
+        _updateLoop?.Stop();
+        _netSession?.Disconnect();
+    }
+
+    internal static void Update(double deltaTime)
+    {
+        _netSession.Update();
+
+        Chat?.Update(deltaTime);
+        IPCChannel.UpdateInternal();
+
+        if (InPlay)
+        {
+            OnUpdate?.Invoke(null, deltaTime);
+        }
+    }
+
+    internal static void OnTeleportStart()
+    {
+    }
+
+    internal static void SelectCharacter(int id)
+    {
+        Send(new SelectCharacterMessage
+        {
+            CharacterId = id,
+        });
+
+        LocalDynelId = id;
+    }
+
+    private static void OnNetworkStateTransition(StateMachine<State, Trigger>.Transition transition)
+    {
+        if (transition.Destination == State.Disconnected)
+        {
+            Disconnected?.Invoke();
+            _isFirstPlayshift = true;
+        }
+    }
+
+    private static void RegisterSystemMessageHandlers()
+    {
+        _sysMsgCallbacks = new Dictionary<SystemMessageType, Action<SystemMessage>>();
+
+        _sysMsgCallbacks.Add(SystemMessageType.ServerSalt, msg =>
+        {
+            Send(new UserCredentialsMessage
             {
-                Logger.Error("Team channel id is not valid.");
-                return;
-            }
-
-            Send(new GroupMsgMessage()
-            {
-                MessageType = GroupMessageType.Team,
-                ChannelId = teamId,
-                Text = message,
+                UserName = Credentials.Username,
+                Credentials = LoginEncryption.MakeChallengeResponse(Credentials, ((ServerSaltMessage)msg).ServerSalt),
             });
+        });
 
-            if (logMessage)
-                Logger.Information(message);
-        }
-
-        public static void SendChannelMessage(ChannelType channel, string message, bool logMessage = true)
+        _sysMsgCallbacks.Add(SystemMessageType.CharacterList, msg =>
         {
-            if (Chat == null)
-                return;
+            var charListMsg = (CharacterListMessage)msg;
 
-            Chat.SendChannelMessage(channel, message, logMessage);
-        }
-
-        public static void SendOrgMessage(string message, bool logMessage = true)
-        {
-            if (!DynelManager.LocalPlayer.TryGetStat(Stat.Clan, out int clanId) || clanId == 0)
+            if (CharacterSelect == null)
             {
-                Logger.Error("Could not obtain LocalPlayer org stat.");
-                return;
-            }
+                var desiredChar = charListMsg.Characters.FirstOrDefault(x => x.Name == CharacterName);
 
-            Send(new GroupMsgMessage()
-            {
-                MessageType = GroupMessageType.Org,
-                ChannelId = clanId,
-                Text = message,
-            });
-
-            if (logMessage)
-                Logger.Information(message);
-        }
-
-        public static void InfoRequest(Identity identity)
-        {
-            Send(new CharacterActionMessage()
-            {
-                Action = CharacterActionType.InfoRequest,
-                Identity = DynelManager.LocalPlayer.Identity,
-                Target = identity,
-            });
-        }
-
-        public static void Disconnect()
-        {
-            Teardown();
-        }
-
-        public static void SuppressItemDataLoad(bool shouldSuppress = true)
-        {
-            ItemDataLoaded = !shouldSuppress;
-        }
-
-        public static void SuppressDeserializationErrors()
-        {
-            LogDeserializationErrors = true;
-        }
-
-        internal static void CreateChatClient()
-        {
-            Chat = new ChatClient(Credentials, CharacterName, Dimension, Logger);
-        }
-
-        internal static void Init(bool useBuiltInLooper = true)
-        {
-            Playfield.LoadPlayfieldNames();
-
-            RegisterSystemMessageHandlers();
-            RegisterN3MessageHandlers();
-
-            _netSession = new NetworkSession(Logger, _sysMsgCallbacks, _n3MsgCallbacks);
-
-            if (useBuiltInLooper)
-            {
-                _updateLoop = new UpdateLoop(Update);
-                _updateLoop.Start();
-            }
-
-            _netSession.Connect();
-            _netSession.NetworkStateChanged += OnNetworkStateTransition;
-
-            Chat?.Init(false);
-        }
-
-        internal static void Teardown()
-        {
-            _updateLoop?.Stop();
-            _netSession?.Disconnect();
-        }
-
-        internal static void Update(double deltaTime)
-        {
-            _netSession.Update();
-
-            Chat?.Update(deltaTime);
-            IPCChannel.UpdateInternal();
-
-            if (InPlay)
-                OnUpdate?.Invoke(null, deltaTime);
-        }
-
-        internal static void OnTeleportStart()
-        {
-        }
-
-        internal static void SelectCharacter(int id)
-        {
-            Send(new SelectCharacterMessage
-            {
-                CharacterId = id
-            });
-
-            LocalDynelId = id;
-        }
-
-        private static void OnNetworkStateTransition(StateMachine<State, Trigger>.Transition transition)
-        {
-            if (transition.Destination == State.Disconnected)
-            {
-                Disconnected?.Invoke();
-                _isFirstPlayshift = true;
-            }
-        }
-
-        private static void RegisterSystemMessageHandlers()
-        {
-            _sysMsgCallbacks = new Dictionary<SystemMessageType, Action<SystemMessage>>();
-
-            _sysMsgCallbacks.Add(SystemMessageType.ServerSalt, (msg) =>
-            {
-                Send(new UserCredentialsMessage
+                if (desiredChar == null)
                 {
-                    UserName = Client.Credentials.Username,
-                    Credentials = LoginEncryption.MakeChallengeResponse(Client.Credentials, ((ServerSaltMessage)msg).ServerSalt)
-                });
-            });
+                    Logger.Error($"Could not locate character with name: {CharacterName}.");
 
-            _sysMsgCallbacks.Add(SystemMessageType.CharacterList, (msg) =>
-            {
-                CharacterListMessage charListMsg = (CharacterListMessage)msg;
+                    Logger.Error("Characters on this account:");
 
-                if (CharacterSelect == null)
-                {
-                    LoginCharacterInfo desiredChar = charListMsg.Characters.FirstOrDefault(x => x.Name == CharacterName);
-
-                    if (desiredChar == null)
+                    foreach (var charInfo in charListMsg.Characters)
                     {
-                        Logger.Error($"Could not locate character with name: {CharacterName}.");
-
-                        Logger.Error("Characters on this account:");
-
-                        foreach (LoginCharacterInfo charInfo in charListMsg.Characters)
-                            Logger.Error($"\t{charInfo.Name}");
-
-                        return; //TODO: Trigger fatal error state?
+                        Logger.Error($"\t{charInfo.Name}");
                     }
 
-                    SelectCharacter(desiredChar.Id);
-                }
-                else
-                {
-                    CharacterSelect.Invoke(new CharacterSelect
-                    {
-                        AllowedCharacters = charListMsg.AllowedCharacters,
-                        Expansions = (ExpansionFlags)charListMsg.Expansions,
-                        Characters = charListMsg.Characters.Select(x => new CharacterSelect.Character
-                        {
-                            Id = x.Id,
-                            Name = x.Name
-                        }).ToList(),
-                    });
-                }
-            });
-        }
-
-        private static void RegisterN3MessageHandlers()
-        {
-            _n3MsgCallbacks = new Dictionary<N3MessageType, Action<N3Message>>();
-
-            _n3MsgCallbacks.Add(N3MessageType.FullCharacter, (msg) =>
-            {
-                FullCharacterMessage fullCharMsg = (FullCharacterMessage)msg;
-
-                // Only OUR OWN FullCharacter updates the local player. The server also sends other characters'
-                // FullCharacter once we're near/teamed with them (e.g. the owner) — applying those overwrote
-                // our SpellList/stats with theirs, so the bot dumped and cast the OWNER'S nanos (a Keeper's).
-                // Always let the FIRST one through (it establishes us, before LocalDynelId may be set); after
-                // that, ignore any whose identity isn't ours.
-                if (!_isFirstPlayshift && Client.LocalDynelId != 0 && fullCharMsg.Identity.Instance != Client.LocalDynelId)
-                    return;
-
-                // Say what we took and from whom. A login where hp, nano, run speed and movement mode all read
-                // as absent, while the nano list arrived intact from the same message, cannot be diagnosed from
-                // the symptom - the counts here name which part of the message was empty and which reader
-                // produced it, instead of another round of guessing.
-                Logger.Information($"FULLCHAR: identity={fullCharMsg.Identity.Instance} localDynelId={Client.LocalDynelId} "
-                    + $"first={_isFirstPlayshift} stats1={fullCharMsg.Stats1?.Length ?? -1} stats2={fullCharMsg.Stats2?.Length ?? -1} "
-                    + $"stats3={fullCharMsg.Stats3?.Length ?? -1} stats4={fullCharMsg.Stats4?.Length ?? -1} "
-                    + $"nanos={fullCharMsg.UploadedNanoIds?.Length ?? -1} perks={(fullCharMsg.Perks == null ? "null" : fullCharMsg.Perks.Length.ToString())} "
-                    + $"pets={fullCharMsg.Pets?.Length ?? -1}");
-
-                DynelManager.LocalPlayerProxy.ApplyFullCharUpdate(fullCharMsg);
-
-                // AUTHORITATIVE pet ownership: our own FullCharacter lists our pets (decoded by the corrected
-                // fallback reader when a pet is up). Mark those NPCs as owned so me.Pets is reliable regardless
-                // of the flaky per-update pet-master bit. Match on INSTANCE — the FullCharacter pet-list
-                // identity uses a different Type than the pet's own dynel identity.
-                if (fullCharMsg.Pets != null && fullCharMsg.Pets.Length > 0)
-                {
-                    LocalPlayer me = DynelManager.LocalPlayer;
-                    if (me != null)
-                        foreach (Identity petId in fullCharMsg.Pets)
-                            foreach (NpcChar npc in DynelManager.Npcs)
-                                if (npc.Identity.Instance == petId.Instance)
-                                    npc.Owner = me.Identity;
+                    return; //TODO: Trigger fatal error state?
                 }
 
-                Send(new CharInPlayMessage());
-                CharacterInPlay?.Invoke(_isFirstPlayshift);
-
-                if (_isFirstPlayshift)
-                    _isFirstPlayshift = false;
-            });
-
-            _n3MsgCallbacks.Add(N3MessageType.ContainerAddItem, (msg) =>
-            {
-                ContainerAddItem contAddItem = (ContainerAddItem)msg;
-
-                if (contAddItem.Identity == DynelManager.LocalPlayer.Identity)
-                    Inventory.OnContainerAddItem(contAddItem.Source, contAddItem.Target, contAddItem.Slot);
-            });
-
-            _n3MsgCallbacks.Add(N3MessageType.Bank, (msg) =>
-            {
-                BankMessage bankMsg = (BankMessage)msg;
-
-                if (bankMsg.Identity == DynelManager.LocalPlayer.Identity)
-                    Inventory.OnBankUpdate(bankMsg);
-            });
-
-            _n3MsgCallbacks.Add(N3MessageType.InventoryUpdate, (msg) =>
-            {
-                InventoryUpdateMessage invMsg = (InventoryUpdateMessage)msg;
-                Inventory.OnContainerUpdate(invMsg.InventoryIdentity, invMsg.Items, invMsg.Handle);
-            });
-
-            _n3MsgCallbacks.Add(N3MessageType.SimpleItemFullUpdate, (msg) =>
-            {
-                SimpleItemFullUpdateMessage sifu = (SimpleItemFullUpdateMessage)msg;
-                FullUpdateProxy.OnSIFU(sifu);
-            });
-
-            _n3MsgCallbacks.Add(N3MessageType.WeaponItemFullUpdate, (msg) =>
-            {
-                WeaponItemFullUpdateMessage wifu = (WeaponItemFullUpdateMessage)msg;
-                FullUpdateProxy.OnWIFU(wifu);
-            });
-
-            _n3MsgCallbacks.Add(N3MessageType.ChestFullUpdate, (msg) =>
-            {
-                ChestFullUpdateMessage cfu = (ChestFullUpdateMessage)msg;
-                FullUpdateProxy.OnCFU(cfu);
-            });
-
-            _n3MsgCallbacks.Add(N3MessageType.SimpleCharFullUpdate, (msg) =>
-            {
-                SimpleCharFullUpdateMessage simpleCharFullUpdateMsg = (SimpleCharFullUpdateMessage)msg;
-                DynelManager.OnDynelSpawned(simpleCharFullUpdateMsg);
-            });
-
-            _n3MsgCallbacks.Add(N3MessageType.OrgInfoPacket, (msg) =>
-            {
-                OrgInfoPacketMessage orgInfoPacketMessage = (OrgInfoPacketMessage)msg;
-                DynelManager.OnOrgInfoPacket(orgInfoPacketMessage);
-            });
-
-            _n3MsgCallbacks.Add(N3MessageType.OrgServer, (msg) =>
-            {
-                OrgServerMessage orgServerMessage = (OrgServerMessage)msg;
-                Organization.OnOrgServerMessage(orgServerMessage);
-            });
-
-            _n3MsgCallbacks.Add(N3MessageType.VendingMachineFullUpdate, (msg) =>
-            {
-                VendingMachineFullUpdateMessage vendingMachineFullUpdateMsg = (VendingMachineFullUpdateMessage)msg;
-
-                if (vendingMachineFullUpdateMsg.Position != null)
-                    DynelManager.OnDynelSpawned(vendingMachineFullUpdateMsg);
-            });
-
-            _n3MsgCallbacks.Add(N3MessageType.Despawn, (msg) =>
-            {
-                DespawnMessage despawnMessage = (DespawnMessage)msg;
-                DynelManager.OnDynelDespawned(despawnMessage.Identity);
-            });
-
-            // DIAGNOSTIC ONLY: log the server's SetPos for the LOCAL player so we can compare the
-            // server's idea of the bot's position against where the bot thinks it is (desync check).
-            // This does NOT move the bot and does NOT apply to any dynel — it only fires the observe
-            // event that the plugin logs. It is safe: setpos is never applied (that is what warps).
-            _n3MsgCallbacks.Add(N3MessageType.SetPos, (msg) =>
-            {
-                SetPosMessage setPos = (SetPosMessage)msg;
-                DynelManager.OnServerSetPos(setPos.Identity, setPos.Position);
-            });
-
-            _n3MsgCallbacks.Add(N3MessageType.PlayfieldAnarchyF, (msg) =>
-            {
-                PlayfieldAnarchyFMessage playfieldMessage = (PlayfieldAnarchyFMessage)msg;
-                Playfield.Init(playfieldMessage);
-            });
-
-            _n3MsgCallbacks.Add(N3MessageType.PlayfieldAllTowers, (msg) =>
-            {
-                PlayfieldAllTowersMessage playfieldAllTowersMessage = (PlayfieldAllTowersMessage)msg;
-
-                foreach (TowerInfo tower in playfieldAllTowersMessage.TowerInfo)
-                    Playfield.MakeTower(tower, PlayfieldTowerUpdateType.InitialLoad);
-            });
-
-            _n3MsgCallbacks.Add(N3MessageType.PlayfieldTowerUpdateClient, (msg) =>
-            {
-                PlayfieldTowerUpdateClientMessage playfieldTowerUpdateClientMessage = (PlayfieldTowerUpdateClientMessage)msg;
-
-                if (playfieldTowerUpdateClientMessage.UpdateType == PlayfieldUpdateClientType.Planted)
-                    Playfield.MakeTower(playfieldTowerUpdateClientMessage.Tower, PlayfieldTowerUpdateType.Planted);
-                else
-                    Playfield.DestroyTower(playfieldTowerUpdateClientMessage.TowerId);
-            });
-
-            _n3MsgCallbacks.Add(N3MessageType.CharDCMove, (msg) =>
-            {
-                CharDCMoveMessage moveMessage = (CharDCMoveMessage)msg;
-
-                DynelManager.OnDynelMovementChanged(moveMessage.Identity, moveMessage.Position, moveMessage.Heading, moveMessage.MoveType);
-            });
-
-            // A CORPSE names the mob it was (owner's capture 20260925-113057 s14 seq 383: 'Remains of Important
-            // Techrejecter', owner CanbeAffected:245734440 = the mob that died at seq 377; decoded here as
-            // UnknownIdentity). A bot that zones in or restarts next to the dead never saw them die, and the server
-            // sends those mobs again with their old HP, still 'fighting' (Algorithman, 2026-09-26: 'he still fights his
-            // ghost mobs ... i restarted the bot mid-mission'). The corpse marks its mob dead.
-            _n3MsgCallbacks.Add(N3MessageType.CorpseFullUpdate, (msg) =>
-            {
-                var corpse = (CorpseFullUpdateMessage)msg;
-                if (corpse.UnknownIdentity.Instance == 0) return;
-                DynelManager.CorpseCount++;
-                if (DynelManager.Find(corpse.UnknownIdentity, out SimpleChar was))
-                {
-                    DynelManager.CorpseMatched++;
-                    DynelManager.LastCorpse = $"'{corpse.Name}' = '{was.Name}'";
-                }
-                MarkDead(corpse.UnknownIdentity);
-            });
-
-            _n3MsgCallbacks.Add(N3MessageType.FollowTarget, (msg) =>
-            {
-                var ft = (FollowTargetMessage)msg;
-                if (ft.Info is FollowTargetMessage.PathInfo pi) DynelManager.OnFollowTarget(ft.Identity, pi.Waypoints, ft.MoveMode);
-                else if (ft.Info is FollowTargetMessage.TargetInfo ti && ti.Coordinates?.Length > 0) DynelManager.OnFollowTarget(ft.Identity, ti.Coordinates, ft.MoveMode);
-            });
-
-            _n3MsgCallbacks.Add(N3MessageType.CharacterAction, (msg) =>
-            {
-                CharacterActionMessage charActionMessage = (CharacterActionMessage)msg;
-                OnCharacterAction(charActionMessage);
-            });
-
-            _n3MsgCallbacks.Add(N3MessageType.Stat, (msg) =>
-            {
-                StatMessage statMsg = (StatMessage)msg;
-
-                if (DynelManager.Find(statMsg.Identity, out Dynel statTarget))
-                {
-                    foreach (var stat in statMsg.Stats)
-                        statTarget.SetStat(stat.Value1, (int)stat.Value2);
-                }
-            });
-
-            // Keep current HP live. The server rarely re-pushes Stat.Health, but every point of
-            // damage or healing arrives as a HealthDamage packet whose Health field is the HP the
-            // character has LEFT after the change. Without this, tracked HP goes stale after a
-            // recharge/heal (bot thinks it's still hurt) — breaking self-heal, owner-heal and rest.
-            _n3MsgCallbacks.Add(N3MessageType.HealthDamage, (msg) =>
-            {
-                HealthDamageMessage hd = (HealthDamageMessage)msg;
-
-                // The packet names the stat it moved: a nano drain/refill carries CurrentNano, and writing
-                // that into Health put a nano number in someone's HP.
-                // WHOSE HP: the message's own Identity is the character whose HP this is; the field called
-                // Target is the one who dealt it (OmniCell's messaging calls it Source). Capture 20260910-200346:
-                // one healer (Source 1999636446) heals three characters, each message carrying that receiver's
-                // own HP. Writing it into Target set the healer's HP to the patient's: the bot stimmed the owner
-                // (42% -> 79%, 322/402) and read its own HP as 51% = 322/638 until restart (2026-09-23 21:01).
-                if (DynelManager.Find(hd.Identity, out Dynel hpTarget))
-                    hpTarget.SetStat(hd.Stat == Stat.CurrentNano ? Stat.CurrentNano : Stat.Health, hd.TargetHp);
-            });
-
-            // Keep skills/abilities live. After login these change via SkillMessage (buffs like
-            // Composite Attribute, IP spends, equipment) — the SDK had no handler, so skills were
-            // frozen at their login values and buffed skills (e.g. First Aid) read low, wrongly
-            // failing item/nano use-requirements. Apply each update to the character's stats.
-            _n3MsgCallbacks.Add(N3MessageType.Skill, (msg) =>
-            {
-                SkillMessage skillMsg = (SkillMessage)msg;
-
-                if (skillMsg.Skills != null && DynelManager.Find(skillMsg.Identity, out Dynel skillTarget))
-                    foreach (var skill in skillMsg.Skills)
-                        skillTarget.SetStat(skill.Value1, (int)skill.Value2);
-            });
-
-            // Keep our LEVEL live. Levelling is SERVER-PUSHED as its own NewLevelMessage (not a Stat or
-            // Skill update), and the SDK had no handler for it — so Stat.Level stayed frozen at the login
-            // value: the character read the old level forever and nothing could notice a "ding". Apply the
-            // new level to the character's stats so Level/GetStat(Stat.Level) tracks reality.
-            _n3MsgCallbacks.Add(N3MessageType.NewLevel, (msg) =>
-            {
-                NewLevelMessage lvlMsg = (NewLevelMessage)msg;
-
-                if (DynelManager.Find(lvlMsg.Identity, out Dynel lvlTarget))
-                    lvlTarget.SetStat(Stat.Level, lvlMsg.Level);
-                else
-                    DynelManager.LocalPlayer?.SetStat(Stat.Level, lvlMsg.Level);
-            });
-
-            _n3MsgCallbacks.Add(N3MessageType.TeamMember, (msg) =>
-            {
-                TeamMemberMessage teamMemberMsg = (TeamMemberMessage)msg;
-
-                Team.OnTeamMember(teamMemberMsg.Character, teamMemberMsg.Level, teamMemberMsg.Name,
-                                  teamMemberMsg.Profession, teamMemberMsg.RaidGroup);
-
-                if (DynelManager.Find(teamMemberMsg.Identity, out Dynel statTarget))
-                {
-                    statTarget.SetStat(Stat.Team, teamMemberMsg.Team.Instance);
-                }
-            });
-
-            // The team window's live health/nano for one member. This was decoded and then dropped
-            // on the floor, so a teammate's vitals could only be read off his dynel - which goes
-            // stale as soon as he stops being broadcast to us. These keep coming while he is in the
-            // playfield at any distance.
-            _n3MsgCallbacks.Add(N3MessageType.TeamMemberInfo, (msg) =>
-            {
-                TeamMemberInfoMessage infoMsg = (TeamMemberInfoMessage)msg;
-
-                Team.OnTeamMemberInfo(infoMsg.Character, infoMsg.CurrentHealth, infoMsg.MaxHealth,
-                                      infoMsg.CurrentNano, infoMsg.MaxNano);
-
-                // Mirror onto the dynel when we can see it, so existing stat readers agree.
-                if (DynelManager.Find(infoMsg.Character, out Dynel vitalsTarget))
-                {
-                    vitalsTarget.SetStat(Stat.Health, infoMsg.CurrentHealth);
-                    vitalsTarget.SetStat(Stat.MaxHealth, infoMsg.MaxHealth);
-                    vitalsTarget.SetStat(Stat.CurrentNano, infoMsg.CurrentNano);
-                    vitalsTarget.SetStat(Stat.MaxNanoEnergy, infoMsg.MaxNano);
-                }
-            });
-
-            // Pet lifecycle. LocalPlayer.Pets still derives the roster from the dynel list, but these
-            // are the exact moments a summon landed or a pet was lost, so a caller can react at once
-            // instead of noticing on its next poll. PetToMaster's attach also repeats the pet's type.
-            _n3MsgCallbacks.Add(N3MessageType.Feedback, (msg) =>
-            {
-                FeedbackMessage fb = (FeedbackMessage)msg;
-                Feedback?.Invoke(fb.CategoryId, fb.MessageId);
-            });
-
-            _n3MsgCallbacks.Add(N3MessageType.AddPet, (msg) =>
-            {
-                AddPetMessage addPetMsg = (AddPetMessage)msg;
-                DynelManager.OnPetAdded(addPetMsg.PetIdentity);
-                PetAdded?.Invoke(addPetMsg.PetIdentity);
-            });
-
-            _n3MsgCallbacks.Add(N3MessageType.RemovePet, (msg) =>
-            {
-                RemovePetMessage removePetMsg = (RemovePetMessage)msg;
-                DynelManager.OnPetRemoved(removePetMsg.PetIdentity);
-                PetRemoved?.Invoke(removePetMsg.PetIdentity);
-            });
-
-            _n3MsgCallbacks.Add(N3MessageType.PetToMaster, (msg) =>
-            {
-                PetToMasterMessage petToMasterMsg = (PetToMasterMessage)msg;
-
-                // Operation 1 is the attach and carries the pet type; operation 2 is the detach.
-                if (petToMasterMsg.Operation == 1)
-                {
-                    DynelManager.OnPetAdded(petToMasterMsg.PetIdentity);
-                    PetAttached?.Invoke(petToMasterMsg.PetIdentity, (PetType)petToMasterMsg.AttachNotificationValue);
-                }
-            });
-
-            _n3MsgCallbacks.Add(N3MessageType.Buff, (msg) =>
-            {
-                BuffMessage buffMsg = (BuffMessage)msg;
-                OnBuffMessage(buffMsg.Identity, buffMsg.Buff.Instance);
-            });
-
-            _n3MsgCallbacks.Add(N3MessageType.CastNanoSpell, (msg) =>
-            {
-                CastNanoSpellMessage castNanoSpellMsg = (CastNanoSpellMessage)msg;
-                OnCastNanoSpell(castNanoSpellMsg.Identity, castNanoSpellMsg.TargetPresent);
-                // A pet's cast arrives with Caster = None (aobuddy.log 2026-09-27: "(None:0000) cast Touch of Salvinous
-                // on me", 42 times); the message's own Identity is who sent it (player casts: Identity == Caster,
-                // capture 20260911-163012 s18). Without this the heal pet's cycle was never measured.
-                var caster = castNanoSpellMsg.Caster == Identity.None ? castNanoSpellMsg.Identity : castNanoSpellMsg.Caster;
-                NanoSeen?.Invoke(caster, castNanoSpellMsg.Target, castNanoSpellMsg.NanoId, -1);
-            });
-
-            _n3MsgCallbacks.Add(N3MessageType.Trade, (msg) =>
-            {
-                TradeMessage tradeMsg = (TradeMessage)msg;
-                Trade.OnTradeMessageReceived(tradeMsg);
-            });
-
-            _n3MsgCallbacks.Add(N3MessageType.GenericCmd, (msg) =>
-            {
-                GenericCmdMessage genericCmdMsg = (GenericCmdMessage)msg;
-                DynelManager.OnDynelUsed(genericCmdMsg.User, genericCmdMsg.Target);
-            });
-
-            _n3MsgCallbacks.Add(N3MessageType.TemplateAction, (msg) =>
-            {
-                TemplateActionMessage templateMsg = (TemplateActionMessage)msg;
-
-                if (templateMsg.Identity != DynelManager.LocalPlayer.Identity)
-                    return;
-
-                if ((templateMsg.Action == 6 || templateMsg.Action == 85) && templateMsg.Placement == IdentityType.Inventory)
-                {
-                    Trade.OnTemplateAction(templateMsg.ItemLowId, templateMsg.ItemHighId, templateMsg.Quality);
-                }
-                else if (templateMsg.Placement == IdentityType.OverflowWindow)
-                {
-                    Inventory.OnTemplateMessage(templateMsg.ItemLowId, templateMsg.ItemHighId, templateMsg.Quality);
-                }
-            });
-
-            _n3MsgCallbacks.Add(N3MessageType.AddTemplate, (msg) =>
-            {
-                AddTemplateMessage tmpMsg = (AddTemplateMessage)msg;
-                Inventory.OnAddTemplateMessage(tmpMsg.LowId, tmpMsg.HighId, tmpMsg.Quality, tmpMsg.Count);
-            });
-
-            _n3MsgCallbacks.Add(N3MessageType.Attack, (msg) =>
-            {
-                AttackMessage attackMessage = (AttackMessage)msg;
-                if (DynelManager.Find(attackMessage.Identity, out SimpleChar attacker))
-                    attacker.FightingIdentity = attackMessage.Target;
-            });
-
-            // EVERY BLOW names who struck whom (capture 20260925-113057 s14: AttackInfo Identity = the attacker, Target = the
-            // one hit; MissedAttackInfo Attacker/Defender). A mob can hit without its Attack message reaching us (it
-            // started before we were in range, or on a pet), and then nothing showed as fighting the bot while it bit
-            // him (owner, 19:21 2026-09-26: "rollerrat chasing him around"). The blow says who it is fighting.
-            _n3MsgCallbacks.Add(N3MessageType.AttackInfo, (msg) =>
-            {
-                var ai = (AttackInfoMessage)msg;
-                NoteBlow(ai.Identity, ai.Target);
-            });
-
-            _n3MsgCallbacks.Add(N3MessageType.MissedAttackInfo, (msg) =>
-            {
-                var mi = (MissedAttackInfoMessage)msg;
-                NoteBlow(mi.Attacker, mi.Defender);
-            });
-
-            _n3MsgCallbacks.Add(N3MessageType.StopFight, (msg) =>
-            {
-                StopFightMessage stopFightMessage = (StopFightMessage)msg;
-                if (DynelManager.Find(stopFightMessage.Identity, out SimpleChar attacker))
-                    attacker.FightingIdentity = null;
-            });
-
-            _n3MsgCallbacks.Add(N3MessageType.TeamInvite, (msg) =>
-            {
-                TeamInviteMessage teamInviteMsg = (TeamInviteMessage)msg;
-
-                TeamRequestEventArgs teamReqArgs = new TeamRequestEventArgs(teamInviteMsg.Requestor);
-                Team.TeamRequest?.Invoke(null, teamReqArgs);
-            });
-        }
-
-        private static void OnCharacterAction(CharacterActionMessage charActionMessage)
-        {
-            switch (charActionMessage.Action)
-            {
-                case CharacterActionType.TeamRequestInvite:
-                case CharacterActionType.TeamRequestReply:
-                case CharacterActionType.TeamRequestResponse:
-                case CharacterActionType.TeamKickMember:
-                case CharacterActionType.TeamMemberLeft:
-                case (CharacterActionType)0x15: //TeamRequestResponse
-                    Team.OnTeamMessage(charActionMessage);
-                    break;
-                case CharacterActionType.SetNanoDuration:
-                    SetNanoDurationCharAction(charActionMessage.Identity, charActionMessage.Target.Instance, charActionMessage.Parameter2);
-                    break;
-                case CharacterActionType.SpecialUsed:
-                    SpecialUsedAction(charActionMessage.Identity, (Stat)charActionMessage.Parameter1, charActionMessage.Parameter2);
-                    break;
-                case CharacterActionType.SpecialAvailable:
-                    SpecialAvailableAction(charActionMessage.Identity, (Stat)charActionMessage.Parameter2);
-                    break;
-                case CharacterActionType.FinishNanoCasting:
-                case CharacterActionType.InterruptNanoCasting:
-                    FinishNanoCastingAction(charActionMessage.Identity);
-                    break;
-                case CharacterActionType.DeleteItem:
-                    DeleteItemAction(charActionMessage.Target);
-                    break;
-                case (CharacterActionType)0x2F: //Temp item expire
-                    //ToDo item deletion on expire
-                    break;
-                case CharacterActionType.Death:
-                    OnCharacterDeath(charActionMessage.Identity);
-                    break;
-                // 0x57 is a sit/stand TOGGLE, and the server echoes it back once the posture change has
-                // actually taken effect. That echo is the only reliable "I am seated now" signal we get:
-                // Stat.CurrentMovementMode (173) is set from the login FullCharacter and never updates, so it
-                // still reads Run while the character is sitting. Without this, code that must act while
-                // seated - using a sit-only recharger - can only guess at a delay and hope.
-                case (CharacterActionType)0x57:
-                    PostureToggled?.Invoke(charActionMessage.Identity);
-                    break;
-                default:
-                    break;
-            }
-        }
-
-        private static void DeleteItemAction(Identity target)
-        {
-            switch (target.Type)
-            {
-                case IdentityType.Backpack:
-                    Inventory.RemoveContainerItem(target, out Container container, out Item item);
-                    Inventory.ContainerItemRemoved?.Invoke(container, item);
-                    break;
-                case IdentityType.Inventory:
-                    Inventory.RemoveItem(target, out item);
-                    Inventory.ItemRemoved?.Invoke(item);
-                    break;
-                case IdentityType.BankByRef:
-                    Inventory.RemoveBankItem(target, out item);
-                    Inventory.BankItemRemoved?.Invoke(item);
-                    break;
-                default:
-                    Logger.Warning($"Unhandled delete action identity type {target.Type}. Please report");
-                    break;
-
-            }
-        }
-
-        private static void FinishNanoCastingAction(Identity identity)
-        {
-            if (!DynelManager.Find(identity, out SimpleChar simpleChar))
-                return;
-
-            if (!(simpleChar is LocalPlayer))
-                return;
-
-            DynelManager.LocalPlayer.SetCastState(false);
-        }
-
-        private static void OnCastNanoSpell(Identity identity, int unknown1)
-        {
-            if (unknown1 == 1)
-                return;
-
-            if (!DynelManager.Find(identity, out SimpleChar simpleChar))
-                return;
-
-            if (!(simpleChar is LocalPlayer))
-                return;
-
-            DynelManager.LocalPlayer.SetCastState(true);
-        }
-
-        private static void NoteBlow(Identity attacker, Identity target)
-        {
-            if (attacker.Instance == 0 || target.Instance == 0 || DynelManager.Dead.Contains(attacker)) return;
-            if (DynelManager.Find(attacker, out SimpleChar a) && !(a is LocalPlayer)) a.FightingIdentity = target;
-        }
-
-        private static void MarkDead(Identity identity)
-        {
-            if (DynelManager.LocalPlayer != null && identity == DynelManager.LocalPlayer.Identity) return;
-            DynelManager.Dead.Add(identity);
-            if (DynelManager.Find(identity, out SimpleChar dead)) { dead.SetStat(Stat.Health, 0); dead.FightingIdentity = null; }
-        }
-
-        private static void OnCharacterDeath(Identity identity)
-        {
-            // Anyone else: the server sends only this CharacterAction Death, then a separate corpse - no Health stat
-            // and no new SimpleCharFullUpdate (owner's capture 20260926-135805 s10 seq 410/417; the mob kept Health=310
-            // and despawned ~95 messages later). Mark it dead so everything that checks Health > 0 lets it go.
-            if (DynelManager.LocalPlayer == null || identity != DynelManager.LocalPlayer.Identity)
-            {
-                MarkDead(identity);
-                return;
-            }
-            if (identity == DynelManager.LocalPlayer.Identity)
-            {
-                Logger.Warning($"I'm dead");
-                DynelManager.LocalPlayer.StopAttack();
-                Died?.Invoke();
-                Task.Delay(5000).ContinueWith(t =>
-                {
-                    Send(new CharacterActionMessage
-                    {
-                        Action = CharacterActionType.Die
-                    });
-                });
+                SelectCharacter(desiredChar.Id);
             }
             else
             {
-                if (DynelManager.Find(identity, out SimpleChar character))
-                    character.SetStat(Stat.Health, 0);
+                CharacterSelect.Invoke(new CharacterSelect
+                {
+                    AllowedCharacters = charListMsg.AllowedCharacters,
+                    Expansions = (ExpansionFlags)charListMsg.Expansions,
+                    Characters = charListMsg.Characters.Select(x => new CharacterSelect.Character
+                    {
+                        Id = x.Id,
+                        Name = x.Name,
+                    }).ToList(),
+                });
             }
-        }
+        });
+    }
 
-        private static void SpecialUsedAction(Identity identity, Stat stat, int cooldownTime)
+    private static void RegisterN3MessageHandlers()
+    {
+        _n3MsgCallbacks = new Dictionary<N3MessageType, Action<N3Message>>();
+
+        _n3MsgCallbacks.Add(N3MessageType.FullCharacter, msg =>
         {
-            if (!DynelManager.Find(identity, out SimpleChar simpleChar))
-                return;
+            var fullCharMsg = (FullCharacterMessage)msg;
 
-            if (!(simpleChar is LocalPlayer))
-                return;
-
-            DynelManager.LocalPlayer.RegisterCooldown(stat, cooldownTime);
-        }
-
-        private static void SpecialAvailableAction(Identity identity, Stat stat)
-        {
-            if (!DynelManager.Find(identity, out SimpleChar simpleChar))
-                return;
-
-            if (!(simpleChar is LocalPlayer))
-                return;
-
-            DynelManager.LocalPlayer.RemoveCooldown(stat);
-        }
-
-        private static void OnBuffMessage(Identity identity, int nanoId)
-        {
-            if (!DynelManager.Find(identity, out SimpleChar simpleChar))
-                return;
-
-            BuffStatus.OnBuffMessage(simpleChar, nanoId);
-
-            simpleChar.RemoveBuff(nanoId);
-        }
-
-        /// <summary>
-        /// WHAT IS CAST ON WHOM (owner, 2026-09-27: "he should always know what is casted on him"). Fired for every
-        /// CastNanoSpell the server shows (caster, target, nano; seconds = -1) and for every nano that lands with a
-        /// timer - CharacterAction SetNanoDuration, Identity = the one it is on, Target = NanoProgram:id, Parameter2 =
-        /// duration in 1/100 s (codedoc capture 20260926-202941 s5: BuffMessage then SetNanoDuration for each buff;
-        /// caster unknown there, so Identity.None).
-        /// </summary>
-        public static event Action<Identity, Identity, int, float> NanoSeen;
-
-        private static void SetNanoDurationCharAction(Identity identity, int nanoId, int param2)
-        {
-            NanoSeen?.Invoke(Identity.None, identity, nanoId, param2 / 100f);
-            if (!DynelManager.Find(identity, out SimpleChar simpleChar))
-                return;
-
-            if (!simpleChar.Buffs.Find(nanoId, out Buff newBuff))
+            // Only OUR OWN FullCharacter updates the local player. The server also sends other characters'
+            // FullCharacter once we're near/teamed with them (e.g. the owner) — applying those overwrote
+            // our SpellList/stats with theirs, so the bot dumped and cast the OWNER'S nanos (a Keeper's).
+            // Always let the FIRST one through (it establishes us, before LocalDynelId may be set); after
+            // that, ignore any whose identity isn't ours.
+            if (!_isFirstPlayshift && LocalDynelId != 0 && fullCharMsg.Identity.Instance != LocalDynelId)
             {
-                newBuff = new Buff(nanoId);
-                simpleChar.RegisterBuff(newBuff);
+                return;
             }
 
-            newBuff.Cooldown.SetExpireTime(param2 / 100f);
+            // Say what we took and from whom. A login where hp, nano, run speed and movement mode all read
+            // as absent, while the nano list arrived intact from the same message, cannot be diagnosed from
+            // the symptom - the counts here name which part of the message was empty and which reader
+            // produced it, instead of another round of guessing.
+            Logger.Information($"FULLCHAR: identity={fullCharMsg.Identity.Instance} localDynelId={LocalDynelId} " +
+                               $"first={_isFirstPlayshift} stats1={fullCharMsg.Stats1?.Length ?? -1} stats2={fullCharMsg.Stats2?.Length ?? -1} " +
+                               $"stats3={fullCharMsg.Stats3?.Length ?? -1} stats4={fullCharMsg.Stats4?.Length ?? -1} " +
+                               $"nanos={fullCharMsg.UploadedNanoIds?.Length ?? -1} perks={(fullCharMsg.Perks == null ? "null" : fullCharMsg.Perks.Length.ToString())} " +
+                               $"pets={fullCharMsg.Pets?.Length ?? -1}");
+
+            DynelManager.LocalPlayerProxy.ApplyFullCharUpdate(fullCharMsg);
+
+            // AUTHORITATIVE pet ownership: our own FullCharacter lists our pets (decoded by the corrected
+            // fallback reader when a pet is up). Mark those NPCs as owned so me.Pets is reliable regardless
+            // of the flaky per-update pet-master bit. Match on INSTANCE — the FullCharacter pet-list
+            // identity uses a different Type than the pet's own dynel identity.
+            if (fullCharMsg.Pets != null && fullCharMsg.Pets.Length > 0)
+            {
+                var me = DynelManager.LocalPlayer;
+                if (me != null)
+                {
+                    foreach (var petId in fullCharMsg.Pets)
+                    foreach (var npc in DynelManager.Npcs)
+                    {
+                        if (npc.Identity.Instance == petId.Instance)
+                        {
+                            npc.Owner = me.Identity;
+                        }
+                    }
+                }
+            }
+
+            Send(new CharInPlayMessage());
+            CharacterInPlay?.Invoke(_isFirstPlayshift);
+
+            if (_isFirstPlayshift)
+            {
+                _isFirstPlayshift = false;
+            }
+        });
+
+        _n3MsgCallbacks.Add(N3MessageType.ContainerAddItem, msg =>
+        {
+            var contAddItem = (ContainerAddItem)msg;
+
+            if (contAddItem.Identity == DynelManager.LocalPlayer.Identity)
+            {
+                Inventory.OnContainerAddItem(contAddItem.Source, contAddItem.Target, contAddItem.Slot);
+            }
+        });
+
+        _n3MsgCallbacks.Add(N3MessageType.Bank, msg =>
+        {
+            var bankMsg = (BankMessage)msg;
+
+            if (bankMsg.Identity == DynelManager.LocalPlayer.Identity)
+            {
+                Inventory.OnBankUpdate(bankMsg);
+            }
+        });
+
+        _n3MsgCallbacks.Add(N3MessageType.InventoryUpdate, msg =>
+        {
+            var invMsg = (InventoryUpdateMessage)msg;
+            Inventory.OnContainerUpdate(invMsg.InventoryIdentity, invMsg.Items, invMsg.Handle);
+        });
+
+        _n3MsgCallbacks.Add(N3MessageType.SimpleItemFullUpdate, msg =>
+        {
+            var sifu = (SimpleItemFullUpdateMessage)msg;
+            FullUpdateProxy.OnSIFU(sifu);
+        });
+
+        _n3MsgCallbacks.Add(N3MessageType.WeaponItemFullUpdate, msg =>
+        {
+            var wifu = (WeaponItemFullUpdateMessage)msg;
+            FullUpdateProxy.OnWIFU(wifu);
+        });
+
+        _n3MsgCallbacks.Add(N3MessageType.ChestFullUpdate, msg =>
+        {
+            var cfu = (ChestFullUpdateMessage)msg;
+            FullUpdateProxy.OnCFU(cfu);
+        });
+
+        _n3MsgCallbacks.Add(N3MessageType.SimpleCharFullUpdate, msg =>
+        {
+            var simpleCharFullUpdateMsg = (SimpleCharFullUpdateMessage)msg;
+            DynelManager.OnDynelSpawned(simpleCharFullUpdateMsg);
+        });
+
+        _n3MsgCallbacks.Add(N3MessageType.OrgInfoPacket, msg =>
+        {
+            var orgInfoPacketMessage = (OrgInfoPacketMessage)msg;
+            DynelManager.OnOrgInfoPacket(orgInfoPacketMessage);
+        });
+
+        _n3MsgCallbacks.Add(N3MessageType.OrgServer, msg =>
+        {
+            var orgServerMessage = (OrgServerMessage)msg;
+            Organization.OnOrgServerMessage(orgServerMessage);
+        });
+
+        _n3MsgCallbacks.Add(N3MessageType.VendingMachineFullUpdate, msg =>
+        {
+            var vendingMachineFullUpdateMsg = (VendingMachineFullUpdateMessage)msg;
+
+            if (vendingMachineFullUpdateMsg.Position != null)
+            {
+                DynelManager.OnDynelSpawned(vendingMachineFullUpdateMsg);
+            }
+        });
+
+        _n3MsgCallbacks.Add(N3MessageType.Despawn, msg =>
+        {
+            var despawnMessage = (DespawnMessage)msg;
+            DynelManager.OnDynelDespawned(despawnMessage.Identity);
+        });
+
+        // DIAGNOSTIC ONLY: log the server's SetPos for the LOCAL player so we can compare the
+        // server's idea of the bot's position against where the bot thinks it is (desync check).
+        // This does NOT move the bot and does NOT apply to any dynel — it only fires the observe
+        // event that the plugin logs. It is safe: setpos is never applied (that is what warps).
+        _n3MsgCallbacks.Add(N3MessageType.SetPos, msg =>
+        {
+            var setPos = (SetPosMessage)msg;
+            DynelManager.OnServerSetPos(setPos.Identity, setPos.Position);
+        });
+
+        _n3MsgCallbacks.Add(N3MessageType.PlayfieldAnarchyF, msg =>
+        {
+            var playfieldMessage = (PlayfieldAnarchyFMessage)msg;
+            Playfield.Init(playfieldMessage);
+        });
+
+        _n3MsgCallbacks.Add(N3MessageType.PlayfieldAllTowers, msg =>
+        {
+            var playfieldAllTowersMessage = (PlayfieldAllTowersMessage)msg;
+
+            foreach (var tower in playfieldAllTowersMessage.TowerInfo)
+            {
+                Playfield.MakeTower(tower, PlayfieldTowerUpdateType.InitialLoad);
+            }
+        });
+
+        _n3MsgCallbacks.Add(N3MessageType.PlayfieldTowerUpdateClient, msg =>
+        {
+            var playfieldTowerUpdateClientMessage = (PlayfieldTowerUpdateClientMessage)msg;
+
+            if (playfieldTowerUpdateClientMessage.UpdateType == PlayfieldUpdateClientType.Planted)
+            {
+                Playfield.MakeTower(playfieldTowerUpdateClientMessage.Tower, PlayfieldTowerUpdateType.Planted);
+            }
+            else
+            {
+                Playfield.DestroyTower(playfieldTowerUpdateClientMessage.TowerId);
+            }
+        });
+
+        _n3MsgCallbacks.Add(N3MessageType.CharDCMove, msg =>
+        {
+            var moveMessage = (CharDCMoveMessage)msg;
+
+            DynelManager.OnDynelMovementChanged(moveMessage.Identity, moveMessage.Position, moveMessage.Heading, moveMessage.MoveType);
+        });
+
+        // A CORPSE names the mob it was (owner's capture 20260925-113057 s14 seq 383: 'Remains of Important
+        // Techrejecter', owner CanbeAffected:245734440 = the mob that died at seq 377; decoded here as
+        // UnknownIdentity). A bot that zones in or restarts next to the dead never saw them die, and the server
+        // sends those mobs again with their old HP, still 'fighting' (Algorithman, 2026-09-26: 'he still fights his
+        // ghost mobs ... i restarted the bot mid-mission'). The corpse marks its mob dead.
+        _n3MsgCallbacks.Add(N3MessageType.CorpseFullUpdate, msg =>
+        {
+            var corpse = (CorpseFullUpdateMessage)msg;
+            if (corpse.UnknownIdentity.Instance == 0)
+            {
+                return;
+            }
+
+            DynelManager.CorpseCount++;
+            if (DynelManager.Find(corpse.UnknownIdentity, out SimpleChar was))
+            {
+                DynelManager.CorpseMatched++;
+                DynelManager.LastCorpse = $"'{corpse.Name}' = '{was.Name}'";
+            }
+
+            MarkDead(corpse.UnknownIdentity);
+        });
+
+        _n3MsgCallbacks.Add(N3MessageType.FollowTarget, msg =>
+        {
+            var ft = (FollowTargetMessage)msg;
+            if (ft.Info is FollowTargetMessage.PathInfo pi)
+            {
+                DynelManager.OnFollowTarget(ft.Identity, pi.Waypoints, ft.MoveMode);
+            }
+            else if (ft.Info is FollowTargetMessage.TargetInfo ti && ti.Coordinates?.Length > 0)
+            {
+                DynelManager.OnFollowTarget(ft.Identity, ti.Coordinates, ft.MoveMode);
+            }
+        });
+
+        _n3MsgCallbacks.Add(N3MessageType.CharacterAction, msg =>
+        {
+            var charActionMessage = (CharacterActionMessage)msg;
+            OnCharacterAction(charActionMessage);
+        });
+
+        _n3MsgCallbacks.Add(N3MessageType.Stat, msg =>
+        {
+            var statMsg = (StatMessage)msg;
+
+            if (DynelManager.Find(statMsg.Identity, out Dynel statTarget))
+            {
+                foreach (var stat in statMsg.Stats)
+                {
+                    statTarget.SetStat(stat.Value1, (int)stat.Value2);
+                }
+            }
+        });
+
+        // Keep current HP live. The server rarely re-pushes Stat.Health, but every point of
+        // damage or healing arrives as a HealthDamage packet whose Health field is the HP the
+        // character has LEFT after the change. Without this, tracked HP goes stale after a
+        // recharge/heal (bot thinks it's still hurt) — breaking self-heal, owner-heal and rest.
+        _n3MsgCallbacks.Add(N3MessageType.HealthDamage, msg =>
+        {
+            var hd = (HealthDamageMessage)msg;
+
+            // The packet names the stat it moved: a nano drain/refill carries CurrentNano, and writing
+            // that into Health put a nano number in someone's HP.
+            // WHOSE HP: the message's own Identity is the character whose HP this is; the field called
+            // Target is the one who dealt it (OmniCell's messaging calls it Source). Capture 20260910-200346:
+            // one healer (Source 1999636446) heals three characters, each message carrying that receiver's
+            // own HP. Writing it into Target set the healer's HP to the patient's: the bot stimmed the owner
+            // (42% -> 79%, 322/402) and read its own HP as 51% = 322/638 until restart (2026-09-23 21:01).
+            if (DynelManager.Find(hd.Identity, out Dynel hpTarget))
+            {
+                hpTarget.SetStat(hd.Stat == Stat.CurrentNano ? Stat.CurrentNano : Stat.Health, hd.TargetHp);
+            }
+        });
+
+        // Keep skills/abilities live. After login these change via SkillMessage (buffs like
+        // Composite Attribute, IP spends, equipment) — the SDK had no handler, so skills were
+        // frozen at their login values and buffed skills (e.g. First Aid) read low, wrongly
+        // failing item/nano use-requirements. Apply each update to the character's stats.
+        _n3MsgCallbacks.Add(N3MessageType.Skill, msg =>
+        {
+            var skillMsg = (SkillMessage)msg;
+
+            if (skillMsg.Skills != null && DynelManager.Find(skillMsg.Identity, out Dynel skillTarget))
+            {
+                foreach (var skill in skillMsg.Skills)
+                {
+                    skillTarget.SetStat(skill.Value1, (int)skill.Value2);
+                }
+            }
+        });
+
+        // Keep our LEVEL live. Levelling is SERVER-PUSHED as its own NewLevelMessage (not a Stat or
+        // Skill update), and the SDK had no handler for it — so Stat.Level stayed frozen at the login
+        // value: the character read the old level forever and nothing could notice a "ding". Apply the
+        // new level to the character's stats so Level/GetStat(Stat.Level) tracks reality.
+        _n3MsgCallbacks.Add(N3MessageType.NewLevel, msg =>
+        {
+            var lvlMsg = (NewLevelMessage)msg;
+
+            if (DynelManager.Find(lvlMsg.Identity, out Dynel lvlTarget))
+            {
+                lvlTarget.SetStat(Stat.Level, lvlMsg.Level);
+            }
+            else
+            {
+                DynelManager.LocalPlayer?.SetStat(Stat.Level, lvlMsg.Level);
+            }
+        });
+
+        _n3MsgCallbacks.Add(N3MessageType.TeamMember, msg =>
+        {
+            var teamMemberMsg = (TeamMemberMessage)msg;
+
+            Team.OnTeamMember(teamMemberMsg.Character, teamMemberMsg.Level, teamMemberMsg.Name,
+                teamMemberMsg.Profession, teamMemberMsg.RaidGroup);
+
+            if (DynelManager.Find(teamMemberMsg.Identity, out Dynel statTarget))
+            {
+                statTarget.SetStat(Stat.Team, teamMemberMsg.Team.Instance);
+            }
+        });
+
+        // The team window's live health/nano for one member. This was decoded and then dropped
+        // on the floor, so a teammate's vitals could only be read off his dynel - which goes
+        // stale as soon as he stops being broadcast to us. These keep coming while he is in the
+        // playfield at any distance.
+        _n3MsgCallbacks.Add(N3MessageType.TeamMemberInfo, msg =>
+        {
+            var infoMsg = (TeamMemberInfoMessage)msg;
+
+            Team.OnTeamMemberInfo(infoMsg.Character, infoMsg.CurrentHealth, infoMsg.MaxHealth,
+                infoMsg.CurrentNano, infoMsg.MaxNano);
+
+            // Mirror onto the dynel when we can see it, so existing stat readers agree.
+            if (DynelManager.Find(infoMsg.Character, out Dynel vitalsTarget))
+            {
+                vitalsTarget.SetStat(Stat.Health, infoMsg.CurrentHealth);
+                vitalsTarget.SetStat(Stat.MaxHealth, infoMsg.MaxHealth);
+                vitalsTarget.SetStat(Stat.CurrentNano, infoMsg.CurrentNano);
+                vitalsTarget.SetStat(Stat.MaxNanoEnergy, infoMsg.MaxNano);
+            }
+        });
+
+        // Pet lifecycle. LocalPlayer.Pets still derives the roster from the dynel list, but these
+        // are the exact moments a summon landed or a pet was lost, so a caller can react at once
+        // instead of noticing on its next poll. PetToMaster's attach also repeats the pet's type.
+        _n3MsgCallbacks.Add(N3MessageType.Feedback, msg =>
+        {
+            var fb = (FeedbackMessage)msg;
+            Feedback?.Invoke(fb.CategoryId, fb.MessageId);
+        });
+
+        _n3MsgCallbacks.Add(N3MessageType.AddPet, msg =>
+        {
+            var addPetMsg = (AddPetMessage)msg;
+            DynelManager.OnPetAdded(addPetMsg.PetIdentity);
+            PetAdded?.Invoke(addPetMsg.PetIdentity);
+        });
+
+        _n3MsgCallbacks.Add(N3MessageType.RemovePet, msg =>
+        {
+            var removePetMsg = (RemovePetMessage)msg;
+            DynelManager.OnPetRemoved(removePetMsg.PetIdentity);
+            PetRemoved?.Invoke(removePetMsg.PetIdentity);
+        });
+
+        _n3MsgCallbacks.Add(N3MessageType.PetToMaster, msg =>
+        {
+            var petToMasterMsg = (PetToMasterMessage)msg;
+
+            // Operation 1 is the attach and carries the pet type; operation 2 is the detach.
+            if (petToMasterMsg.Operation == 1)
+            {
+                DynelManager.OnPetAdded(petToMasterMsg.PetIdentity);
+                PetAttached?.Invoke(petToMasterMsg.PetIdentity, (PetType)petToMasterMsg.AttachNotificationValue);
+            }
+        });
+
+        _n3MsgCallbacks.Add(N3MessageType.Buff, msg =>
+        {
+            var buffMsg = (BuffMessage)msg;
+            OnBuffMessage(buffMsg.Identity, buffMsg.Buff.Instance);
+        });
+
+        _n3MsgCallbacks.Add(N3MessageType.CastNanoSpell, msg =>
+        {
+            var castNanoSpellMsg = (CastNanoSpellMessage)msg;
+            OnCastNanoSpell(castNanoSpellMsg.Identity, castNanoSpellMsg.TargetPresent);
+            // A pet's cast arrives with Caster = None (aobuddy.log 2026-09-27: "(None:0000) cast Touch of Salvinous
+            // on me", 42 times); the message's own Identity is who sent it (player casts: Identity == Caster,
+            // capture 20260911-163012 s18). Without this the heal pet's cycle was never measured.
+            var caster = castNanoSpellMsg.Caster == Identity.None ? castNanoSpellMsg.Identity : castNanoSpellMsg.Caster;
+            NanoSeen?.Invoke(caster, castNanoSpellMsg.Target, castNanoSpellMsg.NanoId, -1);
+        });
+
+        _n3MsgCallbacks.Add(N3MessageType.Trade, msg =>
+        {
+            var tradeMsg = (TradeMessage)msg;
+            Trade.OnTradeMessageReceived(tradeMsg);
+        });
+
+        _n3MsgCallbacks.Add(N3MessageType.GenericCmd, msg =>
+        {
+            var genericCmdMsg = (GenericCmdMessage)msg;
+            DynelManager.OnDynelUsed(genericCmdMsg.User, genericCmdMsg.Target);
+        });
+
+        _n3MsgCallbacks.Add(N3MessageType.TemplateAction, msg =>
+        {
+            var templateMsg = (TemplateActionMessage)msg;
+
+            if (templateMsg.Identity != DynelManager.LocalPlayer.Identity)
+            {
+                return;
+            }
+
+            if ((templateMsg.Action == 6 || templateMsg.Action == 85) && templateMsg.Placement == IdentityType.Inventory)
+            {
+                Trade.OnTemplateAction(templateMsg.ItemLowId, templateMsg.ItemHighId, templateMsg.Quality);
+            }
+            else if (templateMsg.Placement == IdentityType.OverflowWindow)
+            {
+                Inventory.OnTemplateMessage(templateMsg.ItemLowId, templateMsg.ItemHighId, templateMsg.Quality);
+            }
+        });
+
+        _n3MsgCallbacks.Add(N3MessageType.AddTemplate, msg =>
+        {
+            var tmpMsg = (AddTemplateMessage)msg;
+            Inventory.OnAddTemplateMessage(tmpMsg.LowId, tmpMsg.HighId, tmpMsg.Quality, tmpMsg.Count);
+        });
+
+        _n3MsgCallbacks.Add(N3MessageType.Attack, msg =>
+        {
+            var attackMessage = (AttackMessage)msg;
+            if (DynelManager.Find(attackMessage.Identity, out SimpleChar attacker))
+            {
+                attacker.FightingIdentity = attackMessage.Target;
+            }
+        });
+
+        // EVERY BLOW names who struck whom (capture 20260925-113057 s14: AttackInfo Identity = the attacker, Target = the
+        // one hit; MissedAttackInfo Attacker/Defender). A mob can hit without its Attack message reaching us (it
+        // started before we were in range, or on a pet), and then nothing showed as fighting the bot while it bit
+        // him (owner, 19:21 2026-09-26: "rollerrat chasing him around"). The blow says who it is fighting.
+        _n3MsgCallbacks.Add(N3MessageType.AttackInfo, msg =>
+        {
+            var ai = (AttackInfoMessage)msg;
+            NoteBlow(ai.Identity, ai.Target);
+        });
+
+        _n3MsgCallbacks.Add(N3MessageType.MissedAttackInfo, msg =>
+        {
+            var mi = (MissedAttackInfoMessage)msg;
+            NoteBlow(mi.Attacker, mi.Defender);
+        });
+
+        _n3MsgCallbacks.Add(N3MessageType.StopFight, msg =>
+        {
+            var stopFightMessage = (StopFightMessage)msg;
+            if (DynelManager.Find(stopFightMessage.Identity, out SimpleChar attacker))
+            {
+                attacker.FightingIdentity = null;
+            }
+        });
+
+        _n3MsgCallbacks.Add(N3MessageType.TeamInvite, msg =>
+        {
+            var teamInviteMsg = (TeamInviteMessage)msg;
+
+            var teamReqArgs = new TeamRequestEventArgs(teamInviteMsg.Requestor);
+            Team.TeamRequest?.Invoke(null, teamReqArgs);
+        });
+    }
+
+    private static void OnCharacterAction(CharacterActionMessage charActionMessage)
+    {
+        switch (charActionMessage.Action)
+        {
+            case CharacterActionType.TeamRequestInvite:
+            case CharacterActionType.TeamRequestReply:
+            case CharacterActionType.TeamRequestResponse:
+            case CharacterActionType.TeamKickMember:
+            case CharacterActionType.TeamMemberLeft:
+            case (CharacterActionType)0x15: //TeamRequestResponse
+                Team.OnTeamMessage(charActionMessage);
+                break;
+            case CharacterActionType.SetNanoDuration:
+                SetNanoDurationCharAction(charActionMessage.Identity, charActionMessage.Target.Instance, charActionMessage.Parameter2);
+                break;
+            case CharacterActionType.SpecialUsed:
+                SpecialUsedAction(charActionMessage.Identity, (Stat)charActionMessage.Parameter1, charActionMessage.Parameter2);
+                break;
+            case CharacterActionType.SpecialAvailable:
+                SpecialAvailableAction(charActionMessage.Identity, (Stat)charActionMessage.Parameter2);
+                break;
+            case CharacterActionType.FinishNanoCasting:
+            case CharacterActionType.InterruptNanoCasting:
+                FinishNanoCastingAction(charActionMessage.Identity);
+                break;
+            case CharacterActionType.DeleteItem:
+                DeleteItemAction(charActionMessage.Target);
+                break;
+            case (CharacterActionType)0x2F: //Temp item expire
+                //ToDo item deletion on expire
+                break;
+            case CharacterActionType.Death:
+                OnCharacterDeath(charActionMessage.Identity);
+                break;
+            // 0x57 is a sit/stand TOGGLE, and the server echoes it back once the posture change has
+            // actually taken effect. That echo is the only reliable "I am seated now" signal we get:
+            // Stat.CurrentMovementMode (173) is set from the login FullCharacter and never updates, so it
+            // still reads Run while the character is sitting. Without this, code that must act while
+            // seated - using a sit-only recharger - can only guess at a delay and hope.
+            case (CharacterActionType)0x57:
+                PostureToggled?.Invoke(charActionMessage.Identity);
+                break;
         }
+    }
+
+    private static void DeleteItemAction(Identity target)
+    {
+        switch (target.Type)
+        {
+            case IdentityType.Backpack:
+                Inventory.RemoveContainerItem(target, out var container, out var item);
+                Inventory.ContainerItemRemoved?.Invoke(container, item);
+                break;
+            case IdentityType.Inventory:
+                Inventory.RemoveItem(target, out item);
+                Inventory.ItemRemoved?.Invoke(item);
+                break;
+            case IdentityType.BankByRef:
+                Inventory.RemoveBankItem(target, out item);
+                Inventory.BankItemRemoved?.Invoke(item);
+                break;
+            default:
+                Logger.Warning($"Unhandled delete action identity type {target.Type}. Please report");
+                break;
+        }
+    }
+
+    private static void FinishNanoCastingAction(Identity identity)
+    {
+        if (!DynelManager.Find(identity, out SimpleChar simpleChar))
+        {
+            return;
+        }
+
+        if (!(simpleChar is LocalPlayer))
+        {
+            return;
+        }
+
+        DynelManager.LocalPlayer.SetCastState(false);
+    }
+
+    private static void OnCastNanoSpell(Identity identity, int unknown1)
+    {
+        if (unknown1 == 1)
+        {
+            return;
+        }
+
+        if (!DynelManager.Find(identity, out SimpleChar simpleChar))
+        {
+            return;
+        }
+
+        if (!(simpleChar is LocalPlayer))
+        {
+            return;
+        }
+
+        DynelManager.LocalPlayer.SetCastState(true);
+    }
+
+    private static void NoteBlow(Identity attacker, Identity target)
+    {
+        if (attacker.Instance == 0 || target.Instance == 0 || DynelManager.Dead.Contains(attacker))
+        {
+            return;
+        }
+
+        if (DynelManager.Find(attacker, out SimpleChar a) && !(a is LocalPlayer))
+        {
+            a.FightingIdentity = target;
+        }
+    }
+
+    private static void MarkDead(Identity identity)
+    {
+        if (DynelManager.LocalPlayer != null && identity == DynelManager.LocalPlayer.Identity)
+        {
+            return;
+        }
+
+        DynelManager.Dead.Add(identity);
+        if (DynelManager.Find(identity, out SimpleChar dead))
+        {
+            dead.SetStat(Stat.Health, 0);
+            dead.FightingIdentity = null;
+        }
+    }
+
+    private static void OnCharacterDeath(Identity identity)
+    {
+        // Anyone else: the server sends only this CharacterAction Death, then a separate corpse - no Health stat
+        // and no new SimpleCharFullUpdate (owner's capture 20260926-135805 s10 seq 410/417; the mob kept Health=310
+        // and despawned ~95 messages later). Mark it dead so everything that checks Health > 0 lets it go.
+        if (DynelManager.LocalPlayer == null || identity != DynelManager.LocalPlayer.Identity)
+        {
+            MarkDead(identity);
+            return;
+        }
+
+        if (identity == DynelManager.LocalPlayer.Identity)
+        {
+            Logger.Warning("I'm dead");
+            DynelManager.LocalPlayer.StopAttack();
+            Died?.Invoke();
+            Task.Delay(5000).ContinueWith(t =>
+            {
+                Send(new CharacterActionMessage
+                {
+                    Action = CharacterActionType.Die,
+                });
+            });
+        }
+        else
+        {
+            if (DynelManager.Find(identity, out SimpleChar character))
+            {
+                character.SetStat(Stat.Health, 0);
+            }
+        }
+    }
+
+    private static void SpecialUsedAction(Identity identity, Stat stat, int cooldownTime)
+    {
+        if (!DynelManager.Find(identity, out SimpleChar simpleChar))
+        {
+            return;
+        }
+
+        if (!(simpleChar is LocalPlayer))
+        {
+            return;
+        }
+
+        DynelManager.LocalPlayer.RegisterCooldown(stat, cooldownTime);
+    }
+
+    private static void SpecialAvailableAction(Identity identity, Stat stat)
+    {
+        if (!DynelManager.Find(identity, out SimpleChar simpleChar))
+        {
+            return;
+        }
+
+        if (!(simpleChar is LocalPlayer))
+        {
+            return;
+        }
+
+        DynelManager.LocalPlayer.RemoveCooldown(stat);
+    }
+
+    private static void OnBuffMessage(Identity identity, int nanoId)
+    {
+        if (!DynelManager.Find(identity, out SimpleChar simpleChar))
+        {
+            return;
+        }
+
+        BuffStatus.OnBuffMessage(simpleChar, nanoId);
+
+        simpleChar.RemoveBuff(nanoId);
+    }
+
+    /// <summary>
+    ///     WHAT IS CAST ON WHOM (owner, 2026-09-27: "he should always know what is casted on him"). Fired for every
+    ///     CastNanoSpell the server shows (caster, target, nano; seconds = -1) and for every nano that lands with a
+    ///     timer - CharacterAction SetNanoDuration, Identity = the one it is on, Target = NanoProgram:id, Parameter2 =
+    ///     duration in 1/100 s (codedoc capture 20260926-202941 s5: BuffMessage then SetNanoDuration for each buff;
+    ///     caster unknown there, so Identity.None).
+    /// </summary>
+    public static event Action<Identity, Identity, int, float> NanoSeen;
+
+    private static void SetNanoDurationCharAction(Identity identity, int nanoId, int param2)
+    {
+        NanoSeen?.Invoke(Identity.None, identity, nanoId, param2 / 100f);
+        if (!DynelManager.Find(identity, out SimpleChar simpleChar))
+        {
+            return;
+        }
+
+        if (!simpleChar.Buffs.Find(nanoId, out var newBuff))
+        {
+            newBuff = new Buff(nanoId);
+            simpleChar.RegisterBuff(newBuff);
+        }
+
+        newBuff.Cooldown.SetExpireTime(param2 / 100f);
     }
 }

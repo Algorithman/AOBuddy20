@@ -12,23 +12,19 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.GameData
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+
+namespace SmokeLounge.AOtomation.Messaging.GameData;
+
+public class VendingMachineSlot
 {
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region AoMember Properties
 
-    public class VendingMachineSlot
-    {
-        #region AoMember Properties
+    [AoMember(0)] public int ItemLowId { get; set; }
 
-        [AoMember(0)]
-        public int ItemLowId { get; set; }
+    [AoMember(1)] public int ItemHighId { get; set; }
 
-        [AoMember(1)]
-        public int ItemHighId { get; set; }
+    [AoMember(2)] public int Quality { get; set; }
 
-        [AoMember(2)]
-        public int Quality { get; set; }
-
-        #endregion
-    }
+    #endregion
 }

@@ -12,24 +12,20 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.GameData
+using AOSharp.Common.GameData;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+
+namespace SmokeLounge.AOtomation.Messaging.GameData;
+
+public class DestinationInfo
 {
-    using AOSharp.Common.GameData;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region AoMember Properties
 
-    public class DestinationInfo
-    {
-        #region AoMember Properties
+    [AoMember(0)] public PlayfieldId PlayfieldId { get; set; }
 
-        [AoMember(0)]
-        public PlayfieldId PlayfieldId { get; set; }
+    [AoMember(1)] public int Unknown0 { get; set; }
 
-        [AoMember(1)]
-        public int Unknown0 { get; set; }
+    [AoMember(2)] public int Unknown1 { get; set; }
 
-        [AoMember(2)]
-        public int Unknown1 { get; set; }
-
-        #endregion
-    }
+    #endregion
 }

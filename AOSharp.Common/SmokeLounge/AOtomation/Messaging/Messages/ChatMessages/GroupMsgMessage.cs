@@ -12,41 +12,31 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.ChatMessages
+using AOSharp.Common.GameData;
+using SmokeLounge.AOtomation.Messaging.Serialization;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+
+namespace SmokeLounge.AOtomation.Messaging.Messages.ChatMessages;
+
+[AoContract((int)ChatMessageType.GroupMessage)]
+public class GroupMsgMessage : ChatMessageBody
 {
-    using AOSharp.Common.GameData;
-    using SmokeLounge.AOtomation.Messaging.Serialization;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Public Properties
 
-    [AoContract((int)ChatMessageType.GroupMessage)]
-    public class GroupMsgMessage : ChatMessageBody
-    {
-        #region Public Properties
+    public override ChatMessageType PacketType => ChatMessageType.GroupMessage;
 
-        public override ChatMessageType PacketType
-        {
-            get
-            {
-                return ChatMessageType.GroupMessage;
-            }
-        }
+    #endregion
 
-        #endregion
+    #region AoMember Properties
 
-        #region AoMember Properties
+    [AoMember(0)] public GroupMessageType MessageType { get; set; }
 
-        [AoMember(0)]
-        public GroupMessageType MessageType { get; set; }
+    [AoMember(1)] public int ChannelId { get; set; }
 
-        [AoMember(1)]
-        public int ChannelId { get; set; }
+    [AoMember(3)] public uint SenderId { get; set; }
 
-        [AoMember(3)]
-        public uint SenderId { get; set; }
+    [AoMember(4, SerializeSize = ArraySizeType.Int16)]
+    public string Text { get; set; }
 
-        [AoMember(4, SerializeSize = ArraySizeType.Int16)]
-        public string Text { get; set; }
-
-        #endregion
-    }
+    #endregion
 }

@@ -12,28 +12,26 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.SystemMessages
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+
+namespace SmokeLounge.AOtomation.Messaging.Messages.SystemMessages;
+
+[AoContract((int)SystemMessageType.NameInUse)]
+public class NameInUseMessage : SystemMessage
 {
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Constructors and Destructors
 
-    [AoContract((int)SystemMessageType.NameInUse)]
-    public class NameInUseMessage : SystemMessage
+    public NameInUseMessage()
     {
-        #region Constructors and Destructors
-
-        public NameInUseMessage()
-        {
-            this.SystemMessageType = SystemMessageType.NameInUse;
-            this.Unknown = 0x0000001E;
-        }
-
-        #endregion
-
-        #region AoMember Properties
-
-        [AoMember(0)]
-        public int Unknown { get; set; }
-
-        #endregion
+        SystemMessageType = SystemMessageType.NameInUse;
+        Unknown = 0x0000001E;
     }
+
+    #endregion
+
+    #region AoMember Properties
+
+    [AoMember(0)] public int Unknown { get; set; }
+
+    #endregion
 }

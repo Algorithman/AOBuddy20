@@ -12,38 +12,31 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages
+using SmokeLounge.AOtomation.Messaging.Serialization;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+
+namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
+
+[AoContract((int)N3MessageType.DoorStatusUpdate)]
+public class DoorStatusUpdateMessage : N3Message
 {
-    using AOSharp.Common.GameData;
-    using SmokeLounge.AOtomation.Messaging.GameData;
-    using SmokeLounge.AOtomation.Messaging.Serialization;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Constructors and Destructors
 
-    [AoContract((int)N3MessageType.DoorStatusUpdate)]
-    public class DoorStatusUpdateMessage : N3Message
+    public DoorStatusUpdateMessage()
     {
-        #region Constructors and Destructors
-
-        public DoorStatusUpdateMessage()
-        {
-            this.N3MessageType = N3MessageType.DoorStatusUpdate;
-        }
-
-        #endregion
-
-        [AoMember(0)]
-        public int Version { get; set; }
-
-        [AoMember(1)]
-        public int Unknown2 { get; set; }
-
-        [AoMember(2)]
-        public byte Open { get; set; }
-
-        [AoMember(3)]
-        public short Unknown4 { get; set; }
-
-        [AoMember(4, SerializeSize = ArraySizeType.X3F1)]
-        public int UnknownArray { get; set; }
+        N3MessageType = N3MessageType.DoorStatusUpdate;
     }
+
+    #endregion
+
+    [AoMember(0)] public int Version { get; set; }
+
+    [AoMember(1)] public int Unknown2 { get; set; }
+
+    [AoMember(2)] public byte Open { get; set; }
+
+    [AoMember(3)] public short Unknown4 { get; set; }
+
+    [AoMember(4, SerializeSize = ArraySizeType.X3F1)]
+    public int UnknownArray { get; set; }
 }

@@ -12,49 +12,43 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages
+using SmokeLounge.AOtomation.Messaging.GameData;
+using SmokeLounge.AOtomation.Messaging.Serialization;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+
+namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
+
+[AoContract((int)N3MessageType.SpecialAttackWeapon)]
+public class SpecialAttackWeaponMessage : N3Message
 {
-    using SmokeLounge.AOtomation.Messaging.GameData;
-    using SmokeLounge.AOtomation.Messaging.Serialization;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Constructors and Destructors
 
-    [AoContract((int)N3MessageType.SpecialAttackWeapon)]
-    public class SpecialAttackWeaponMessage : N3Message
+    public SpecialAttackWeaponMessage()
     {
-        #region Constructors and Destructors
-
-        public SpecialAttackWeaponMessage()
-        {
-            this.N3MessageType = N3MessageType.SpecialAttackWeapon;
-            this.Unknown1 = 0x00000007;
-            this.CloseCombatInitiative = 0x00000007;
-            this.DistanceWeaponInitiative = 0x00000007;
-            this.PhysicalProwessInitiative = 0x0000000E;
-            this.NanoProwessInitiative = 0x00000064;
-        }
-
-        #endregion
-
-        #region AoMember Properties
-
-        [AoMember(0, SerializeSize = ArraySizeType.X3F1)]
-        public SpecialAttackInfo[] Specials { get; set; }
-
-        [AoMember(1)]
-        public int Unknown1 { get; set; }
-
-        [AoMember(2)]
-        public int CloseCombatInitiative { get; set; }
-
-        [AoMember(3)]
-        public int DistanceWeaponInitiative { get; set; }
-
-        [AoMember(4)]
-        public int PhysicalProwessInitiative { get; set; }
-
-        [AoMember(5)]
-        public int NanoProwessInitiative { get; set; }
-
-        #endregion
+        N3MessageType = N3MessageType.SpecialAttackWeapon;
+        Unknown1 = 0x00000007;
+        CloseCombatInitiative = 0x00000007;
+        DistanceWeaponInitiative = 0x00000007;
+        PhysicalProwessInitiative = 0x0000000E;
+        NanoProwessInitiative = 0x00000064;
     }
+
+    #endregion
+
+    #region AoMember Properties
+
+    [AoMember(0, SerializeSize = ArraySizeType.X3F1)]
+    public SpecialAttackInfo[] Specials { get; set; }
+
+    [AoMember(1)] public int Unknown1 { get; set; }
+
+    [AoMember(2)] public int CloseCombatInitiative { get; set; }
+
+    [AoMember(3)] public int DistanceWeaponInitiative { get; set; }
+
+    [AoMember(4)] public int PhysicalProwessInitiative { get; set; }
+
+    [AoMember(5)] public int NanoProwessInitiative { get; set; }
+
+    #endregion
 }

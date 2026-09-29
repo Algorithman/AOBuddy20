@@ -1,9 +1,8 @@
-﻿namespace AOSharp.Common.GameData
+﻿namespace AOSharp.Common.GameData;
+
+public enum TowerClass
 {
-    public enum TowerClass
-    {
-        ControlTower = 1,
-        Turret = 2,
-        Conductor = 4
-    }
+    ControlTower = 1,
+    Turret = 2,
+    Conductor = 4,
 }

@@ -12,9 +12,8 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.GameData
+namespace SmokeLounge.AOtomation.Messaging.GameData;
+
+public abstract class InfoPacket
 {
-    public abstract class InfoPacket
-    {
-    }
 }

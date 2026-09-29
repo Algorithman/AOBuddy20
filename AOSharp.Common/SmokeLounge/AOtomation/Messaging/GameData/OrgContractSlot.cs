@@ -12,38 +12,29 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.GameData
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+
+namespace SmokeLounge.AOtomation.Messaging.GameData;
+
+public class OrgContractSlot
 {
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region AoMember Properties
 
-    public class OrgContractSlot
-    {
-        #region AoMember Properties
+    [AoMember(0)] public int Slot { get; set; }
 
-        [AoMember(0)]
-        public int Slot { get; set; }
+    [AoMember(1)] public int Unknown1 { get; set; } //6356993 Inactive? / 2162689 Active?
 
-        [AoMember(1)]
-        public int Unknown1 { get; set; } //6356993 Inactive? / 2162689 Active?
+    [AoMember(2)] public int Unknown2 { get; set; }
 
-        [AoMember(2)]
-        public int Unknown2 { get; set; }
-       
-        [AoMember(3)]
-        public int Unknown3 { get; set; }
-      
-        [AoMember(4)]
-        public int LowId { get; set; }
-      
-        [AoMember(5)]
-        public int HighId { get; set; }
-        
-        [AoMember(6)]
-        public int Ql { get; set; }
+    [AoMember(3)] public int Unknown3 { get; set; }
 
-        [AoMember(7)]
-        public int Unknown4 { get; set; }
+    [AoMember(4)] public int LowId { get; set; }
 
-        #endregion
-    }
+    [AoMember(5)] public int HighId { get; set; }
+
+    [AoMember(6)] public int Ql { get; set; }
+
+    [AoMember(7)] public int Unknown4 { get; set; }
+
+    #endregion
 }

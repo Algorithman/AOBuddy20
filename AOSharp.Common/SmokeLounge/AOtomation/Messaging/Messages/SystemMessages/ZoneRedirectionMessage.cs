@@ -12,32 +12,28 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.SystemMessages
+using System.Net;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+
+namespace SmokeLounge.AOtomation.Messaging.Messages.SystemMessages;
+
+[AoContract((int)SystemMessageType.ZoneRedirection)]
+public class ZoneRedirectionMessage : SystemMessage
 {
-    using System.Net;
+    #region Constructors and Destructors
 
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
-
-    [AoContract((int)SystemMessageType.ZoneRedirection)]
-    public class ZoneRedirectionMessage : SystemMessage
+    public ZoneRedirectionMessage()
     {
-        #region Constructors and Destructors
-
-        public ZoneRedirectionMessage()
-        {
-            this.SystemMessageType = SystemMessageType.ZoneRedirection;
-        }
-
-        #endregion
-
-        #region AoMember Properties
-
-        [AoMember(0)]
-        public IPAddress ServerIpAddress { get; set; }
-
-        [AoMember(1)]
-        public ushort ServerPort { get; set; }
-
-        #endregion
+        SystemMessageType = SystemMessageType.ZoneRedirection;
     }
+
+    #endregion
+
+    #region AoMember Properties
+
+    [AoMember(0)] public IPAddress ServerIpAddress { get; set; }
+
+    [AoMember(1)] public ushort ServerPort { get; set; }
+
+    #endregion
 }

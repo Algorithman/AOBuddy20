@@ -12,28 +12,21 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-using AOSharp.Common.GameData;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
 
-namespace SmokeLounge.AOtomation.Messaging.GameData
+namespace SmokeLounge.AOtomation.Messaging.GameData;
+
+public class ResearchLine
 {
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region AoMember Properties
 
-    public class ResearchLine
-    {
-        #region AoMember Properties
+    [AoMember(0)] public int ResearchId { get; set; }
 
-        [AoMember(0)]
-        public int ResearchId { get; set; }
+    [AoMember(1)] public int Unknown1 { get; set; }
 
-        [AoMember(1)]
-        public int Unknown1 { get; set; }
+    [AoMember(2)] public int Unknown2 { get; set; }
 
-        [AoMember(2)]
-        public int Unknown2 { get; set; }
+    [AoMember(3)] public int Unknown3 { get; set; }
 
-        [AoMember(3)]
-        public int Unknown3 { get; set; }
-
-        #endregion
-    }
+    #endregion
 }

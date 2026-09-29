@@ -12,34 +12,31 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages
+using SmokeLounge.AOtomation.Messaging.Serialization;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+
+namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
+
+[AoContract((int)N3MessageType.ChatText)]
+public class ChatTextMessage : N3Message
 {
-    using SmokeLounge.AOtomation.Messaging.Serialization;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Constructors and Destructors
 
-    [AoContract((int)N3MessageType.ChatText)]
-    public class ChatTextMessage : N3Message
+    public ChatTextMessage()
     {
-        #region Constructors and Destructors
-
-        public ChatTextMessage()
-        {
-            this.N3MessageType = N3MessageType.ChatText;
-        }
-
-        #endregion
-
-        #region AoMember Properties
-
-        [AoMember(0, SerializeSize = ArraySizeType.Int16)]
-        public string Text { get; set; }
-
-        [AoMember(1)]
-        public short Unknown1 { get; set; }
-
-        [AoMember(2)]
-        public int Unknown2 { get; set; }
-
-        #endregion
+        N3MessageType = N3MessageType.ChatText;
     }
+
+    #endregion
+
+    #region AoMember Properties
+
+    [AoMember(0, SerializeSize = ArraySizeType.Int16)]
+    public string Text { get; set; }
+
+    [AoMember(1)] public short Unknown1 { get; set; }
+
+    [AoMember(2)] public int Unknown2 { get; set; }
+
+    #endregion
 }

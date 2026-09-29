@@ -15,140 +15,148 @@ using AOSharp.Common.Unmanaged.Imports;
 
 namespace AOSharp.Common.SmokeLounge.AOtomation.Messaging;
 
-   public class StdString : IDisposable
+public class StdString : IDisposable
+{
+    public readonly IntPtr Pointer;
+    private readonly bool _shouldDispose;
+    private bool _disposedValue;
+
+    internal StdString(IntPtr pointer, bool shouldDispose = true)
     {
-        public readonly IntPtr Pointer;
-        public unsafe int Length => ((StdStringStruct*)Pointer)->Length;
-        private bool _disposedValue;
-        private bool _shouldDispose;
+        Pointer = pointer;
+        _shouldDispose = shouldDispose;
+    }
 
-        internal StdString(IntPtr pointer, bool shouldDispose = true)
+    public unsafe int Length => ((StdStringStruct*)Pointer)->Length;
+
+    public void Dispose()
+    {
+        if (!_shouldDispose)
         {
-            Pointer = pointer;
-            _shouldDispose = shouldDispose;
+            return;
         }
 
-        public override int GetHashCode()
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    public override int GetHashCode()
+    {
+        return ToString().GetHashCode();
+    }
+
+    public static StdString FromPointer(IntPtr pointer, bool shouldDispose = true)
+    {
+        return new StdString(pointer, shouldDispose);
+    }
+
+    public static StdString Create()
+    {
+        return Create(string.Empty);
+    }
+
+    public static StdString Create(string str)
+    {
+        var bytes = Encoding.ASCII.GetBytes(str);
+        return new StdString(String_c.Constructor(MSVCR100.New(0x14), bytes, bytes.Length));
+    }
+
+    public override unsafe string ToString()
+    {
+        return ((StdStringStruct*)Pointer)->ToString();
+    }
+
+    public override bool Equals(object obj)
+    {
+        if (ReferenceEquals(obj, null))
         {
-            return ToString().GetHashCode();
+            return false;
         }
 
-        public static StdString FromPointer(IntPtr pointer, bool shouldDispose = true)
+        if (ReferenceEquals(this, obj))
         {
-            return new StdString(pointer, shouldDispose);
+            return true;
         }
 
-        public static StdString Create()
-        {
-            return Create(string.Empty);
-        }
+        return ToString() == obj.ToString();
+    }
 
-        public static StdString Create(string str)
+    public static bool operator ==(StdString str1, StdString str2)
+    {
+        if (ReferenceEquals(str1, null))
         {
-            byte[] bytes = Encoding.ASCII.GetBytes(str);
-            return new StdString(String_c.Constructor(MSVCR100.New(0x14), bytes, bytes.Length));
-        }
-
-        public unsafe override string ToString()
-        {
-            return ((StdStringStruct*)Pointer)->ToString();
-        }
-
-        public override bool Equals(object obj)
-        {
-            if (Object.ReferenceEquals(obj, null))
-                return false;
-
-            if (Object.ReferenceEquals(this, obj))
+            if (ReferenceEquals(str2, null))
+            {
                 return true;
-
-            return ToString() == obj.ToString();
-        }
-
-        public static bool operator ==(StdString str1, StdString str2)
-        {
-            if (Object.ReferenceEquals(str1, null))
-            {
-                if (Object.ReferenceEquals(str2, null))
-                    return true;
-
-                return false;
             }
 
-            return str1.Equals(str2);
+            return false;
         }
 
-        public static bool operator !=(StdString str1, StdString str2)
-        {
-            return !(str1 == str2);
-        }
-
-        public static bool operator ==(StdString str1, string str2)
-        {
-            if (Object.ReferenceEquals(str1, null))
-            {
-                if (Object.ReferenceEquals(str2, null))
-                    return true;
-
-                return false;
-            }
-
-            return str1.Equals(str2);
-        }
-
-        public static bool operator !=(StdString str1, string str2)
-        {
-            return !(str1 == str2);
-        }
-
-        protected virtual void Dispose(bool disposing)
-        {
-            if (!_disposedValue)
-            {
-                String_c.Deconstructor(Pointer);
-                MSVCR100.Delete(Pointer);
-                _disposedValue = true;
-            }
-        }
-
-        ~StdString()
-        {
-            if(_shouldDispose)
-                Dispose(disposing: false);
-        }
-
-        public void Dispose()
-        {
-            if (!_shouldDispose)
-                return;
-
-            Dispose(disposing: true);
-            GC.SuppressFinalize(this);
-        }
+        return str1.Equals(str2);
     }
 
-    [StructLayout(LayoutKind.Explicit, Pack=0)]
-    public unsafe struct StdStringStruct
+    public static bool operator !=(StdString str1, StdString str2)
     {
-        [FieldOffset(0)]
-        private fixed byte _shortBuffer[16];
-        [FieldOffset(0)]
-        private byte* _pLongBuffer;
-        [FieldOffset(16)]
-        public int Length;
+        return !(str1 == str2);
+    }
 
-        public override string ToString()
+    public static bool operator ==(StdString str1, string str2)
+    {
+        if (ReferenceEquals(str1, null))
         {
-            if(Length < 16)
+            if (ReferenceEquals(str2, null))
             {
-                fixed (byte* bytes = _shortBuffer)
-                {
-                    return Encoding.ASCII.GetString(bytes, Length);
-                }
+                return true;
             }
-            else
-            {
-                return Encoding.ASCII.GetString(_pLongBuffer, Length);
-            }
+
+            return false;
+        }
+
+        return str1.Equals(str2);
+    }
+
+    public static bool operator !=(StdString str1, string str2)
+    {
+        return !(str1 == str2);
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (!_disposedValue)
+        {
+            String_c.Deconstructor(Pointer);
+            MSVCR100.Delete(Pointer);
+            _disposedValue = true;
         }
     }
+
+    ~StdString()
+    {
+        if (_shouldDispose)
+        {
+            Dispose(false);
+        }
+    }
+}
+
+[StructLayout(LayoutKind.Explicit, Pack = 0)]
+public unsafe struct StdStringStruct
+{
+    [FieldOffset(0)] private fixed byte _shortBuffer[16];
+    [FieldOffset(0)] private byte* _pLongBuffer;
+    [FieldOffset(16)] public int Length;
+
+    public override string ToString()
+    {
+        if (Length < 16)
+        {
+            fixed (byte* bytes = _shortBuffer)
+            {
+                return Encoding.ASCII.GetString(bytes, Length);
+            }
+        }
+
+        return Encoding.ASCII.GetString(_pLongBuffer, Length);
+    }
+}

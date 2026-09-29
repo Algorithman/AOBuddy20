@@ -12,22 +12,20 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.GameData
+using AOSharp.Common.GameData;
+using SmokeLounge.AOtomation.Messaging.Serialization;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+
+namespace SmokeLounge.AOtomation.Messaging.GameData;
+
+public class CharacterInfo
 {
-    using AOSharp.Common.GameData;
-    using SmokeLounge.AOtomation.Messaging.Serialization;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region AoMember Properties
 
-    public class CharacterInfo
-    {
-        #region AoMember Properties
+    [AoMember(0)] public Identity MissionIdentity { get; set; }
 
-        [AoMember(0)]
-        public Identity MissionIdentity { get; set; }
+    [AoMember(1, SerializeSize = ArraySizeType.NullTerminated)]
+    public string Name { get; set; }
 
-        [AoMember(1, SerializeSize = ArraySizeType.NullTerminated)]
-        public string Name { get; set; }
-
-        #endregion
-    }
+    #endregion
 }

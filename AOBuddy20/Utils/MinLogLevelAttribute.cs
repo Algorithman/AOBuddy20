@@ -3,10 +3,10 @@
 // Project: AOBuddy20
 // Filename: MinLogLevelAttribute.cs
 // 
-// Last modified: 2026-09-29 21:50
-// Created:       2026-09-29 21:09
+// Last modified: 2026-09-30 00:19
+// Created:       2026-09-29 23:09
 // 
-// Long live OmniCell and AOBuddy20
+// Long live OmniCell and AOBuddy
 // ---------------------------------------------------------------------------------------
 
 using Serilog.Events;

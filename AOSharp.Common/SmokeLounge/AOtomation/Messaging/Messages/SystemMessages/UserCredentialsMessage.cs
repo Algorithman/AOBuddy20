@@ -12,31 +12,30 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.SystemMessages
+using SmokeLounge.AOtomation.Messaging.Serialization;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+
+namespace SmokeLounge.AOtomation.Messaging.Messages.SystemMessages;
+
+[AoContract((int)SystemMessageType.UserCredentials)]
+public class UserCredentialsMessage : SystemMessage
 {
-    using SmokeLounge.AOtomation.Messaging.Serialization;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Constructors and Destructors
 
-    [AoContract((int)SystemMessageType.UserCredentials)]
-    public class UserCredentialsMessage : SystemMessage
+    public UserCredentialsMessage()
     {
-        #region Constructors and Destructors
-
-        public UserCredentialsMessage()
-        {
-            this.SystemMessageType = SystemMessageType.UserCredentials;
-        }
-
-        #endregion
-
-        #region AoMember Properties
-
-        [AoMember(0, IsFixedSize = true, FixedSizeLength = 40)]
-        public string UserName { get; set; }
-
-        [AoMember(1, SerializeSize = ArraySizeType.Int32)]
-        public string Credentials { get; set; }
-
-        #endregion
+        SystemMessageType = SystemMessageType.UserCredentials;
     }
+
+    #endregion
+
+    #region AoMember Properties
+
+    [AoMember(0, IsFixedSize = true, FixedSizeLength = 40)]
+    public string UserName { get; set; }
+
+    [AoMember(1, SerializeSize = ArraySizeType.Int32)]
+    public string Credentials { get; set; }
+
+    #endregion
 }

@@ -12,12 +12,11 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages
-{
-    public enum TeamRequestResponseAction
-    {
-        Decline = 0x00, 
+namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
 
-        Accept = 0x01
-    }
+public enum TeamRequestResponseAction
+{
+    Decline = 0x00,
+
+    Accept = 0x01,
 }

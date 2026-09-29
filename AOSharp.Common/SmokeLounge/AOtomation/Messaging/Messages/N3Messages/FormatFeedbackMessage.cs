@@ -14,58 +14,56 @@
 
 using AOSharp.Common.SmokeLounge.AOtomation.Messaging;
 using AOSharp.Common.Unmanaged.Imports;
+using SmokeLounge.AOtomation.Messaging.Serialization;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages
+namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
+
+[AoContract((int)N3MessageType.FormatFeedback)]
+public class FormatFeedbackMessage : N3Message
 {
-    using SmokeLounge.AOtomation.Messaging.Serialization;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
-    using System.Text;
-    using System;
+    private string _formattedMessage;
 
-    [AoContract((int)N3MessageType.FormatFeedback)]
-    public class FormatFeedbackMessage : N3Message
+    #region Constructors and Destructors
+
+    public FormatFeedbackMessage()
     {
-        #region Constructors and Destructors
+        N3MessageType = N3MessageType.FormatFeedback;
+    }
 
-        public FormatFeedbackMessage()
+    #endregion
+
+    public string FormattedMessage
+    {
+        get
         {
-            this.N3MessageType = N3MessageType.FormatFeedback;
-        }
-
-        #endregion
-
-        #region AoMember Properties
-
-        [AoMember(0)]
-        public int ChatCategory { get; set; }
-
-        [AoMember(1, SerializeSize = ArraySizeType.Int16)]
-        public string Message { get; set; }
-      
-        [AoMember(2)]
-        public int PayloadKind { get; set; }
-        #endregion
-
-        private string _formattedMessage = null;
-        public string FormattedMessage
-        {
-            get
+            if (_formattedMessage == null)
             {
-                if (_formattedMessage == null)
-                    _formattedMessage = FormatMessage();
-
-                return _formattedMessage;
+                _formattedMessage = FormatMessage();
             }
-        }
 
-        private string FormatMessage()
-        {
-            StdString stdStr = StdString.Create();
-            RemoteFormat.ParseString(stdStr.Pointer, Message);
-            string formattedMessage = stdStr.ToString();
-            stdStr.Dispose();
-
-            return formattedMessage;
+            return _formattedMessage;
         }
     }
+
+    private string FormatMessage()
+    {
+        var stdStr = StdString.Create();
+        RemoteFormat.ParseString(stdStr.Pointer, Message);
+        var formattedMessage = stdStr.ToString();
+        stdStr.Dispose();
+
+        return formattedMessage;
+    }
+
+    #region AoMember Properties
+
+    [AoMember(0)] public int ChatCategory { get; set; }
+
+    [AoMember(1, SerializeSize = ArraySizeType.Int16)]
+    public string Message { get; set; }
+
+    [AoMember(2)] public int PayloadKind { get; set; }
+
+    #endregion
 }

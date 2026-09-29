@@ -1,24 +1,17 @@
-﻿namespace SmokeLounge.AOtomation.Messaging.Messages.ChatMessages
+﻿using SmokeLounge.AOtomation.Messaging.Serialization;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+
+namespace SmokeLounge.AOtomation.Messaging.Messages.ChatMessages;
+
+[AoContract((int)ChatMessageType.ServerSalt)]
+public class ChatServerSaltMessage : ChatMessageBody
 {
-    using SmokeLounge.AOtomation.Messaging.Serialization;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Public Properties
 
-    [AoContract((int)ChatMessageType.ServerSalt)]
-    public class ChatServerSaltMessage : ChatMessageBody
-    {
-        #region Public Properties
+    public override ChatMessageType PacketType => ChatMessageType.ServerSalt;
 
-        public override ChatMessageType PacketType
-        {
-            get
-            {
-                return ChatMessageType.ServerSalt;
-            }
-        }
+    #endregion
 
-        #endregion
-
-        [AoMember(0, SerializeSize = ArraySizeType.Int16)]
-        public byte[] ServerSalt { get; set; }
-    }
+    [AoMember(0, SerializeSize = ArraySizeType.Int16)]
+    public byte[] ServerSalt { get; set; }
 }

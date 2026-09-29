@@ -13,37 +13,31 @@
 // --------------------------------------------------------------------------------------------------------------------
 
 using AOSharp.Common.GameData;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
 
-namespace SmokeLounge.AOtomation.Messaging.GameData
+namespace SmokeLounge.AOtomation.Messaging.GameData;
+
+public class PlayfieldVendorInfo
 {
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Constructors and Destructors
 
-    public class PlayfieldVendorInfo
+    public PlayfieldVendorInfo()
     {
-        #region Constructors and Destructors
-
-        public PlayfieldVendorInfo()
-        {
-            this.Unknown1 = new Identity { Type = IdentityType.VendingMachine, Instance = 1 };
-            this.Unknown2 = 0x00000001;
-        }
-
-        #endregion
-
-        #region AoMember Properties
-
-        [AoMember(0)]
-        public Identity Unknown1 { get; set; }
-
-        [AoMember(1)]
-        public int Unknown2 { get; set; }
-
-        [AoMember(2)]
-        public int FirstVendorId { get; set; }
-
-        [AoMember(3)]
-        public int VendorCount { get; set; }
-
-        #endregion
+        Unknown1 = new Identity { Type = IdentityType.VendingMachine, Instance = 1, };
+        Unknown2 = 0x00000001;
     }
+
+    #endregion
+
+    #region AoMember Properties
+
+    [AoMember(0)] public Identity Unknown1 { get; set; }
+
+    [AoMember(1)] public int Unknown2 { get; set; }
+
+    [AoMember(2)] public int FirstVendorId { get; set; }
+
+    [AoMember(3)] public int VendorCount { get; set; }
+
+    #endregion
 }

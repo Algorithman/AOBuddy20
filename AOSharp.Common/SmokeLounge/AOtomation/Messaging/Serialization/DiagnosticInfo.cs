@@ -12,54 +12,45 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Serialization
+namespace SmokeLounge.AOtomation.Messaging.Serialization;
+
+public class DiagnosticInfo
 {
-    using System.Collections.Generic;
+    #region Fields
 
-    public class DiagnosticInfo
+    private readonly List<DiagnosticInfo> diagnosticInfos;
+
+    #endregion
+
+    #region Constructors and Destructors
+
+    public DiagnosticInfo()
     {
-        #region Fields
-
-        private readonly List<DiagnosticInfo> diagnosticInfos;
-
-        #endregion
-
-        #region Constructors and Destructors
-
-        public DiagnosticInfo()
-        {
-            this.diagnosticInfos = new List<DiagnosticInfo>();
-        }
-
-        #endregion
-
-        #region Public Properties
-
-        public IEnumerable<DiagnosticInfo> DiagnosticInfos
-        {
-            get
-            {
-                return this.diagnosticInfos;
-            }
-        }
-
-        public long Length { get; set; }
-
-        public long Offset { get; set; }
-
-        public PropertyMetaData PropertyMetaData { get; set; }
-
-        public object Value { get; set; }
-
-        #endregion
-
-        #region Public Methods and Operators
-
-        public void Add(DiagnosticInfo diagnosticInfo)
-        {
-            this.diagnosticInfos.Add(diagnosticInfo);
-        }
-
-        #endregion
+        diagnosticInfos = new List<DiagnosticInfo>();
     }
+
+    #endregion
+
+    #region Public Methods and Operators
+
+    public void Add(DiagnosticInfo diagnosticInfo)
+    {
+        diagnosticInfos.Add(diagnosticInfo);
+    }
+
+    #endregion
+
+    #region Public Properties
+
+    public IEnumerable<DiagnosticInfo> DiagnosticInfos => diagnosticInfos;
+
+    public long Length { get; set; }
+
+    public long Offset { get; set; }
+
+    public PropertyMetaData PropertyMetaData { get; set; }
+
+    public object Value { get; set; }
+
+    #endregion
 }

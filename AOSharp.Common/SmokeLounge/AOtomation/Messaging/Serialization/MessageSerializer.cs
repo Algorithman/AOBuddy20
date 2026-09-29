@@ -12,139 +12,143 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Serialization
+using SmokeLounge.AOtomation.Messaging.Messages;
+using SmokeLounge.AOtomation.Messaging.Serialization.Serializers;
+
+namespace SmokeLounge.AOtomation.Messaging.Serialization;
+
+public class MessageSerializer
 {
-    using SmokeLounge.AOtomation.Messaging.Messages;
-    using SmokeLounge.AOtomation.Messaging.Serialization.Serializers;
-    using System.IO;
+    #region Fields
 
-    public class MessageSerializer
+    private readonly HeaderSerializer headerSerializer;
+
+    private readonly PacketInspector packetInspector;
+
+    private readonly SerializerResolver serializerResolver;
+
+    #endregion
+
+    #region Constructors and Destructors
+
+    public MessageSerializer()
     {
-        #region Fields
+        packetInspector = new PacketInspector(new TypeInfo(typeof(MessageBody)));
+        serializerResolver = new SerializerResolverBuilder<MessageBody>().Build();
+        headerSerializer = new HeaderSerializer();
+    }
 
-        private readonly HeaderSerializer headerSerializer;
+    public MessageSerializer(SerializerResolverBuilder serializerResolverBuilder)
+    {
+        packetInspector = new PacketInspector(new TypeInfo(typeof(MessageBody)));
+        serializerResolver = serializerResolverBuilder.Build();
+        headerSerializer = new HeaderSerializer();
+    }
 
-        private readonly PacketInspector packetInspector;
+    #endregion
 
-        private readonly SerializerResolver serializerResolver;
+    #region Public Methods and Operators
 
-        #endregion
+    public AOMessage Deserialize(Stream stream)
+    {
+        SerializationContext ignore;
+        return Deserialize(stream, out ignore);
+    }
 
-        #region Constructors and Destructors
-
-        public MessageSerializer()
+    public AOMessage Deserialize(byte[] datablock)
+    {
+        using (var buffer = new MemoryStream(datablock))
         {
-            this.packetInspector = new PacketInspector(new TypeInfo(typeof(MessageBody)));
-            this.serializerResolver = new SerializerResolverBuilder<MessageBody>().Build();
-            this.headerSerializer = new HeaderSerializer();
+            return Deserialize(buffer);
+        }
+    }
+
+    public AOMessage Deserialize(Stream stream, out SerializationContext serializationContext)
+    {
+        serializationContext = null;
+        var reader = new StreamReader(stream) { Position = 0, };
+        var subTypeInfo = packetInspector.FindSubType(reader, out var _);
+
+        if (subTypeInfo == null)
+        {
+            return null;
         }
 
-        public MessageSerializer(SerializerResolverBuilder serializerResolverBuilder)
+        var serializer = serializerResolver.GetSerializer(subTypeInfo.Type);
+        if (serializer == null)
         {
-            this.packetInspector = new PacketInspector(new TypeInfo(typeof(MessageBody)));
-            this.serializerResolver = serializerResolverBuilder.Build();
-            this.headerSerializer = new HeaderSerializer();
+            return null;
         }
 
-        #endregion
+        reader.Position = 0;
+        serializationContext = new SerializationContext(serializerResolver);
 
-        #region Public Methods and Operators
-
-        public AOMessage Deserialize(Stream stream)
+        return new AOMessage
         {
-            SerializationContext ignore;
-            return this.Deserialize(stream, out ignore);
-        }
+            Header = (Header)headerSerializer.Deserialize(reader, serializationContext),
+            Body = (MessageBody)serializer.Deserialize(reader, serializationContext),
+            RawPacket = reader.ReadAll(),
+        };
+    }
 
-        public AOMessage Deserialize(byte[] datablock)
-        {
-            using (MemoryStream buffer = new MemoryStream(datablock))
-            {
-                return this.Deserialize(buffer);
-            }
-        }
+    public MessageBody DeserializeDatablock(Stream stream)
+    {
+        SerializationContext serializationContext = null;
 
-        public AOMessage Deserialize(Stream stream, out SerializationContext serializationContext)
+        using (var reader = new StreamReader(stream) { Position = 0, })
         {
-            serializationContext = null;
-            var reader = new StreamReader(stream) { Position = 0 };
-            var subTypeInfo = this.packetInspector.FindSubType(reader, out int _);
+            var subTypeInfo = packetInspector.FindSubType(reader, out var _);
 
             if (subTypeInfo == null)
             {
                 return null;
             }
 
-            var serializer = this.serializerResolver.GetSerializer(subTypeInfo.Type);
+            var serializer = serializerResolver.GetSerializer(subTypeInfo.Type);
             if (serializer == null)
             {
                 return null;
             }
 
-            reader.Position = 0;
-            serializationContext = new SerializationContext(this.serializerResolver);
+            reader.Position = 16;
+            serializationContext = new SerializationContext(serializerResolver);
 
-            return new AOMessage
-            {
-                Header = (Header)this.headerSerializer.Deserialize(reader, serializationContext),
-                Body = (MessageBody)serializer.Deserialize(reader, serializationContext),
-                RawPacket = reader.ReadAll()
-            };
+            return (MessageBody)serializer.Deserialize(reader, serializationContext);
         }
-
-        public MessageBody DeserializeDatablock(Stream stream)
-        {
-            SerializationContext serializationContext = null;
-
-            using (StreamReader reader = new StreamReader(stream) { Position = 0 })
-            {
-                var subTypeInfo = this.packetInspector.FindSubType(reader, out int _);
-
-                if (subTypeInfo == null)
-                    return null;
-
-                var serializer = this.serializerResolver.GetSerializer(subTypeInfo.Type);
-                if (serializer == null)
-                    return null;
-
-                reader.Position = 16;
-                serializationContext = new SerializationContext(this.serializerResolver);
-
-                return (MessageBody)serializer.Deserialize(reader, serializationContext);
-            }
-        }
-
-        public void Serialize(Stream stream, AOMessage aoMessage)
-        {
-            SerializationContext ignore;
-            this.Serialize(stream, aoMessage, out ignore);
-        }
-
-        public void Serialize(Stream stream, AOMessage aoMessage, out SerializationContext serializationContext)
-        {
-            serializationContext = null;
-            var serializer = this.serializerResolver.GetSerializer(aoMessage.Body.GetType());
-            if (serializer == null)
-            {
-                return;
-            }
-
-            serializationContext = new SerializationContext(this.serializerResolver);
-            var writer = new StreamWriter(stream) { Position = 0 };
-            this.headerSerializer.Serialize(writer, serializationContext, aoMessage.Header);
-            serializer.Serialize(writer, serializationContext, aoMessage.Body);
-
-            int length = (int)writer.Position;
-            int padding = length % 4 == 0 ? 0 : 4 - length % 4;
-
-            //Padding
-            for (int i = 0; i < padding; i++)
-                writer.WriteByte(0);
-
-            writer.Position = 6;
-            writer.WriteInt16((short)length);
-        }
-
-        #endregion
     }
+
+    public void Serialize(Stream stream, AOMessage aoMessage)
+    {
+        SerializationContext ignore;
+        Serialize(stream, aoMessage, out ignore);
+    }
+
+    public void Serialize(Stream stream, AOMessage aoMessage, out SerializationContext serializationContext)
+    {
+        serializationContext = null;
+        var serializer = serializerResolver.GetSerializer(aoMessage.Body.GetType());
+        if (serializer == null)
+        {
+            return;
+        }
+
+        serializationContext = new SerializationContext(serializerResolver);
+        var writer = new StreamWriter(stream) { Position = 0, };
+        headerSerializer.Serialize(writer, serializationContext, aoMessage.Header);
+        serializer.Serialize(writer, serializationContext, aoMessage.Body);
+
+        var length = (int)writer.Position;
+        var padding = length % 4 == 0 ? 0 : 4 - length % 4;
+
+        //Padding
+        for (var i = 0; i < padding; i++)
+        {
+            writer.WriteByte(0);
+        }
+
+        writer.Position = 6;
+        writer.WriteInt16((short)length);
+    }
+
+    #endregion
 }

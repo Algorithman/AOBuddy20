@@ -12,20 +12,17 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.GameData
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+
+namespace SmokeLounge.AOtomation.Messaging.GameData;
+
+public class GameTuple<T1, T2>
 {
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region AoMember Properties
 
-    public class GameTuple<T1, T2>
-    {
-        #region AoMember Properties
+    [AoMember(0)] public T1 Value1 { get; set; }
 
-        [AoMember(0)]
-        public T1 Value1 { get; set; }
+    [AoMember(1)] public T2 Value2 { get; set; }
 
-        [AoMember(1)]
-        public T2 Value2 { get; set; }
-
-        #endregion
-    }
+    #endregion
 }

@@ -12,31 +12,28 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-using AOSharp.Common.GameData;
+using SmokeLounge.AOtomation.Messaging.GameData;
+using SmokeLounge.AOtomation.Messaging.Serialization;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages
+namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
+
+[AoContract((int)N3MessageType.PlayfieldAllTowers)]
+public class PlayfieldAllTowersMessage : N3Message
 {
-    using SmokeLounge.AOtomation.Messaging.GameData;
-    using SmokeLounge.AOtomation.Messaging.Serialization;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Constructors and Destructors
 
-    [AoContract((int)N3MessageType.PlayfieldAllTowers)]
-    public class PlayfieldAllTowersMessage : N3Message
+    public PlayfieldAllTowersMessage()
     {
-        #region Constructors and Destructors
-
-        public PlayfieldAllTowersMessage()
-        {
-            this.N3MessageType = N3MessageType.PlayfieldAllTowers;
-        }
-
-        #endregion
-
-        #region AoMember Properties
-
-        [AoMember(0, SerializeSize = ArraySizeType.X3F1)]
-        public TowerInfo[] TowerInfo { get; set; }
-
-        #endregion
+        N3MessageType = N3MessageType.PlayfieldAllTowers;
     }
+
+    #endregion
+
+    #region AoMember Properties
+
+    [AoMember(0, SerializeSize = ArraySizeType.X3F1)]
+    public TowerInfo[] TowerInfo { get; set; }
+
+    #endregion
 }

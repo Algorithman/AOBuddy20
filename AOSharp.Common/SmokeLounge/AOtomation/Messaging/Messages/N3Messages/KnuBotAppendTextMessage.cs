@@ -13,42 +13,35 @@
 // --------------------------------------------------------------------------------------------------------------------
 
 using AOSharp.Common.GameData;
+using SmokeLounge.AOtomation.Messaging.Serialization;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages
+namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
+
+[AoContract((int)N3MessageType.KnubotAppendText)]
+public class KnuBotAppendTextMessage : N3Message
 {
-    using SmokeLounge.AOtomation.Messaging.GameData;
-    using SmokeLounge.AOtomation.Messaging.Serialization;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Constructors and Destructors
 
-    [AoContract((int)N3MessageType.KnubotAppendText)]
-    public class KnuBotAppendTextMessage : N3Message
+    public KnuBotAppendTextMessage()
     {
-        #region Constructors and Destructors
-
-        public KnuBotAppendTextMessage()
-        {
-            this.N3MessageType = N3MessageType.KnubotAppendText;
-        }
-
-        #endregion
-
-        #region AoMember Properties
-
-        [AoMember(0)]
-        public short Version { get; set; }
-
-        [AoMember(1)]
-        public Identity Target { get; set; }
-
-        [AoMember(2)]
-        public int PresentationMode { get; set; }
-
-        [AoMember(3, SerializeSize = ArraySizeType.Int32)]
-        public string Text { get; set; }
-
-        [AoMember(4)]
-        public int Unknown3 { get; set; }
-
-        #endregion
+        N3MessageType = N3MessageType.KnubotAppendText;
     }
+
+    #endregion
+
+    #region AoMember Properties
+
+    [AoMember(0)] public short Version { get; set; }
+
+    [AoMember(1)] public Identity Target { get; set; }
+
+    [AoMember(2)] public int PresentationMode { get; set; }
+
+    [AoMember(3, SerializeSize = ArraySizeType.Int32)]
+    public string Text { get; set; }
+
+    [AoMember(4)] public int Unknown3 { get; set; }
+
+    #endregion
 }

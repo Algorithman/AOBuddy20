@@ -1,9 +1,8 @@
-﻿namespace AOSharp.Common.GameData
+﻿namespace AOSharp.Common.GameData;
+
+public enum Fatness
 {
-    public enum Fatness
-    {
-        Thin = 0,
-        Normal = 1,
-        Fat = 2
-    }
+    Thin = 0,
+    Normal = 1,
+    Fat = 2,
 }

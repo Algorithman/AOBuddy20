@@ -13,43 +13,35 @@
 // --------------------------------------------------------------------------------------------------------------------
 
 using AOSharp.Common.GameData;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages
+namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
+
+[AoContract((int)N3MessageType.HealthDamage)]
+public class HealthDamageMessage : N3Message
 {
-    using SmokeLounge.AOtomation.Messaging.GameData;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Constructors and Destructors
 
-    [AoContract((int)N3MessageType.HealthDamage)]
-    public class HealthDamageMessage : N3Message
+    public HealthDamageMessage()
     {
-        #region Constructors and Destructors
-
-        public HealthDamageMessage()
-        {
-            this.N3MessageType = N3MessageType.HealthDamage;
-        }
-
-        #endregion
-
-        #region AoMember Properties
-
-        [AoMember(0)]
-        public int TargetHp { get; set; }
-
-        [AoMember(1)]
-        public int Amount { get; set; }
-
-        [AoMember(2)]
-        public Stat Stat { get; set; }
-
-        [AoMember(3)]
-        public int Unk1 { get; set; }
-
-        [AoMember(4)]
-        public Identity Target { get; set; }
-
-        [AoMember(5)]
-        public int Unk2 { get; set; }
-        #endregion
+        N3MessageType = N3MessageType.HealthDamage;
     }
+
+    #endregion
+
+    #region AoMember Properties
+
+    [AoMember(0)] public int TargetHp { get; set; }
+
+    [AoMember(1)] public int Amount { get; set; }
+
+    [AoMember(2)] public Stat Stat { get; set; }
+
+    [AoMember(3)] public int Unk1 { get; set; }
+
+    [AoMember(4)] public Identity Target { get; set; }
+
+    [AoMember(5)] public int Unk2 { get; set; }
+
+    #endregion
 }

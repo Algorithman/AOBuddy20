@@ -12,120 +12,111 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Serialization
+using System.Net;
+using System.Text;
+
+namespace SmokeLounge.AOtomation.Messaging.Serialization;
+
+public sealed class StreamWriter : IDisposable
 {
-    using System;
-    using System.IO;
-    using System.Net;
-    using System.Text;
+    #region Constructors and Destructors
 
-    public sealed class StreamWriter : IDisposable
+    public StreamWriter(Stream stream)
     {
-        #region Fields
-
-        private readonly Stream stream;
-
-        private readonly BinaryWriter writer;
-
-        #endregion
-
-        #region Constructors and Destructors
-
-        public StreamWriter(Stream stream)
-        {
-            this.stream = stream;
-            this.writer = new BinaryWriter(this.stream);
-        }
-
-        #endregion
-
-        #region Public Properties
-
-        public long Position
-        {
-            get
-            {
-                return this.stream.Position;
-            }
-
-            set
-            {
-                this.stream.Position = value;
-            }
-        }
-
-        #endregion
-
-        #region Public Methods and Operators
-
-        public void Dispose()
-        {
-            this.writer.Dispose();
-            this.stream.Dispose();
-        }
-
-        public void WriteBool(bool value)
-        {
-            this.writer.Write(value);
-        }
-
-        public void WriteByte(byte value)
-        {
-            this.writer.Write(value);
-        }
-
-        public void WriteBytes(byte[] buffer)
-        {
-            this.writer.Write(buffer);
-        }
-
-        public void WriteInt16(short value)
-        {
-            this.writer.Write(IPAddress.HostToNetworkOrder(value));
-        }
-
-        public void WriteInt32(int value)
-        {
-            this.writer.Write(IPAddress.HostToNetworkOrder(value));
-        }
-
-        public void WriteInt64(long value)
-        {
-            this.writer.Write(IPAddress.HostToNetworkOrder(value));
-        }
-
-        public void WriteSingle(float value)
-        {
-            var single = BitConverter.GetBytes(value);
-            Array.Reverse(single);
-            this.writer.Write(single);
-        }
-
-        public void WriteDouble(double value)
-        {
-            this.writer.Write(value);
-        }
-
-        public void WriteString(string str, int? padToLength = null)
-        {
-            var bytes = new byte[padToLength ?? str.Length];
-            var length = str.Length > bytes.Length ? bytes.Length : str.Length;
-            Encoding.ASCII.GetBytes(str, 0, length, bytes, 0);
-            this.writer.Write(bytes);
-        }
-
-        public void WriteUInt16(ushort value)
-        {
-            var bigEndian = IPAddress.HostToNetworkOrder(value) >> 16;
-            this.writer.Write((ushort)bigEndian);
-        }
-
-        public void WriteUInt32(uint value)
-        {
-            var bigEndian = IPAddress.HostToNetworkOrder(value) >> 32;
-            this.writer.Write((uint)bigEndian);
-        }
-
-        #endregion
+        this.stream = stream;
+        writer = new BinaryWriter(this.stream);
     }
+
+    #endregion
+
+    #region Public Properties
+
+    public long Position
+    {
+        get => stream.Position;
+
+        set => stream.Position = value;
+    }
+
+    #endregion
+
+    #region Fields
+
+    private readonly Stream stream;
+
+    private readonly BinaryWriter writer;
+
+    #endregion
+
+    #region Public Methods and Operators
+
+    public void Dispose()
+    {
+        writer.Dispose();
+        stream.Dispose();
+    }
+
+    public void WriteBool(bool value)
+    {
+        writer.Write(value);
+    }
+
+    public void WriteByte(byte value)
+    {
+        writer.Write(value);
+    }
+
+    public void WriteBytes(byte[] buffer)
+    {
+        writer.Write(buffer);
+    }
+
+    public void WriteInt16(short value)
+    {
+        writer.Write(IPAddress.HostToNetworkOrder(value));
+    }
+
+    public void WriteInt32(int value)
+    {
+        writer.Write(IPAddress.HostToNetworkOrder(value));
+    }
+
+    public void WriteInt64(long value)
+    {
+        writer.Write(IPAddress.HostToNetworkOrder(value));
+    }
+
+    public void WriteSingle(float value)
+    {
+        var single = BitConverter.GetBytes(value);
+        Array.Reverse(single);
+        writer.Write(single);
+    }
+
+    public void WriteDouble(double value)
+    {
+        writer.Write(value);
+    }
+
+    public void WriteString(string str, int? padToLength = null)
+    {
+        var bytes = new byte[padToLength ?? str.Length];
+        var length = str.Length > bytes.Length ? bytes.Length : str.Length;
+        Encoding.ASCII.GetBytes(str, 0, length, bytes, 0);
+        writer.Write(bytes);
+    }
+
+    public void WriteUInt16(ushort value)
+    {
+        var bigEndian = IPAddress.HostToNetworkOrder(value) >> 16;
+        writer.Write((ushort)bigEndian);
+    }
+
+    public void WriteUInt32(uint value)
+    {
+        var bigEndian = IPAddress.HostToNetworkOrder(value) >> 32;
+        writer.Write((uint)bigEndian);
+    }
+
+    #endregion
 }

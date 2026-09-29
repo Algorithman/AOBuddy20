@@ -1,27 +1,19 @@
-﻿namespace SmokeLounge.AOtomation.Messaging.Messages.ChatMessages
+﻿using SmokeLounge.AOtomation.Messaging.Serialization;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+
+namespace SmokeLounge.AOtomation.Messaging.Messages.ChatMessages;
+
+[AoContract((int)ChatMessageType.CharacterName)]
+public class CharacterNameMessage : ChatMessageBody
 {
-    using SmokeLounge.AOtomation.Messaging.Serialization;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Public Properties
 
-    [AoContract((int)ChatMessageType.CharacterName)]
-    public class CharacterNameMessage : ChatMessageBody
-    {
-        #region Public Properties
+    public override ChatMessageType PacketType => ChatMessageType.CharacterName;
 
-        public override ChatMessageType PacketType
-        {
-            get
-            {
-                return ChatMessageType.CharacterName;
-            }
-        }
+    #endregion
 
-        #endregion
+    [AoMember(0)] public uint Id { get; set; }
 
-        [AoMember(0)]
-        public uint Id { get; set; }
-
-        [AoMember(1, SerializeSize = ArraySizeType.Int16)]
-        public string Name { get; set; }
-    }
+    [AoMember(1, SerializeSize = ArraySizeType.Int16)]
+    public string Name { get; set; }
 }

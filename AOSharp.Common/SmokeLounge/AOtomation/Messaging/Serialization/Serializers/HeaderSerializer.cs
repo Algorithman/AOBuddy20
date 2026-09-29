@@ -12,100 +12,89 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Serialization.Serializers
+using System.Linq.Expressions;
+using SmokeLounge.AOtomation.Messaging.Messages;
+
+namespace SmokeLounge.AOtomation.Messaging.Serialization.Serializers;
+
+public class HeaderSerializer : ISerializer
 {
-    using System;
-    using System.Linq.Expressions;
+    #region Fields
 
-    using SmokeLounge.AOtomation.Messaging.Messages;
+    #endregion
 
-    public class HeaderSerializer : ISerializer
+    #region Constructors and Destructors
+
+    public HeaderSerializer()
     {
-        #region Fields
-
-        private readonly Type type;
-
-        #endregion
-
-        #region Constructors and Destructors
-
-        public HeaderSerializer()
-        {
-            this.type = typeof(Header);
-            this.SerializerLambda =
-                (streamWriter, serializationContext, value) => this.Serialize(streamWriter, serializationContext, value);
-            this.DeserializerLambda =
-                (streamReader, serializationContext) => this.Deserialize(streamReader, serializationContext);
-        }
-
-        #endregion
-
-        #region Public Properties
-
-        public Func<StreamReader, SerializationContext, object> DeserializerLambda { get; private set; }
-
-        public Action<StreamWriter, SerializationContext, object> SerializerLambda { get; private set; }
-
-        public Type Type
-        {
-            get
-            {
-                return this.type;
-            }
-        }
-
-        #endregion
-
-        #region Public Methods and Operators
-
-        public object Deserialize(
-            StreamReader streamReader, 
-            SerializationContext serializationContext, 
-            PropertyMetaData propertyMetaData = null)
-        {
-            var header = new Header();
-            header.MessageId = streamReader.ReadUInt16();
-            header.PacketType = (PacketType)streamReader.ReadInt16();
-            header.Unknown = streamReader.ReadInt16();
-            header.Size = streamReader.ReadInt16();
-            header.Sender = streamReader.ReadInt32();
-            header.Receiver = streamReader.ReadInt32();
-            return header;
-        }
-
-        public Expression DeserializerExpression(
-            ParameterExpression streamReaderExpression, 
-            ParameterExpression serializationContextExpression, 
-            Expression assignmentTargetExpression, 
-            PropertyMetaData propertyMetaData)
-        {
-            throw new NotImplementedException();
-        }
-
-        public void Serialize(
-            StreamWriter streamWriter, 
-            SerializationContext serializationContext, 
-            object value, 
-            PropertyMetaData propertyMetaData = null)
-        {
-            var header = (Header)value;
-            streamWriter.WriteUInt16(header.MessageId);
-            streamWriter.WriteInt16((short)header.PacketType);
-            streamWriter.WriteInt16(header.Unknown);
-            streamWriter.WriteInt16(header.Size);
-            streamWriter.WriteInt32(header.Sender);
-            streamWriter.WriteInt32(header.Receiver);
-        }
-
-        public Expression SerializerExpression(
-            ParameterExpression streamWriterExpression, 
-            ParameterExpression serializationContextExpression, 
-            Expression valueExpression, 
-            PropertyMetaData propertyMetaData)
-        {
-            throw new NotImplementedException();
-        }
-
-        #endregion
+        Type = typeof(Header);
+        SerializerLambda =
+            (streamWriter, serializationContext, value) => Serialize(streamWriter, serializationContext, value);
+        DeserializerLambda =
+            (streamReader, serializationContext) => Deserialize(streamReader, serializationContext);
     }
+
+    #endregion
+
+    #region Public Properties
+
+    public Func<StreamReader, SerializationContext, object> DeserializerLambda { get; private set; }
+
+    public Action<StreamWriter, SerializationContext, object> SerializerLambda { get; private set; }
+
+    public Type Type { get; }
+
+    #endregion
+
+    #region Public Methods and Operators
+
+    public object Deserialize(
+        StreamReader streamReader,
+        SerializationContext serializationContext,
+        PropertyMetaData propertyMetaData = null)
+    {
+        var header = new Header();
+        header.MessageId = streamReader.ReadUInt16();
+        header.PacketType = (PacketType)streamReader.ReadInt16();
+        header.Unknown = streamReader.ReadInt16();
+        header.Size = streamReader.ReadInt16();
+        header.Sender = streamReader.ReadInt32();
+        header.Receiver = streamReader.ReadInt32();
+        return header;
+    }
+
+    public Expression DeserializerExpression(
+        ParameterExpression streamReaderExpression,
+        ParameterExpression serializationContextExpression,
+        Expression assignmentTargetExpression,
+        PropertyMetaData propertyMetaData)
+    {
+        throw new NotImplementedException();
+    }
+
+    public void Serialize(
+        StreamWriter streamWriter,
+        SerializationContext serializationContext,
+        object value,
+        PropertyMetaData propertyMetaData = null)
+    {
+        var header = (Header)value;
+        streamWriter.WriteUInt16(header.MessageId);
+        streamWriter.WriteInt16((short)header.PacketType);
+        streamWriter.WriteInt16(header.Unknown);
+        streamWriter.WriteInt16(header.Size);
+        streamWriter.WriteInt32(header.Sender);
+        streamWriter.WriteInt32(header.Receiver);
+    }
+
+    public Expression SerializerExpression(
+        ParameterExpression streamWriterExpression,
+        ParameterExpression serializationContextExpression,
+        Expression valueExpression,
+        PropertyMetaData propertyMetaData)
+    {
+        throw new NotImplementedException();
+    }
+
+    #endregion
 }

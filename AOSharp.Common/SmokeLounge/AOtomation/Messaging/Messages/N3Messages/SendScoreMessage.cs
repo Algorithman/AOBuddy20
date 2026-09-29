@@ -13,50 +13,39 @@
 // --------------------------------------------------------------------------------------------------------------------
 
 using AOSharp.Common.GameData;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages
+namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
+
+[AoContract((int)N3MessageType.SendScore)]
+public class SendScoreMessage : N3Message
 {
-    using SmokeLounge.AOtomation.Messaging.GameData;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Constructors and Destructors
 
-    [AoContract((int)N3MessageType.SendScore)]
-    public class SendScoreMessage : N3Message
+    public SendScoreMessage()
     {
-        #region Constructors and Destructors
-
-        public SendScoreMessage()
-        {
-            this.N3MessageType = N3MessageType.SendScore;
-        }
-
-        #endregion
-
-        #region AoMember Properties
-
-        [AoMember(0)]
-        public int Unknown1 { get; set; }
-
-        [AoMember(1)]
-        public BattlestationSide A { get; set; }
-
-        [AoMember(2)]
-        public BattlestationSide B { get; set; }
-
-        [AoMember(3)]
-        public BattlestationSide C { get; set; }
-
-        [AoMember(4)]
-        public BattlestationSide Core { get; set; }
-
-        [AoMember(5)]
-        public int Unknown2 { get; set; }
-
-        [AoMember(6)]
-        public int RedScore { get; set; }
-
-        [AoMember(7)]
-        public int BlueScore { get; set; }
-
-        #endregion
+        N3MessageType = N3MessageType.SendScore;
     }
+
+    #endregion
+
+    #region AoMember Properties
+
+    [AoMember(0)] public int Unknown1 { get; set; }
+
+    [AoMember(1)] public BattlestationSide A { get; set; }
+
+    [AoMember(2)] public BattlestationSide B { get; set; }
+
+    [AoMember(3)] public BattlestationSide C { get; set; }
+
+    [AoMember(4)] public BattlestationSide Core { get; set; }
+
+    [AoMember(5)] public int Unknown2 { get; set; }
+
+    [AoMember(6)] public int RedScore { get; set; }
+
+    [AoMember(7)] public int BlueScore { get; set; }
+
+    #endregion
 }

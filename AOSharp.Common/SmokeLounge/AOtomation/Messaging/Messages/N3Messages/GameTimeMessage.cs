@@ -12,36 +12,31 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+
+namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
+
+[AoContract((int)N3MessageType.GameTime)]
+public class GameTimeMessage : N3Message
 {
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Constructors and Destructors
 
-    [AoContract((int)N3MessageType.GameTime)]
-    public class GameTimeMessage : N3Message
+    public GameTimeMessage()
     {
-        #region Constructors and Destructors
-
-        public GameTimeMessage()
-        {
-            this.N3MessageType = N3MessageType.GameTime;
-        }
-
-        #endregion
-
-        #region AoMember Properties
-
-        [AoMember(0)]
-        public float CurrentGameTime { get; set; }
-
-        [AoMember(1)]
-        public int Unknown2 { get; set; }
-
-        [AoMember(2)]
-        public int CurrentGameDay { get; set; }
-
-        [AoMember(3)]
-        public float Unknown4 { get; set; }
-
-        #endregion
+        N3MessageType = N3MessageType.GameTime;
     }
+
+    #endregion
+
+    #region AoMember Properties
+
+    [AoMember(0)] public float CurrentGameTime { get; set; }
+
+    [AoMember(1)] public int Unknown2 { get; set; }
+
+    [AoMember(2)] public int CurrentGameDay { get; set; }
+
+    [AoMember(3)] public float Unknown4 { get; set; }
+
+    #endregion
 }

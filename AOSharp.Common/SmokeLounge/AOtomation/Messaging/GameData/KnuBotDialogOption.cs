@@ -12,18 +12,17 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.GameData
+using SmokeLounge.AOtomation.Messaging.Serialization;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+
+namespace SmokeLounge.AOtomation.Messaging.GameData;
+
+public class KnuBotDialogOption
 {
-    using SmokeLounge.AOtomation.Messaging.Serialization;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region AoMember Properties
 
-    public class KnuBotDialogOption
-    {
-        #region AoMember Properties
+    [AoMember(0, SerializeSize = ArraySizeType.Int32)]
+    public string Text { get; set; }
 
-        [AoMember(0, SerializeSize = ArraySizeType.Int32)]
-        public string Text { get; set; }
-
-        #endregion
-    }
+    #endregion
 }

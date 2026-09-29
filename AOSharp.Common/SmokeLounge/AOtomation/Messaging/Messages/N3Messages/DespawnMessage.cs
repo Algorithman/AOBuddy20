@@ -12,20 +12,19 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+
+namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
+
+[AoContract((int)N3MessageType.Despawn)]
+public class DespawnMessage : N3Message
 {
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Constructors and Destructors
 
-    [AoContract((int)N3MessageType.Despawn)]
-    public class DespawnMessage : N3Message
+    public DespawnMessage()
     {
-        #region Constructors and Destructors
-
-        public DespawnMessage()
-        {
-            this.N3MessageType = N3MessageType.Despawn;
-        }
-
-        #endregion
+        N3MessageType = N3MessageType.Despawn;
     }
+
+    #endregion
 }

@@ -1,10 +1,9 @@
-﻿namespace AOSharp.Common.GameData
+﻿namespace AOSharp.Common.GameData;
+
+public enum DuelUpdate
 {
-    public enum DuelUpdate
-    {
-        Challenge = 0,
-        Accept = 1,
-        Decline = 2,
-        Stop = 3,
-    }
+    Challenge = 0,
+    Accept = 1,
+    Decline = 2,
+    Stop = 3,
 }

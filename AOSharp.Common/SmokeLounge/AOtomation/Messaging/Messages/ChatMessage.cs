@@ -12,16 +12,15 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Messages
+namespace SmokeLounge.AOtomation.Messaging.Messages;
+
+public class ChatMessage
 {
-    public class ChatMessage
-    {
-        #region Public Properties
+    #region Public Properties
 
-        public ChatMessageBody Body { get; set; }
+    public ChatMessageBody Body { get; set; }
 
-        public ChatHeader Header { get; set; }
+    public ChatHeader Header { get; set; }
 
-        #endregion
-    }
+    #endregion
 }

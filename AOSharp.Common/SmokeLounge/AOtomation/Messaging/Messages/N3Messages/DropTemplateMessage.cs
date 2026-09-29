@@ -13,32 +13,27 @@
 // --------------------------------------------------------------------------------------------------------------------
 
 using AOSharp.Common.GameData;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages
+namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
+
+[AoContract((int)N3MessageType.DropTemplate)]
+public class DropTemplateMessage : N3Message
 {
-    using SmokeLounge.AOtomation.Messaging.GameData;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Constructors and Destructors
 
-    [AoContract((int)N3MessageType.DropTemplate)]
-    public class DropTemplateMessage : N3Message
+    public DropTemplateMessage()
     {
-        #region Constructors and Destructors
-
-        public DropTemplateMessage()
-        {
-            this.N3MessageType = N3MessageType.DropTemplate;
-        }
-
-        #endregion
-
-        #region AoMember Properties
-
-        [AoMember(0)]
-        public Identity Item { get; set; }
-
-        [AoMember(1)]
-        public Vector3 Position { get; set; }
-
-        #endregion
+        N3MessageType = N3MessageType.DropTemplate;
     }
+
+    #endregion
+
+    #region AoMember Properties
+
+    [AoMember(0)] public Identity Item { get; set; }
+
+    [AoMember(1)] public Vector3 Position { get; set; }
+
+    #endregion
 }

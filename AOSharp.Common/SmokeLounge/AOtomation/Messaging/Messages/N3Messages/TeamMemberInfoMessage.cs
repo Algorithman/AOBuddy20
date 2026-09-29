@@ -13,46 +13,38 @@
 // --------------------------------------------------------------------------------------------------------------------
 
 using AOSharp.Common.GameData;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages
+namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
+
+[AoContract((int)N3MessageType.TeamMemberInfo)]
+public class TeamMemberInfoMessage : N3Message
 {
-    using SmokeLounge.AOtomation.Messaging.GameData;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Constructors and Destructors
 
-    [AoContract((int)N3MessageType.TeamMemberInfo)]
-    public class TeamMemberInfoMessage : N3Message
+    public TeamMemberInfoMessage()
     {
-        #region Constructors and Destructors
-
-        public TeamMemberInfoMessage()
-        {
-            this.N3MessageType = N3MessageType.TeamMemberInfo;
-        }
-
-        #endregion
-
-        #region AoMember Properties
-
-        [AoMember(0)]
-        public Identity Character { get; set; }
-
-        // The team window's live vitals for one member. Sent whenever that member's health or
-        // nano changes, for members in THIS playfield only - so it keeps arriving for a teammate
-        // who is out of render range, but stops entirely once he leaves the zone.
-        // Wire-verified (sniffs/20260913-154958_s11.csv seq 628, s16 seq 350):
-        //   Character=<a teammate> CurrentNano=347 MaxNano=347 MaxHealth=363 CurrentHealth=347
-        [AoMember(1)]
-        public int CurrentNano { get; set; }
-
-        [AoMember(2)]
-        public int MaxNano { get; set; }
-
-        [AoMember(3)]
-        public int MaxHealth { get; set; }
-
-        [AoMember(4)]
-        public int CurrentHealth { get; set; }
-
-        #endregion
+        N3MessageType = N3MessageType.TeamMemberInfo;
     }
+
+    #endregion
+
+    #region AoMember Properties
+
+    [AoMember(0)] public Identity Character { get; set; }
+
+    // The team window's live vitals for one member. Sent whenever that member's health or
+    // nano changes, for members in THIS playfield only - so it keeps arriving for a teammate
+    // who is out of render range, but stops entirely once he leaves the zone.
+    // Wire-verified (sniffs/20260913-154958_s11.csv seq 628, s16 seq 350):
+    //   Character=<a teammate> CurrentNano=347 MaxNano=347 MaxHealth=363 CurrentHealth=347
+    [AoMember(1)] public int CurrentNano { get; set; }
+
+    [AoMember(2)] public int MaxNano { get; set; }
+
+    [AoMember(3)] public int MaxHealth { get; set; }
+
+    [AoMember(4)] public int CurrentHealth { get; set; }
+
+    #endregion
 }

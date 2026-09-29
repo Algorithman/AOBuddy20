@@ -12,38 +12,34 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.SystemMessages
+using SmokeLounge.AOtomation.Messaging.Serialization;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+
+namespace SmokeLounge.AOtomation.Messaging.Messages.SystemMessages;
+
+[AoContract((int)SystemMessageType.ChatServerInfo)]
+public class ChatServerInfoMessage : SystemMessage
 {
-    using SmokeLounge.AOtomation.Messaging.Serialization;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Constructors and Destructors
 
-    [AoContract((int)SystemMessageType.ChatServerInfo)]
-    public class ChatServerInfoMessage : SystemMessage
+    public ChatServerInfoMessage()
     {
-        #region Constructors and Destructors
-
-        public ChatServerInfoMessage()
-        {
-            this.SystemMessageType = SystemMessageType.ChatServerInfo;
-            this.Unknown1 = 1;
-        }
-
-        #endregion
-
-        #region AoMember Properties
-
-        [AoMember(0)]
-        public int Unknown1 { get; set; }
-
-        [AoMember(1, SerializeSize = ArraySizeType.Int32)]
-        public string HostName { get; set; }
-
-        [AoMember(2)]
-        public int Port { get; set; }
-
-        [AoMember(3)]
-        public int Unknown2 { get; set; }
-
-        #endregion
+        SystemMessageType = SystemMessageType.ChatServerInfo;
+        Unknown1 = 1;
     }
+
+    #endregion
+
+    #region AoMember Properties
+
+    [AoMember(0)] public int Unknown1 { get; set; }
+
+    [AoMember(1, SerializeSize = ArraySizeType.Int32)]
+    public string HostName { get; set; }
+
+    [AoMember(2)] public int Port { get; set; }
+
+    [AoMember(3)] public int Unknown2 { get; set; }
+
+    #endregion
 }

@@ -12,22 +12,21 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages
+namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
+
+public enum GenericCmdAction
 {
-    public enum GenericCmdAction
-    {
-        None = 0, 
+    None = 0,
 
-        Get = 1, 
+    Get = 1,
 
-        Drop = 2, 
+    Drop = 2,
 
-        Use = 3, 
+    Use = 3,
 
-        Repair = 4, 
+    Repair = 4,
 
-        UseItemOnItem = 5,
+    UseItemOnItem = 5,
 
-        UseItemOnCharacter = 32
-    }
+    UseItemOnCharacter = 32,
 }

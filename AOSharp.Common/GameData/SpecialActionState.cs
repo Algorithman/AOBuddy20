@@ -1,8 +1,7 @@
-﻿namespace AOSharp.Common.GameData
+﻿namespace AOSharp.Common.GameData;
+
+public enum SpecialActionState
 {
-    public enum SpecialActionState
-    {
-        Ready = 0,
-        NotReady = 1
-    }
+    Ready = 0,
+    NotReady = 1,
 }

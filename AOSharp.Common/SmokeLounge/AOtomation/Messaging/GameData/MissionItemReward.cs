@@ -12,28 +12,21 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.GameData
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+
+namespace SmokeLounge.AOtomation.Messaging.GameData;
+
+public class MissionItemReward
 {
-    using AOSharp.Common.GameData;
-    using SmokeLounge.AOtomation.Messaging.Serialization;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region AoMember Properties
 
-    public class MissionItemReward
-    {
-        #region AoMember Properties
+    [AoMember(0)] public int LowId { get; set; }
 
-        [AoMember(0)]
-        public int LowId { get; set; }
+    [AoMember(1)] public int HighId { get; set; }
 
-        [AoMember(1)]
-        public int HighId { get; set; }
+    [AoMember(2)] public int Ql { get; set; }
 
-        [AoMember(2)]
-        public int Ql { get; set; }
+    [AoMember(3)] public int Unk { get; set; }
 
-        [AoMember(3)]
-        public int Unk { get; set; }
-
-        #endregion
-    }
+    #endregion
 }

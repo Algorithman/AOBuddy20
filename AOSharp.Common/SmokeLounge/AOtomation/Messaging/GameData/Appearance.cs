@@ -13,148 +13,128 @@
 // --------------------------------------------------------------------------------------------------------------------
 
 using AOSharp.Common.GameData;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
 
-namespace SmokeLounge.AOtomation.Messaging.GameData
+namespace SmokeLounge.AOtomation.Messaging.GameData;
+
+public class Appearance
 {
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region AoMember Properties
 
-    public class Appearance
+    [AoMember(0)]
+    public uint Value
     {
-        #region Fields
+        get => value;
 
-        private Breed breed;
-
-        private Fatness fatness;
-
-        private Gender gender;
-
-        private uint race;
-
-        private Side side;
-
-        private uint value;
-
-        #endregion
-
-        #region AoMember Properties
-
-        [AoMember(0)]
-        public uint Value
+        set
         {
-            get
-            {
-                return this.value;
-            }
-
-            set
-            {
-                this.value = value;
-                this.UpdateStats();
-            }
+            this.value = value;
+            UpdateStats();
         }
-
-        #endregion
-
-        #region Public Properties
-
-        public Breed Breed
-        {
-            get
-            {
-                return this.breed;
-            }
-
-            set
-            {
-                this.breed = value;
-                this.UpdateValue();
-            }
-        }
-
-        public Fatness Fatness
-        {
-            get
-            {
-                return this.fatness;
-            }
-
-            set
-            {
-                this.fatness = value;
-                this.UpdateValue();
-            }
-        }
-
-        public Gender Gender
-        {
-            get
-            {
-                return this.gender;
-            }
-
-            set
-            {
-                this.gender = value;
-                this.UpdateValue();
-            }
-        }
-
-        public uint Race
-        {
-            get
-            {
-                return this.race;
-            }
-
-            set
-            {
-                this.race = value;
-                this.UpdateValue();
-            }
-        }
-
-        public Side Side
-        {
-            get
-            {
-                return this.side;
-            }
-
-            set
-            {
-                this.side = value;
-                this.UpdateValue();
-            }
-        }
-
-        #endregion
-
-        #region Methods
-
-        private void UpdateStats()
-        {
-            var sideValue = this.value & 7;
-            this.side = (Side)sideValue;
-            var fatnessValue = (this.value & 31) >> 3;
-            this.fatness = (Fatness)fatnessValue;
-            var breedValue = (this.value & 255) >> 5;
-            this.breed = (Breed)breedValue;
-            var genderValue = (this.value & 1023) >> 8;
-            this.gender = (Gender)genderValue;
-            var raceValue = this.value >> 10;
-            this.race = raceValue;
-        }
-
-        private void UpdateValue()
-        {
-            var sideValue = (uint)this.side;
-            var fatnessValue = (uint)this.fatness << 3;
-            var breedValue = (uint)this.breed << 5;
-            var genderValue = (uint)this.gender << 8;
-            var raceValue = this.race << 10;
-            this.value = sideValue + fatnessValue + breedValue + genderValue + raceValue;
-        }
-
-        #endregion
     }
+
+    #endregion
+
+    #region Fields
+
+    private Breed breed;
+
+    private Fatness fatness;
+
+    private Gender gender;
+
+    private uint race;
+
+    private Side side;
+
+    private uint value;
+
+    #endregion
+
+    #region Public Properties
+
+    public Breed Breed
+    {
+        get => breed;
+
+        set
+        {
+            breed = value;
+            UpdateValue();
+        }
+    }
+
+    public Fatness Fatness
+    {
+        get => fatness;
+
+        set
+        {
+            fatness = value;
+            UpdateValue();
+        }
+    }
+
+    public Gender Gender
+    {
+        get => gender;
+
+        set
+        {
+            gender = value;
+            UpdateValue();
+        }
+    }
+
+    public uint Race
+    {
+        get => race;
+
+        set
+        {
+            race = value;
+            UpdateValue();
+        }
+    }
+
+    public Side Side
+    {
+        get => side;
+
+        set
+        {
+            side = value;
+            UpdateValue();
+        }
+    }
+
+    #endregion
+
+    #region Methods
+
+    private void UpdateStats()
+    {
+        var sideValue = value & 7;
+        side = (Side)sideValue;
+        var fatnessValue = (value & 31) >> 3;
+        fatness = (Fatness)fatnessValue;
+        var breedValue = (value & 255) >> 5;
+        breed = (Breed)breedValue;
+        var genderValue = (value & 1023) >> 8;
+        gender = (Gender)genderValue;
+        var raceValue = value >> 10;
+        race = raceValue;
+    }
+
+    private void UpdateValue()
+    {
+        var sideValue = (uint)side;
+        var fatnessValue = (uint)fatness << 3;
+        var breedValue = (uint)breed << 5;
+        var genderValue = (uint)gender << 8;
+        var raceValue = race << 10;
+        value = sideValue + fatnessValue + breedValue + genderValue + raceValue;
+    }
+
+    #endregion
 }

@@ -12,41 +12,34 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.SystemMessages
+using System.Net;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+
+namespace SmokeLounge.AOtomation.Messaging.Messages.SystemMessages;
+
+[AoContract((int)SystemMessageType.ZoneInfo)]
+public class ZoneInfoMessage : SystemMessage
 {
-    using System.Net;
+    #region Constructors and Destructors
 
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
-
-    [AoContract((int)SystemMessageType.ZoneInfo)]
-    public class ZoneInfoMessage : SystemMessage
+    public ZoneInfoMessage()
     {
-        #region Constructors and Destructors
-
-        public ZoneInfoMessage()
-        {
-            this.SystemMessageType = SystemMessageType.ZoneInfo;
-        }
-
-        #endregion
-
-        #region AoMember Properties
-
-        [AoMember(0)]
-        public int CharacterId { get; set; }
-
-        [AoMember(1)]
-        public IPAddress ServerIpAddress { get; set; }
-
-        [AoMember(2)]
-        public ushort ServerPort { get; set; }
-
-        [AoMember(3)]
-        public uint Cookie1 { get; set; }
-
-        [AoMember(4)]
-        public uint Cookie2 { get; set; }
-
-        #endregion
+        SystemMessageType = SystemMessageType.ZoneInfo;
     }
+
+    #endregion
+
+    #region AoMember Properties
+
+    [AoMember(0)] public int CharacterId { get; set; }
+
+    [AoMember(1)] public IPAddress ServerIpAddress { get; set; }
+
+    [AoMember(2)] public ushort ServerPort { get; set; }
+
+    [AoMember(3)] public uint Cookie1 { get; set; }
+
+    [AoMember(4)] public uint Cookie2 { get; set; }
+
+    #endregion
 }

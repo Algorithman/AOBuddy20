@@ -12,27 +12,26 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.SystemMessages
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+
+namespace SmokeLounge.AOtomation.Messaging.Messages.SystemMessages;
+
+[AoContract((int)SystemMessageType.ServerSalt)]
+public class ServerSaltMessage : SystemMessage
 {
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Constructors and Destructors
 
-    [AoContract((int)SystemMessageType.ServerSalt)]
-    public class ServerSaltMessage : SystemMessage
+    public ServerSaltMessage()
     {
-        #region Constructors and Destructors
-
-        public ServerSaltMessage()
-        {
-            this.SystemMessageType = SystemMessageType.ServerSalt;
-        }
-
-        #endregion
-
-        #region AoMember Properties
-
-        [AoMember(0, IsFixedSize = true, FixedSizeLength = 32)]
-        public byte[] ServerSalt { get; set; }
-
-        #endregion
+        SystemMessageType = SystemMessageType.ServerSalt;
     }
+
+    #endregion
+
+    #region AoMember Properties
+
+    [AoMember(0, IsFixedSize = true, FixedSizeLength = 32)]
+    public byte[] ServerSalt { get; set; }
+
+    #endregion
 }

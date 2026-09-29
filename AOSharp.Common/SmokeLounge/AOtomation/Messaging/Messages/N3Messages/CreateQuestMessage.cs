@@ -13,29 +13,25 @@
 // --------------------------------------------------------------------------------------------------------------------
 
 using AOSharp.Common.GameData;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages
+namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
+
+[AoContract((int)N3MessageType.CreateQuest)]
+public class CreateQuestMessage : N3Message
 {
-    using SmokeLounge.AOtomation.Messaging.GameData;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Constructors and Destructors
 
-    [AoContract((int)N3MessageType.CreateQuest)]
-    public class CreateQuestMessage : N3Message
+    public CreateQuestMessage()
     {
-        #region Constructors and Destructors
-
-        public CreateQuestMessage()
-        {
-            this.N3MessageType = N3MessageType.CreateQuest;
-        }
-
-        #endregion
-
-        #region AoMember Properties
-
-        [AoMember(0)]
-        public Identity MissionId { get; set; }
-
-        #endregion
+        N3MessageType = N3MessageType.CreateQuest;
     }
+
+    #endregion
+
+    #region AoMember Properties
+
+    [AoMember(0)] public Identity MissionId { get; set; }
+
+    #endregion
 }

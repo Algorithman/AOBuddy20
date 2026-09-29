@@ -12,42 +12,35 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+
+namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
+
+[AoContract((int)N3MessageType.SocialActionCmd)]
+public class SocialActionCmdMessage : N3Message
 {
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Constructors and Destructors
 
-    [AoContract((int)N3MessageType.SocialActionCmd)]
-    public class SocialActionCmdMessage : N3Message
+    public SocialActionCmdMessage()
     {
-        #region Constructors and Destructors
-
-        public SocialActionCmdMessage()
-        {
-            this.N3MessageType = N3MessageType.SocialActionCmd;
-        }
-
-        #endregion
-
-        #region AoMember Properties
-
-        [AoMember(0)]
-        public byte Unknown1 { get; set; }
-
-        [AoMember(1)]
-        public byte Unknown2 { get; set; }
-
-        [AoMember(2)]
-        public byte Unknown3 { get; set; }
-
-        [AoMember(3)]
-        public byte Unknown4 { get; set; }
-
-        [AoMember(4)]
-        public int Unknown5 { get; set; }
-
-        [AoMember(5)]
-        public SocialAction Action { get; set; }
-
-        #endregion
+        N3MessageType = N3MessageType.SocialActionCmd;
     }
+
+    #endregion
+
+    #region AoMember Properties
+
+    [AoMember(0)] public byte Unknown1 { get; set; }
+
+    [AoMember(1)] public byte Unknown2 { get; set; }
+
+    [AoMember(2)] public byte Unknown3 { get; set; }
+
+    [AoMember(3)] public byte Unknown4 { get; set; }
+
+    [AoMember(4)] public int Unknown5 { get; set; }
+
+    [AoMember(5)] public SocialAction Action { get; set; }
+
+    #endregion
 }

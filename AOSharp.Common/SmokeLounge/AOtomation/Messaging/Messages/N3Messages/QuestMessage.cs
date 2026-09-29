@@ -13,40 +13,33 @@
 // --------------------------------------------------------------------------------------------------------------------
 
 using AOSharp.Common.GameData;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages
+namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
+
+[AoContract((int)N3MessageType.Quest)]
+public class QuestMessage : N3Message
 {
-    using SmokeLounge.AOtomation.Messaging.GameData;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Constructors and Destructors
 
-    [AoContract((int)N3MessageType.Quest)]
-    public class QuestMessage : N3Message
+    public QuestMessage()
     {
-        #region Constructors and Destructors
-
-        public QuestMessage()
-        {
-            this.N3MessageType = N3MessageType.Quest;
-        }
-
-        #endregion
-
-        #region AoMember Properties
-
-        [AoMember(0)]
-        public QuestAction Action { get; set; }
-
-        [AoMember(1)]
-        public int Unknown1 { get; set; }
-
-        [AoMember(2)]
-        public Identity Mission { get; set; }
-
-        [AoMember(3)]
-        public int Unknown2 { get; set; }
-
-        [AoMember(4)]
-        public int Unknown3 { get; set; }
-        #endregion
+        N3MessageType = N3MessageType.Quest;
     }
+
+    #endregion
+
+    #region AoMember Properties
+
+    [AoMember(0)] public QuestAction Action { get; set; }
+
+    [AoMember(1)] public int Unknown1 { get; set; }
+
+    [AoMember(2)] public Identity Mission { get; set; }
+
+    [AoMember(3)] public int Unknown2 { get; set; }
+
+    [AoMember(4)] public int Unknown3 { get; set; }
+
+    #endregion
 }

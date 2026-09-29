@@ -12,38 +12,35 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages
+using SmokeLounge.AOtomation.Messaging.GameData;
+using SmokeLounge.AOtomation.Messaging.Serialization;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+
+namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
+
+[AoContract((int)N3MessageType.AppearanceUpdate)]
+public class AppearanceUpdateMessage : N3Message
 {
-    using SmokeLounge.AOtomation.Messaging.GameData;
-    using SmokeLounge.AOtomation.Messaging.Serialization;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Constructors and Destructors
 
-    [AoContract((int)N3MessageType.AppearanceUpdate)]
-    public class AppearanceUpdateMessage : N3Message
+    public AppearanceUpdateMessage()
     {
-        #region Constructors and Destructors
-
-        public AppearanceUpdateMessage()
-        {
-            this.N3MessageType = N3MessageType.AppearanceUpdate;
-        }
-
-        #endregion
-
-        #region AoMember Properties
-
-        [AoMember(0, SerializeSize = ArraySizeType.X3F1)]
-        public Texture[] Textures { get; set; }
-
-        [AoMember(1, SerializeSize = ArraySizeType.X3F1)]
-        public Mesh[] Meshes { get; set; }
-
-        [AoMember(2)]
-        public short VisualFlags { get; set; }
-
-        [AoMember(3)]
-        public byte VisibleTitle { get; set; }
-
-        #endregion
+        N3MessageType = N3MessageType.AppearanceUpdate;
     }
+
+    #endregion
+
+    #region AoMember Properties
+
+    [AoMember(0, SerializeSize = ArraySizeType.X3F1)]
+    public Texture[] Textures { get; set; }
+
+    [AoMember(1, SerializeSize = ArraySizeType.X3F1)]
+    public Mesh[] Meshes { get; set; }
+
+    [AoMember(2)] public short VisualFlags { get; set; }
+
+    [AoMember(3)] public byte VisibleTitle { get; set; }
+
+    #endregion
 }

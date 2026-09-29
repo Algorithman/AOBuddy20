@@ -12,20 +12,19 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages
+namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
+
+public enum PetCommand
 {
-    public enum PetCommand : int
-    {
-        Follow = 1,
-        Behind = 2,
-        Wait = 4,
-        Guard = 6,
-        Attack = 7,
-        Social = 9,
-        Terminate = 10,
-        Release = 11,
-        Heal = 12,
-        Report = 14,
-        Chat = 16
-    }
+    Follow = 1,
+    Behind = 2,
+    Wait = 4,
+    Guard = 6,
+    Attack = 7,
+    Social = 9,
+    Terminate = 10,
+    Release = 11,
+    Heal = 12,
+    Report = 14,
+    Chat = 16,
 }

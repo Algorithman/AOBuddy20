@@ -1,6 +1,6 @@
 // --------------------------------------------------------------------------------------------------------------------
 // <copyright file="ISerializer.cs" company="SmokeLounge">
-//   Copyright © 2013 SmokeLounge.
+//   Copyright ï¿½ 2013 SmokeLounge.
 //   This program is free software. It comes without any warranty, to
 //   the extent permitted by applicable law. You can redistribute it
 //   and/or modify it under the terms of the Do What The Fuck You Want
@@ -12,44 +12,42 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Serialization
+using System.Linq.Expressions;
+
+namespace SmokeLounge.AOtomation.Messaging.Serialization;
+
+public interface ISerializer
 {
-    using System;
-    using System.Linq.Expressions;
+    #region Public Properties
 
-    public interface ISerializer
-    {
-        #region Public Properties
+    Type Type { get; }
 
-        Type Type { get; }
+    #endregion
 
-        #endregion
+    #region Public Methods and Operators
 
-        #region Public Methods and Operators
+    object Deserialize(
+        StreamReader streamReader,
+        SerializationContext serializationContext,
+        PropertyMetaData propertyMetaData = null);
 
-        object Deserialize(
-            StreamReader streamReader, 
-            SerializationContext serializationContext, 
-            PropertyMetaData propertyMetaData = null);
+    Expression DeserializerExpression(
+        ParameterExpression streamReaderExpression,
+        ParameterExpression serializationContextExpression,
+        Expression assignmentTargetExpression,
+        PropertyMetaData propertyMetaData);
 
-        Expression DeserializerExpression(
-            ParameterExpression streamReaderExpression, 
-            ParameterExpression serializationContextExpression, 
-            Expression assignmentTargetExpression, 
-            PropertyMetaData propertyMetaData);
+    void Serialize(
+        StreamWriter streamWriter,
+        SerializationContext serializationContext,
+        object value,
+        PropertyMetaData propertyMetaData = null);
 
-        void Serialize(
-            StreamWriter streamWriter, 
-            SerializationContext serializationContext, 
-            object value, 
-            PropertyMetaData propertyMetaData = null);
+    Expression SerializerExpression(
+        ParameterExpression streamWriterExpression,
+        ParameterExpression serializationContextExpression,
+        Expression valueExpression,
+        PropertyMetaData propertyMetaData);
 
-        Expression SerializerExpression(
-            ParameterExpression streamWriterExpression, 
-            ParameterExpression serializationContextExpression, 
-            Expression valueExpression, 
-            PropertyMetaData propertyMetaData);
-
-        #endregion
-    }
+    #endregion
 }

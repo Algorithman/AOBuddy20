@@ -12,68 +12,56 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages
+using AOSharp.Common.GameData;
+using SmokeLounge.AOtomation.Messaging.GameData;
+using SmokeLounge.AOtomation.Messaging.Serialization;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+
+namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
+
+[AoContract((int)N3MessageType.VendingMachineFullUpdate)]
+public class VendingMachineFullUpdateMessage : N3Message
 {
-    using AOSharp.Common.GameData;
-    using SmokeLounge.AOtomation.Messaging.GameData;
-    using SmokeLounge.AOtomation.Messaging.Serialization;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Constructors and Destructors
 
-    [AoContract((int)N3MessageType.VendingMachineFullUpdate)]
-    public class VendingMachineFullUpdateMessage : N3Message
+    public VendingMachineFullUpdateMessage()
     {
-        #region Constructors and Destructors
-
-        public VendingMachineFullUpdateMessage()
-        {
-            this.N3MessageType = N3MessageType.VendingMachineFullUpdate;
-        }
-
-        [AoMember(0)]
-        public int Unknown1 { get; set; }
-
-        [AoFlags("OwnerType")]
-        [AoMember(1)]
-        public int OwnerType { get; set; }
-
-        [AoMember(2)]
-        public int OwnerInstance { get; set; }
-
-        [AoUsesFlags("OwnerType", typeof(Vector3), FlagsCriteria.EqualsToAny, new[] { 0 })]
-        [AoMember(3)]
-        public Vector3? Position { get; set; }
-
-        [AoUsesFlags("OwnerType", typeof(Quaternion), FlagsCriteria.EqualsToAny, new[] { 0 })]
-        [AoMember(4)]
-        public Quaternion? Rotation { get; set; }
-
-        [AoMember(5)]
-        public int PlayfieldId { get; set; }
-
-        [AoMember(6)]
-        public Identity StateMachine { get; set; }
-
-        [AoMember(7)]
-        public short Unknown4 { get; set; }
-
-        [AoMember(8, SerializeSize = ArraySizeType.X3F1)]
-        public GameTuple<Stat, int>[] Stats { get; set; }
-
-        [AoMember(9)]
-        public int Unknown6 { get; set; }
-
-        [AoMember(10)]
-        public int Unknown7 { get; set; }
-
-        [AoMember(11)]
-        public int TailVersion { get; set; }
-
-        [AoMember(12, SerializeSize = ArraySizeType.X3F1)]
-        public int[] UnknownArray { get; set; }
-
-        [AoMember(13)]
-        public int Unknown9 { get; set; }
-
-        #endregion
+        N3MessageType = N3MessageType.VendingMachineFullUpdate;
     }
+
+    [AoMember(0)] public int Unknown1 { get; set; }
+
+    [AoFlags("OwnerType")] [AoMember(1)] public int OwnerType { get; set; }
+
+    [AoMember(2)] public int OwnerInstance { get; set; }
+
+    [AoUsesFlags("OwnerType", typeof(Vector3), FlagsCriteria.EqualsToAny, 0)]
+    [AoMember(3)]
+    public Vector3? Position { get; set; }
+
+    [AoUsesFlags("OwnerType", typeof(Quaternion), FlagsCriteria.EqualsToAny, 0)]
+    [AoMember(4)]
+    public Quaternion? Rotation { get; set; }
+
+    [AoMember(5)] public int PlayfieldId { get; set; }
+
+    [AoMember(6)] public Identity StateMachine { get; set; }
+
+    [AoMember(7)] public short Unknown4 { get; set; }
+
+    [AoMember(8, SerializeSize = ArraySizeType.X3F1)]
+    public GameTuple<Stat, int>[] Stats { get; set; }
+
+    [AoMember(9)] public int Unknown6 { get; set; }
+
+    [AoMember(10)] public int Unknown7 { get; set; }
+
+    [AoMember(11)] public int TailVersion { get; set; }
+
+    [AoMember(12, SerializeSize = ArraySizeType.X3F1)]
+    public int[] UnknownArray { get; set; }
+
+    [AoMember(13)] public int Unknown9 { get; set; }
+
+    #endregion
 }

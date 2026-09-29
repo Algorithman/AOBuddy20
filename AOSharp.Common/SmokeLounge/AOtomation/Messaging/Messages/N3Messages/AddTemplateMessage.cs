@@ -12,36 +12,31 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+
+namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
+
+[AoContract((int)N3MessageType.AddTemplate)]
+public class AddTemplateMessage : N3Message
 {
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Constructors and Destructors
 
-    [AoContract((int)N3MessageType.AddTemplate)]
-    public class AddTemplateMessage : N3Message
+    public AddTemplateMessage()
     {
-        #region Constructors and Destructors
-
-        public AddTemplateMessage()
-        {
-            this.N3MessageType = N3MessageType.AddTemplate;
-        }
-
-        #endregion
-
-        #region AoMember Properties
-
-        [AoMember(0)]
-        public int HighId { get; set; }
-
-        [AoMember(1)]
-        public int LowId { get; set; }
-
-        [AoMember(2)]
-        public int Quality { get; set; }
-
-        [AoMember(3)]
-        public int Count { get; set; }
-
-        #endregion
+        N3MessageType = N3MessageType.AddTemplate;
     }
+
+    #endregion
+
+    #region AoMember Properties
+
+    [AoMember(0)] public int HighId { get; set; }
+
+    [AoMember(1)] public int LowId { get; set; }
+
+    [AoMember(2)] public int Quality { get; set; }
+
+    [AoMember(3)] public int Count { get; set; }
+
+    #endregion
 }

@@ -12,24 +12,19 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.GameData
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+
+namespace SmokeLounge.AOtomation.Messaging.GameData;
+
+public class GridInteractionToken
 {
-    using AOSharp.Common.GameData;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region AoMember Properties
 
-    public class GridInteractionToken
-    {
-        #region AoMember Properties
+    [AoMember(0)] public byte Unknown0 { get; set; }
 
-        [AoMember(0)]
-        public byte Unknown0 { get; set; }
+    [AoMember(1)] public int Unknown1 { get; set; }
 
-        [AoMember(1)]
-        public int Unknown1 { get; set; }
+    [AoMember(2)] public int Unknown2 { get; set; }
 
-        [AoMember(2)]
-        public int Unknown2 { get; set; }
-
-        #endregion
-    }
+    #endregion
 }

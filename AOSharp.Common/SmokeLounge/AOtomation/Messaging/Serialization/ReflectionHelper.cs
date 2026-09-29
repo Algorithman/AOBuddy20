@@ -12,89 +12,87 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Serialization
+using System.Linq.Expressions;
+using System.Reflection;
+
+namespace SmokeLounge.AOtomation.Messaging.Serialization;
+
+public static class ReflectionHelper
 {
-    using System;
-    using System.Linq.Expressions;
-    using System.Reflection;
+    #region Public Methods and Operators
 
-    public static class ReflectionHelper
+    public static MethodInfo GetMethodInfo<TSource, TSignature>(
+        Expression<Func<TSource, TSignature>> lambdaExpression)
     {
-        #region Public Methods and Operators
-
-        public static MethodInfo GetMethodInfo<TSource, TSignature>(
-            Expression<Func<TSource, TSignature>> lambdaExpression)
+        var unaryExpression = lambdaExpression.Body as UnaryExpression;
+        if (unaryExpression == null)
         {
-            var unaryExpression = lambdaExpression.Body as UnaryExpression;
-            if (unaryExpression == null)
-            {
-                throw new InvalidOperationException();
-            }
-
-            var methodCallExpression = unaryExpression.Operand as MethodCallExpression;
-            if (methodCallExpression == null)
-            {
-                throw new InvalidOperationException();
-            }
-
-            if (methodCallExpression.Arguments.Count < 2)
-            {
-                throw new InvalidOperationException();
-            }
-
-            var constantExpression = methodCallExpression.Object as ConstantExpression;
-            if (constantExpression == null)
-            {
-                throw new InvalidOperationException();
-            }
-
-            var methodInfo = constantExpression.Value as MethodInfo;
-            if (methodInfo == null)
-            {
-                throw new InvalidOperationException();
-            }
-
-            return methodInfo;
+            throw new InvalidOperationException();
         }
 
-        public static PropertyInfo GetPropertyInfo<TSource>(Expression<Func<TSource, object>> propertyExpression)
+        var methodCallExpression = unaryExpression.Operand as MethodCallExpression;
+        if (methodCallExpression == null)
         {
-            var lambdaExpression = propertyExpression as LambdaExpression;
-            if (lambdaExpression == null)
-            {
-                throw new InvalidOperationException();
-            }
-
-            MemberExpression memberExpression;
-            var unaryExpression = lambdaExpression.Body as UnaryExpression;
-            if (unaryExpression != null)
-            {
-                memberExpression = unaryExpression.Operand as MemberExpression;
-            }
-            else
-            {
-                memberExpression = lambdaExpression.Body as MemberExpression;
-            }
-
-            if (memberExpression == null)
-            {
-                throw new InvalidOperationException();
-            }
-
-            var propertyInfo = memberExpression.Member as PropertyInfo;
-            if (propertyInfo == null)
-            {
-                throw new InvalidOperationException();
-            }
-
-            return propertyInfo;
+            throw new InvalidOperationException();
         }
 
-        public static bool IsStruct(Type type)
+        if (methodCallExpression.Arguments.Count < 2)
         {
-            return type.IsValueType && type.IsPrimitive == false && type.IsEnum == false;
+            throw new InvalidOperationException();
         }
 
-        #endregion
+        var constantExpression = methodCallExpression.Object as ConstantExpression;
+        if (constantExpression == null)
+        {
+            throw new InvalidOperationException();
+        }
+
+        var methodInfo = constantExpression.Value as MethodInfo;
+        if (methodInfo == null)
+        {
+            throw new InvalidOperationException();
+        }
+
+        return methodInfo;
     }
+
+    public static PropertyInfo GetPropertyInfo<TSource>(Expression<Func<TSource, object>> propertyExpression)
+    {
+        var lambdaExpression = propertyExpression as LambdaExpression;
+        if (lambdaExpression == null)
+        {
+            throw new InvalidOperationException();
+        }
+
+        MemberExpression memberExpression;
+        var unaryExpression = lambdaExpression.Body as UnaryExpression;
+        if (unaryExpression != null)
+        {
+            memberExpression = unaryExpression.Operand as MemberExpression;
+        }
+        else
+        {
+            memberExpression = lambdaExpression.Body as MemberExpression;
+        }
+
+        if (memberExpression == null)
+        {
+            throw new InvalidOperationException();
+        }
+
+        var propertyInfo = memberExpression.Member as PropertyInfo;
+        if (propertyInfo == null)
+        {
+            throw new InvalidOperationException();
+        }
+
+        return propertyInfo;
+    }
+
+    public static bool IsStruct(Type type)
+    {
+        return type.IsValueType && !type.IsPrimitive && !type.IsEnum;
+    }
+
+    #endregion
 }

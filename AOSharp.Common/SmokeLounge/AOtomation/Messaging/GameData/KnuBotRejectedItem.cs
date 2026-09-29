@@ -12,26 +12,21 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.GameData
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+
+namespace SmokeLounge.AOtomation.Messaging.GameData;
+
+public class KnuBotRejectedItem
 {
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region AoMember Properties
 
-    public class KnuBotRejectedItem
-    {
-        #region AoMember Properties
+    [AoMember(0)] public int LowId { get; set; }
 
-        [AoMember(0)]
-        public int LowId { get; set; }
+    [AoMember(1)] public int HighId { get; set; }
 
-        [AoMember(1)]
-        public int HighId { get; set; }
+    [AoMember(2)] public int Quality { get; set; }
 
-        [AoMember(2)]
-        public int Quality { get; set; }
+    [AoMember(3)] public int Unused { get; set; }
 
-        [AoMember(3)]
-        public int Unused { get; set; }
-
-        #endregion
-    }
+    #endregion
 }

@@ -3,27 +3,25 @@
 // Project: AOBuddy20
 // Filename: ControlArbiter.cs
 // 
-// Last modified: 2026-09-29 13:47
-// Created:       2026-09-28 17:09
+// Last modified: 2026-09-30 00:19
+// Created:       2026-09-29 23:09
 // 
-// Long live OmniCell and AOBuddy20
+// Long live OmniCell and AOBuddy
 // ---------------------------------------------------------------------------------------
 
 using AOBuddy20.Enums;
-using System.Linq;
 using Microsoft.Extensions.Logging;
 
 namespace AOBuddy20;
 
 public sealed class ControlArbiter
 {
-    private int _activePriority = (int)ControlPriority.None;
-    private TaskCompletionSource? _resume = null;
-
-    private Dictionary<ControlPriority, int> _priorityLevels = new Dictionary<ControlPriority, int>();
-
     private readonly ILogger<ControlArbiter> _logger;
-    
+
+    private readonly Dictionary<ControlPriority, int> _priorityLevels = new Dictionary<ControlPriority, int>();
+    private int _activePriority = (int)ControlPriority.None;
+    private TaskCompletionSource? _resume;
+
     public ControlArbiter(ILogger<ControlArbiter> logger)
     {
         _logger = logger;
@@ -36,8 +34,8 @@ public sealed class ControlArbiter
         _priorityLevels[ControlPriority.None]++;
         _logger.LogInformation("ControlArbiter initialized.");
     }
-        
-    
+
+
     /// <summary>
     ///     Runs a step. If a higher-priority system is active (or becomes active),
     ///     the step suspends until control is released back down.
@@ -73,7 +71,7 @@ public sealed class ControlArbiter
             }
 
             _priorityLevels[priority]++;
-            
+
             // re-check after registering (avoid missed signal)
             if (Volatile.Read(ref _activePriority) < (int)priority)
             {

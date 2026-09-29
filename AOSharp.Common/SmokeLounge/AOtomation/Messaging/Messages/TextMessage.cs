@@ -12,45 +12,33 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Messages
+using AOSharp.Common.GameData;
+using SmokeLounge.AOtomation.Messaging.Serialization;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+
+namespace SmokeLounge.AOtomation.Messaging.Messages;
+
+[AoContract((int)PacketType.TextMessage)]
+public class TextMessage : MessageBody
 {
-    using AOSharp.Common.GameData;
-    using SmokeLounge.AOtomation.Messaging.GameData;
-    using SmokeLounge.AOtomation.Messaging.Serialization;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Public Properties
 
-    [AoContract((int)PacketType.TextMessage)]
-    public class TextMessage : MessageBody
-    {
-        #region AoMember Properties
+    public override PacketType PacketType => PacketType.TextMessage;
 
-        [AoMember(0)]
-        public TextMessageType TextMessageType { get; set; }
+    #endregion
 
-        [AoMember(1)]
-        public Identity Unk { get; set; }
+    #region AoMember Properties
 
-        [AoMember(2)]
-        public int PayloadSize { get; set; }
+    [AoMember(0)] public TextMessageType TextMessageType { get; set; }
 
-        [AoMember(3, SerializeSize = ArraySizeType.Int16)]
-        public string Text { get; set; }
+    [AoMember(1)] public Identity Unk { get; set; }
 
-        [AoMember(4)]
-        public TextMessageRange Range { get; set; }
+    [AoMember(2)] public int PayloadSize { get; set; }
 
-        #endregion
+    [AoMember(3, SerializeSize = ArraySizeType.Int16)]
+    public string Text { get; set; }
 
-        #region Public Properties
+    [AoMember(4)] public TextMessageRange Range { get; set; }
 
-        public override PacketType PacketType
-        {
-            get
-            {
-                return PacketType.TextMessage;
-            }
-        }
-
-        #endregion
-    }
+    #endregion
 }

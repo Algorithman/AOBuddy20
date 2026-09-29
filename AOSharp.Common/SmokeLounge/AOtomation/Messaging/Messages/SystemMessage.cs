@@ -1,6 +1,6 @@
 // --------------------------------------------------------------------------------------------------------------------
 // <copyright file="SystemMessage.cs" company="SmokeLounge">
-//   Copyright © 2013 SmokeLounge.
+//   Copyright ï¿½ 2013 SmokeLounge.
 //   This program is free software. It comes without any warranty, to
 //   the extent permitted by applicable law. You can redistribute it
 //   and/or modify it under the terms of the Do What The Fuck You Want
@@ -12,32 +12,24 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Messages
+using SmokeLounge.AOtomation.Messaging.Serialization;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+
+namespace SmokeLounge.AOtomation.Messaging.Messages;
+
+[AoContract((int)PacketType.SystemMessage)]
+[AoKnownType(16, IdentifierType.Int32)]
+public abstract class SystemMessage : MessageBody
 {
-    using SmokeLounge.AOtomation.Messaging.Serialization;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region AoMember Properties
 
-    [AoContract((int)PacketType.SystemMessage)]
-    [AoKnownType(16, IdentifierType.Int32)]
-    public abstract class SystemMessage : MessageBody
-    {
-        #region AoMember Properties
+    [AoMember(0)] public SystemMessageType SystemMessageType { get; set; }
 
-        [AoMember(0)]
-        public SystemMessageType SystemMessageType { get; set; }
+    #endregion
 
-        #endregion
+    #region Public Properties
 
-        #region Public Properties
+    public override PacketType PacketType => PacketType.SystemMessage;
 
-        public override PacketType PacketType
-        {
-            get
-            {
-                return PacketType.SystemMessage;
-            }
-        }
-
-        #endregion
-    }
+    #endregion
 }

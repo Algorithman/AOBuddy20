@@ -12,37 +12,32 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-using AOSharp.Common.GameData;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages
+namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
+
+[AoContract((int)N3MessageType.SpellList)]
+public class SpellListMessage : N3Message
 {
-    using SmokeLounge.AOtomation.Messaging.GameData;
-    using SmokeLounge.AOtomation.Messaging.Serialization;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Constructors and Destructors
 
-    [AoContract((int)N3MessageType.SpellList)]
-    public class SpellListMessage : N3Message
+    public SpellListMessage()
     {
-        #region Constructors and Destructors
-
-        public SpellListMessage()
-        {
-            this.N3MessageType = N3MessageType.SpellList;
-        }
-
-        #endregion
-
-        #region AoMember Properties
-
-        //This really isn't used by us and it's definition is incorrect so until
-        //someone (Mali) properly defines the struct this message will just be empty.
-
-        //[AoMember(0, SerializeSize = ArraySizeType.Int32)]
-        //public NanoEffect[] NanoEffects { get; set; }
-
-        //[AoMember(1)]
-        //public Identity Character { get; set; }
-
-        #endregion
+        N3MessageType = N3MessageType.SpellList;
     }
+
+    #endregion
+
+    #region AoMember Properties
+
+    //This really isn't used by us and it's definition is incorrect so until
+    //someone (Mali) properly defines the struct this message will just be empty.
+
+    //[AoMember(0, SerializeSize = ArraySizeType.Int32)]
+    //public NanoEffect[] NanoEffects { get; set; }
+
+    //[AoMember(1)]
+    //public Identity Character { get; set; }
+
+    #endregion
 }

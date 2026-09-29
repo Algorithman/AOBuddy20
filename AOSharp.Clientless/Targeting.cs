@@ -1,26 +1,20 @@
 ﻿using AOSharp.Common.GameData;
 using SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
-namespace AOSharp.Clientless
+namespace AOSharp.Clientless;
+
+public static class Targeting
 {
-    public static class Targeting
+    public static void SetTarget(SimpleChar target)
     {
-        public static void SetTarget(SimpleChar target)
-        {
-            SetTarget(target.Identity);
-        }
+        SetTarget(target.Identity);
+    }
 
-        public static void SetTarget(Identity target)
+    public static void SetTarget(Identity target)
+    {
+        Client.Send(new LookAtMessage
         {
-            Client.Send(new LookAtMessage()
-            {
-                Target = target
-            });
-        }
+            Target = target,
+        });
     }
 }

@@ -1,7 +1,6 @@
-﻿namespace AOSharp.Common.GameData
+﻿namespace AOSharp.Common.GameData;
+
+public enum CharacterStatus
 {
-    public enum CharacterStatus
-    {
-        Active = 0x00000001
-    }
+    Active = 0x00000001,
 }

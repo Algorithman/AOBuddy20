@@ -13,29 +13,25 @@
 // --------------------------------------------------------------------------------------------------------------------
 
 using AOSharp.Common.GameData;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.SystemMessages
+namespace SmokeLounge.AOtomation.Messaging.Messages.SystemMessages;
+
+[AoContract((int)SystemMessageType.RandomNameRequest)]
+public class RandomNameRequestMessage : SystemMessage
 {
-    using SmokeLounge.AOtomation.Messaging.GameData;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Constructors and Destructors
 
-    [AoContract((int)SystemMessageType.RandomNameRequest)]
-    public class RandomNameRequestMessage : SystemMessage
+    public RandomNameRequestMessage()
     {
-        #region Constructors and Destructors
-
-        public RandomNameRequestMessage()
-        {
-            this.SystemMessageType = SystemMessageType.RandomNameRequest;
-        }
-
-        #endregion
-
-        #region AoMember Properties
-
-        [AoMember(0)]
-        public Profession Profession { get; set; }
-
-        #endregion
+        SystemMessageType = SystemMessageType.RandomNameRequest;
     }
+
+    #endregion
+
+    #region AoMember Properties
+
+    [AoMember(0)] public Profession Profession { get; set; }
+
+    #endregion
 }

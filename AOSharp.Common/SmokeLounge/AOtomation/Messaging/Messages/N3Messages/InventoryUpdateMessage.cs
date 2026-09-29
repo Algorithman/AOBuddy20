@@ -12,45 +12,39 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages
+using AOSharp.Common.GameData;
+using SmokeLounge.AOtomation.Messaging.GameData;
+using SmokeLounge.AOtomation.Messaging.Serialization;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+
+namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
+
+[AoContract((int)N3MessageType.InventoryUpdate)]
+public class InventoryUpdateMessage : N3Message
 {
-    using AOSharp.Common.GameData;
-    using SmokeLounge.AOtomation.Messaging.GameData;
-    using SmokeLounge.AOtomation.Messaging.Serialization;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Constructors and Destructors
 
-    [AoContract((int)N3MessageType.InventoryUpdate)]
-    public class InventoryUpdateMessage : N3Message
+    public InventoryUpdateMessage()
     {
-        #region Constructors and Destructors
-
-        public InventoryUpdateMessage()
-        {
-            this.N3MessageType = N3MessageType.InventoryUpdate;
-        }
-
-        #endregion
-
-        #region AoMember Properties
-
-        [AoMember(0)]
-        public int NumberOfSlots { get; set; }
-
-        [AoMember(1)]
-        public int Unknown2 { get; set; }
-
-        [AoMember(2, SerializeSize = ArraySizeType.X3F1)]
-        public InventorySlot[] Items { get; set; }
-
-        [AoMember(3)]
-        public Identity InventoryIdentity { get; set; }
-
-        [AoMember(4)]
-        public int Handle { get; set; }
-
-        [AoMember(5)]
-        public int Open { get; set; }
-
-        #endregion
+        N3MessageType = N3MessageType.InventoryUpdate;
     }
+
+    #endregion
+
+    #region AoMember Properties
+
+    [AoMember(0)] public int NumberOfSlots { get; set; }
+
+    [AoMember(1)] public int Unknown2 { get; set; }
+
+    [AoMember(2, SerializeSize = ArraySizeType.X3F1)]
+    public InventorySlot[] Items { get; set; }
+
+    [AoMember(3)] public Identity InventoryIdentity { get; set; }
+
+    [AoMember(4)] public int Handle { get; set; }
+
+    [AoMember(5)] public int Open { get; set; }
+
+    #endregion
 }

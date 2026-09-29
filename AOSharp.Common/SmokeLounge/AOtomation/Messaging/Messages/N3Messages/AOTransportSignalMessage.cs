@@ -13,13 +13,12 @@
 // --------------------------------------------------------------------------------------------------------------------
 
 using AOSharp.Common.GameData;
+using SmokeLounge.AOtomation.Messaging.GameData;
+using SmokeLounge.AOtomation.Messaging.Serialization;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
 
 namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages
 {
-    using SmokeLounge.AOtomation.Messaging.GameData;
-    using SmokeLounge.AOtomation.Messaging.Serialization;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
-
     [AoContract((int)N3MessageType.AOTransportSignal)]
     public class AOTransportSignalMessage : N3Message
     {
@@ -27,23 +26,20 @@ namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages
 
         public AOTransportSignalMessage()
         {
-            this.N3MessageType = N3MessageType.AOTransportSignal;
+            N3MessageType = N3MessageType.AOTransportSignal;
         }
 
         #endregion
 
         #region AoMember Properties
 
-        [AoFlags("action")]
-        [AoMember(0)]
-        public AOSignalAction Action { get; set; }
+        [AoFlags("action")] [AoMember(0)] public AOSignalAction Action { get; set; }
 
-        [AoUsesFlags("action", typeof(CityInfo), FlagsCriteria.EqualsToAny, new[] { (int)AOSignalAction.CityInfo })]
-        [AoUsesFlags("action", typeof(CityCreditsUpkeep), FlagsCriteria.EqualsToAny, new[] { (int)AOSignalAction.CreditsUpkeepInfo })]
-        [AoUsesFlags("action", typeof(CloakInfo), FlagsCriteria.EqualsToAny, new[] { (int)AOSignalAction.CloakInfo })]
-        [AoUsesFlags("action", typeof(CityNextUpkeep), FlagsCriteria.EqualsToAny, new[] { (int)AOSignalAction.UpkeepInfo })]
-        [AoUsesFlags("action", typeof(CityCharge), FlagsCriteria.EqualsToAny, new[] { (int)AOSignalAction.ChargeInfo })]
-
+        [AoUsesFlags("action", typeof(CityInfo), FlagsCriteria.EqualsToAny, (int)AOSignalAction.CityInfo)]
+        [AoUsesFlags("action", typeof(CityCreditsUpkeep), FlagsCriteria.EqualsToAny, (int)AOSignalAction.CreditsUpkeepInfo)]
+        [AoUsesFlags("action", typeof(CloakInfo), FlagsCriteria.EqualsToAny, (int)AOSignalAction.CloakInfo)]
+        [AoUsesFlags("action", typeof(CityNextUpkeep), FlagsCriteria.EqualsToAny, (int)AOSignalAction.UpkeepInfo)]
+        [AoUsesFlags("action", typeof(CityCharge), FlagsCriteria.EqualsToAny, (int)AOSignalAction.ChargeInfo)]
         [AoMember(1)]
         public IAOTransportSignalMessage TransportSignalMessage { get; set; }
 
@@ -58,23 +54,17 @@ namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages
     {
         #region AoMember Properties
 
-        [AoMember(0)]
-        public Identity UnknownIdentity1 { get; set; }
+        [AoMember(0)] public Identity UnknownIdentity1 { get; set; }
 
-        [AoMember(1)]
-        public int Unknown1 { get; set; }
+        [AoMember(1)] public int Unknown1 { get; set; }
 
-        [AoMember(2)]
-        public Identity UnknownIdentity2 { get; set; }
+        [AoMember(2)] public Identity UnknownIdentity2 { get; set; }
 
-        [AoMember(3)]
-        public Identity User { get; set; }
+        [AoMember(3)] public Identity User { get; set; }
 
-        [AoMember(4)]
-        public int Unknown2 { get; set; }
+        [AoMember(4)] public int Unknown2 { get; set; }
 
-        [AoMember(5)]
-        public int Unknown3 { get; set; }
+        [AoMember(5)] public int Unknown3 { get; set; }
 
         [AoMember(6, SerializeSize = ArraySizeType.Int32)]
         public string OrgName { get; set; }
@@ -84,19 +74,16 @@ namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages
 
     public class CityCreditsUpkeep : IAOTransportSignalMessage
     {
-        [AoMember(0)]
-        public int CreditsUpkeep { get; set; }
+        [AoMember(0)] public int CreditsUpkeep { get; set; }
     }
 
     public class CloakInfo : IAOTransportSignalMessage
     {
         #region AoMember Properties
 
-        [AoMember(0)]
-        public CloakStatus CloakState { get; set; }
+        [AoMember(0)] public CloakStatus CloakState { get; set; }
 
-        [AoMember(1)]
-        public int ShieldTimerInSeconds { get; set; }
+        [AoMember(1)] public int ShieldTimerInSeconds { get; set; }
 
         #endregion
     }
@@ -105,8 +92,7 @@ namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages
     {
         #region AoMember Properties
 
-        [AoMember(0)]
-        public int NextUpkeepPaymentInSeconds { get; set; }
+        [AoMember(0)] public int NextUpkeepPaymentInSeconds { get; set; }
 
         #endregion
     }
@@ -116,8 +102,7 @@ namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages
     {
         #region AoMember Properties
 
-        [AoMember(0)]
-        public float CityControllerCharge { get; set; }
+        [AoMember(0)] public float CityControllerCharge { get; set; }
 
         #endregion
     }

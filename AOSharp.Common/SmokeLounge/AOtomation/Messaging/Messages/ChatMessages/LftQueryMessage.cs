@@ -12,35 +12,23 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.ChatMessages
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+
+namespace SmokeLounge.AOtomation.Messaging.Messages.ChatMessages;
+
+public class LftQueryMessage : ChatMessageBody
 {
-    using SmokeLounge.AOtomation.Messaging.Serialization;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Public Properties
 
-    public class LftQueryMessage : ChatMessageBody
-    {
-        #region Public Properties
+    public override ChatMessageType PacketType => ChatMessageType.LftQuery;
 
-        public override ChatMessageType PacketType
-        {
-            get
-            {
-                return ChatMessageType.LftQuery;
-            }
-        }
+    #endregion
 
-        #endregion
+    [AoMember(0)] public uint Side { get; set; }
 
-        [AoMember(0)]
-        public uint Side { get; set; }
+    [AoMember(1)] public uint Profession { get; set; }
 
-        [AoMember(1)]
-        public uint Profession { get; set; }
+    [AoMember(2)] public uint Location { get; set; }
 
-        [AoMember(2)]
-        public uint Location { get; set; }
-
-        [AoMember(3)]
-        public uint Unknown1 { get; set; }
-    }
+    [AoMember(3)] public uint Unknown1 { get; set; }
 }

@@ -12,33 +12,29 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+
+namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
+
+[AoContract((int)N3MessageType.Feedback)]
+public class FeedbackMessage : N3Message
 {
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Constructors and Destructors
 
-    [AoContract((int)N3MessageType.Feedback)]
-    public class FeedbackMessage : N3Message
+    public FeedbackMessage()
     {
-        #region Constructors and Destructors
-
-        public FeedbackMessage()
-        {
-            this.N3MessageType = N3MessageType.Feedback;
-        }
-
-        #endregion
-
-        #region AoMember Properties
-
-        [AoMember(0)]
-        public int Unknown1 { get; set; }
-
-        [AoMember(1)]
-        public int CategoryId { get; set; }
-
-        [AoMember(2)]
-        public int MessageId { get; set; }
-
-        #endregion
+        N3MessageType = N3MessageType.Feedback;
     }
+
+    #endregion
+
+    #region AoMember Properties
+
+    [AoMember(0)] public int Unknown1 { get; set; }
+
+    [AoMember(1)] public int CategoryId { get; set; }
+
+    [AoMember(2)] public int MessageId { get; set; }
+
+    #endregion
 }

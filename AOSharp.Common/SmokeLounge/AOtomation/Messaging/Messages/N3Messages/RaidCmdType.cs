@@ -12,13 +12,12 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages
+namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
+
+public enum RaidCmdType
 {
-    public enum RaidCmdType : int
-    {
-        CreateRaid = 0x01,
-        ShowMemberList = 0x2,
-        MoveMember = 0x4,
-        RequestLocks = 0x06
-    }
+    CreateRaid = 0x01,
+    ShowMemberList = 0x2,
+    MoveMember = 0x4,
+    RequestLocks = 0x06,
 }

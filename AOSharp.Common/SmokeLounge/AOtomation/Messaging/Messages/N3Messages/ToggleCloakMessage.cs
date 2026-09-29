@@ -12,30 +12,25 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-using AOSharp.Common.GameData;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages
+namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
+
+[AoContract((int)N3MessageType.ToggleCloak)]
+public class ToggleCloakMessage : N3Message
 {
-    using SmokeLounge.AOtomation.Messaging.GameData;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Constructors and Destructors
 
-    [AoContract((int)N3MessageType.ToggleCloak)]
-    public class ToggleCloakMessage : N3Message
+    public ToggleCloakMessage()
     {
-        #region Constructors and Destructors
-
-        public ToggleCloakMessage()
-        {
-            this.N3MessageType = N3MessageType.ToggleCloak;
-        }
-
-        #endregion
-
-        #region AoMember Properties
-
-        [AoMember(0)]
-        public int Unknown1 { get; set; }
-
-        #endregion
+        N3MessageType = N3MessageType.ToggleCloak;
     }
+
+    #endregion
+
+    #region AoMember Properties
+
+    [AoMember(0)] public int Unknown1 { get; set; }
+
+    #endregion
 }

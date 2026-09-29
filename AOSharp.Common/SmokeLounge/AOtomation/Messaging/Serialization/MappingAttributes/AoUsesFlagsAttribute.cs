@@ -1,6 +1,6 @@
 // --------------------------------------------------------------------------------------------------------------------
 // <copyright file="AoUsesFlagsAttribute.cs" company="SmokeLounge">
-//   Copyright © 2013 SmokeLounge.
+//   Copyright ï¿½ 2013 SmokeLounge.
 //   This program is free software. It comes without any warranty, to
 //   the extent permitted by applicable law. You can redistribute it
 //   and/or modify it under the terms of the Do What The Fuck You Want
@@ -12,86 +12,43 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes
+namespace SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+
+[AttributeUsage(AttributeTargets.Property | AttributeTargets.Field, AllowMultiple = true)]
+public class AoUsesFlagsAttribute : Attribute
 {
-    using System;
+    #region Constructors and Destructors
 
-    [AttributeUsage(AttributeTargets.Property | AttributeTargets.Field, AllowMultiple = true)]
-    public class AoUsesFlagsAttribute : Attribute
+    public AoUsesFlagsAttribute(string flag, Type type, FlagsCriteria criteria, params int[] criteriaValues)
     {
-        #region Fields
+        this.Flag = flag;
+        this.Type = type;
+        this.Criteria = criteria;
+        this.CriteriaValues = criteriaValues;
 
-        private readonly FlagsCriteria criteria;
-
-        private readonly int criteriaValue;
-
-        private readonly int[] criteriaValues;
-
-        private readonly string flag;
-
-        private readonly Type type;
-
-        #endregion
-
-        #region Constructors and Destructors
-
-        public AoUsesFlagsAttribute(string flag, Type type, FlagsCriteria criteria, params int[] criteriaValues)
+        foreach (var value in criteriaValues)
         {
-            this.flag = flag;
-            this.type = type;
-            this.criteria = criteria;
-            this.criteriaValues = criteriaValues;
-
-            foreach (var value in criteriaValues)
-            {
-                this.criteriaValue |= value;
-            }
+            CriteriaValue |= value;
         }
-
-        #endregion
-
-        #region Public Properties
-
-        public FlagsCriteria Criteria
-        {
-            get
-            {
-                return this.criteria;
-            }
-        }
-
-        public int CriteriaValue
-        {
-            get
-            {
-                return this.criteriaValue;
-            }
-        }
-
-        public int[] CriteriaValues
-        {
-            get
-            {
-                return this.criteriaValues;
-            }
-        }
-
-        public string Flag
-        {
-            get
-            {
-                return this.flag;
-            }
-        }
-
-        public Type Type
-        {
-            get
-            {
-                return this.type;
-            }
-        }
-
-        #endregion
     }
+
+    #endregion
+
+    #region Fields
+
+    #endregion
+
+    #region Public Properties
+
+    public FlagsCriteria Criteria { get; }
+
+    public int CriteriaValue { get; }
+
+    public int[] CriteriaValues { get; }
+
+    public string Flag { get; }
+
+    public Type Type { get; }
+
+    #endregion
 }

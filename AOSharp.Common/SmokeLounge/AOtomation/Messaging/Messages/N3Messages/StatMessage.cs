@@ -13,30 +13,28 @@
 // --------------------------------------------------------------------------------------------------------------------
 
 using AOSharp.Common.GameData;
+using SmokeLounge.AOtomation.Messaging.GameData;
+using SmokeLounge.AOtomation.Messaging.Serialization;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages
+namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
+
+[AoContract((int)N3MessageType.Stat)]
+public class StatMessage : N3Message
 {
-    using SmokeLounge.AOtomation.Messaging.GameData;
-    using SmokeLounge.AOtomation.Messaging.Serialization;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Constructors and Destructors
 
-    [AoContract((int)N3MessageType.Stat)]
-    public class StatMessage : N3Message
+    public StatMessage()
     {
-        #region Constructors and Destructors
-
-        public StatMessage()
-        {
-            this.N3MessageType = N3MessageType.Stat;
-        }
-
-        #endregion
-
-        #region AoMember Properties
-
-        [AoMember(0, SerializeSize = ArraySizeType.Int32)]
-        public GameTuple<Stat, uint>[] Stats { get; set; }
-
-        #endregion
+        N3MessageType = N3MessageType.Stat;
     }
+
+    #endregion
+
+    #region AoMember Properties
+
+    [AoMember(0, SerializeSize = ArraySizeType.Int32)]
+    public GameTuple<Stat, uint>[] Stats { get; set; }
+
+    #endregion
 }

@@ -12,110 +12,107 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Serialization
+using SmokeLounge.AOtomation.Messaging.Messages;
+using SmokeLounge.AOtomation.Messaging.Serialization.Serializers;
+
+namespace SmokeLounge.AOtomation.Messaging.Serialization;
+
+public class ChatMessageSerializer
 {
-    using System.IO;
+    #region Fields
 
-    using SmokeLounge.AOtomation.Messaging.Messages;
-    using SmokeLounge.AOtomation.Messaging.Serialization.Serializers;
+    private readonly ChatHeaderSerializer headerSerializer;
 
-    public class ChatMessageSerializer
+    private readonly PacketInspector packetInspector;
+
+    private readonly SerializerResolver serializerResolver;
+
+    #endregion
+
+    #region Constructors and Destructors
+
+    public ChatMessageSerializer()
     {
-        #region Fields
-
-        private readonly ChatHeaderSerializer headerSerializer;
-
-        private readonly PacketInspector packetInspector;
-
-        private readonly SerializerResolver serializerResolver;
-
-        #endregion
-
-        #region Constructors and Destructors
-
-        public ChatMessageSerializer()
-        {
-            this.packetInspector = new PacketInspector(new TypeInfo(typeof(ChatMessageBody)));
-            this.serializerResolver = new SerializerResolverBuilder<ChatMessageBody>().Build();
-            this.headerSerializer = new ChatHeaderSerializer();
-        }
-
-        public ChatMessageSerializer(SerializerResolverBuilder serializerResolverBuilder)
-        {
-            this.packetInspector = new PacketInspector(new TypeInfo(typeof(ChatMessageBody)));
-            this.serializerResolver = serializerResolverBuilder.Build();
-            this.headerSerializer = new ChatHeaderSerializer();
-        }
-
-        #endregion
-
-        #region Public Methods and Operators
-
-        public ChatMessage Deserialize(Stream stream)
-        {
-            SerializationContext ignore;
-            return this.Deserialize(stream, out ignore);
-        }
-
-        public ChatMessage Deserialize(byte[] message)
-        {
-            using (MemoryStream buffer = new MemoryStream(message))
-            {
-                return this.Deserialize(buffer);
-            }
-        }
-
-        public ChatMessage Deserialize(Stream stream, out SerializationContext serializationContext)
-        {
-            serializationContext = null;
-            var reader = new StreamReader(stream) { Position = 0 };
-            var subTypeInfo = this.packetInspector.FindSubType(reader, out int _);
-
-            if (subTypeInfo == null)
-            {
-                return null;
-            }
-
-            var serializer = this.serializerResolver.GetSerializer(subTypeInfo.Type);
-            if (serializer == null)
-            {
-                return null;
-            }
-
-            reader.Position = 0;
-            serializationContext = new SerializationContext(this.serializerResolver);
-            var message = new ChatMessage
-                              {
-                                  Header = (ChatHeader)this.headerSerializer.Deserialize(reader, serializationContext), 
-                                  Body = (ChatMessageBody)serializer.Deserialize(reader, serializationContext)
-                              };
-            return message;
-        }
-
-        public void Serialize(Stream stream, ChatMessage message)
-        {
-            SerializationContext ignore;
-            this.Serialize(stream, message, out ignore);
-        }
-
-        public void Serialize(Stream stream, ChatMessage message, out SerializationContext serializationContext)
-        {
-            serializationContext = null;
-            var serializer = this.serializerResolver.GetSerializer(message.Body.GetType());
-            if (serializer == null)
-            {
-                return;
-            }
-
-            serializationContext = new SerializationContext(this.serializerResolver);
-            var writer = new StreamWriter(stream) { Position = 0 };
-            this.headerSerializer.Serialize(writer, serializationContext, message.Header);
-            serializer.Serialize(writer, serializationContext, message.Body);
-            var length = writer.Position;
-            writer.Position = 2;
-            writer.WriteInt16((short)(length - 4));
-        }
-
-        #endregion
+        packetInspector = new PacketInspector(new TypeInfo(typeof(ChatMessageBody)));
+        serializerResolver = new SerializerResolverBuilder<ChatMessageBody>().Build();
+        headerSerializer = new ChatHeaderSerializer();
     }
+
+    public ChatMessageSerializer(SerializerResolverBuilder serializerResolverBuilder)
+    {
+        packetInspector = new PacketInspector(new TypeInfo(typeof(ChatMessageBody)));
+        serializerResolver = serializerResolverBuilder.Build();
+        headerSerializer = new ChatHeaderSerializer();
+    }
+
+    #endregion
+
+    #region Public Methods and Operators
+
+    public ChatMessage Deserialize(Stream stream)
+    {
+        SerializationContext ignore;
+        return Deserialize(stream, out ignore);
+    }
+
+    public ChatMessage Deserialize(byte[] message)
+    {
+        using (var buffer = new MemoryStream(message))
+        {
+            return Deserialize(buffer);
+        }
+    }
+
+    public ChatMessage Deserialize(Stream stream, out SerializationContext serializationContext)
+    {
+        serializationContext = null;
+        var reader = new StreamReader(stream) { Position = 0, };
+        var subTypeInfo = packetInspector.FindSubType(reader, out var _);
+
+        if (subTypeInfo == null)
+        {
+            return null;
+        }
+
+        var serializer = serializerResolver.GetSerializer(subTypeInfo.Type);
+        if (serializer == null)
+        {
+            return null;
+        }
+
+        reader.Position = 0;
+        serializationContext = new SerializationContext(serializerResolver);
+        var message = new ChatMessage
+        {
+            Header = (ChatHeader)headerSerializer.Deserialize(reader, serializationContext),
+            Body = (ChatMessageBody)serializer.Deserialize(reader, serializationContext),
+        };
+        return message;
+    }
+
+    public void Serialize(Stream stream, ChatMessage message)
+    {
+        SerializationContext ignore;
+        Serialize(stream, message, out ignore);
+    }
+
+    public void Serialize(Stream stream, ChatMessage message, out SerializationContext serializationContext)
+    {
+        serializationContext = null;
+        var serializer = serializerResolver.GetSerializer(message.Body.GetType());
+        if (serializer == null)
+        {
+            return;
+        }
+
+        serializationContext = new SerializationContext(serializerResolver);
+        var writer = new StreamWriter(stream) { Position = 0, };
+        headerSerializer.Serialize(writer, serializationContext, message.Header);
+        serializer.Serialize(writer, serializationContext, message.Body);
+        var length = writer.Position;
+        writer.Position = 2;
+        writer.WriteInt16((short)(length - 4));
+    }
+
+    #endregion
 }

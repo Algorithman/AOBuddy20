@@ -13,31 +13,28 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-using AOSharp.Common.GameData;
+using SmokeLounge.AOtomation.Messaging.GameData;
+using SmokeLounge.AOtomation.Messaging.Serialization;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages
+namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
+
+[AoContract((int)N3MessageType.CityAdvantages)]
+public class CityAdvantagesMessage : N3Message
 {
-    using SmokeLounge.AOtomation.Messaging.GameData;
-    using SmokeLounge.AOtomation.Messaging.Serialization;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Constructors and Destructors
 
-    [AoContract((int)N3MessageType.CityAdvantages)]
-    public class CityAdvantagesMessage : N3Message
+    public CityAdvantagesMessage()
     {
-        #region Constructors and Destructors
-
-        public CityAdvantagesMessage()
-        {
-            this.N3MessageType = N3MessageType.CityAdvantages;
-        }
-
-        #endregion
-
-        #region AoMember Properties
-
-        [AoMember(0, SerializeSize = ArraySizeType.Int32)]
-        public AdvantagesItem[] Advantages { get; set; }
-
-        #endregion
+        N3MessageType = N3MessageType.CityAdvantages;
     }
+
+    #endregion
+
+    #region AoMember Properties
+
+    [AoMember(0, SerializeSize = ArraySizeType.Int32)]
+    public AdvantagesItem[] Advantages { get; set; }
+
+    #endregion
 }

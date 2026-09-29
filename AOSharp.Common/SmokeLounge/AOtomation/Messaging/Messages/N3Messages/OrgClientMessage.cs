@@ -13,64 +13,54 @@
 // --------------------------------------------------------------------------------------------------------------------
 
 using AOSharp.Common.GameData;
+using SmokeLounge.AOtomation.Messaging.Serialization;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages
+namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
+
+[AoContract((int)N3MessageType.OrgClient)]
+public class OrgClientMessage : N3Message
 {
-    using SmokeLounge.AOtomation.Messaging.GameData;
-    using SmokeLounge.AOtomation.Messaging.Serialization;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Constructors and Destructors
 
-    [AoContract((int)N3MessageType.OrgClient)]
-    public class OrgClientMessage : N3Message
+    public OrgClientMessage()
     {
-        #region Constructors and Destructors
-
-        public OrgClientMessage()
-        {
-            this.N3MessageType = N3MessageType.OrgClient;
-        }
-
-        #endregion
-
-        #region AoMember Properties
-
-
-        [AoFlags("action")]
-        [AoMember(0)]
-        public OrgClientCommand Command { get; set; }
-
-        [AoMember(1)]
-        public Identity Target { get; set; }
-
-        [AoMember(2)]
-        public int Window { get; set; }
-
-        [AoUsesFlags("action", typeof(OrgClientNoCommandArgsMessage), FlagsCriteria.EqualsToAny, new[] { (int)OrgClientCommand.Info, (int)OrgClientCommand.Invite })]
-        [AoUsesFlags("action", typeof(OrgClientCommandArgsMessage), FlagsCriteria.EqualsToAny, new[]
-        {
-            (int)OrgClientCommand.Create, (int)OrgClientCommand.StartVote, (int)OrgClientCommand.Vote,
-            (int)OrgClientCommand.Kick, (int)OrgClientCommand.Tax, (int)OrgClientCommand.BankAdd,
-            (int)OrgClientCommand.BankRemove, (int)OrgClientCommand.BankPaymembers, (int)OrgClientCommand.History,
-            (int)OrgClientCommand.Objective, (int)OrgClientCommand.Description, (int)OrgClientCommand.Name,
-            (int)OrgClientCommand.GoverningForm, (int)OrgClientCommand.StopVote
-        })]
-        [AoMember(3)]
-        public IOrgClientMessage IOrgClientMessage { get; set; }
-
-        #endregion
+        N3MessageType = N3MessageType.OrgClient;
     }
 
-    public interface IOrgClientMessage
-    {
-    }
+    #endregion
 
-    public class OrgClientNoCommandArgsMessage : IOrgClientMessage
-    {
-    }
+    #region AoMember Properties
 
-    public class OrgClientCommandArgsMessage : IOrgClientMessage
-    {
-        [AoMember(0, SerializeSize = ArraySizeType.Int16)]
-        public string CommandArgs { get; set; }
-    }
+    [AoFlags("action")] [AoMember(0)] public OrgClientCommand Command { get; set; }
+
+    [AoMember(1)] public Identity Target { get; set; }
+
+    [AoMember(2)] public int Window { get; set; }
+
+    [AoUsesFlags("action", typeof(OrgClientNoCommandArgsMessage), FlagsCriteria.EqualsToAny, (int)OrgClientCommand.Info,
+        (int)OrgClientCommand.Invite)]
+    [AoUsesFlags("action", typeof(OrgClientCommandArgsMessage), FlagsCriteria.EqualsToAny, (int)OrgClientCommand.Create,
+        (int)OrgClientCommand.StartVote, (int)OrgClientCommand.Vote, (int)OrgClientCommand.Kick, (int)OrgClientCommand.Tax,
+        (int)OrgClientCommand.BankAdd, (int)OrgClientCommand.BankRemove, (int)OrgClientCommand.BankPaymembers, (int)OrgClientCommand.History,
+        (int)OrgClientCommand.Objective, (int)OrgClientCommand.Description, (int)OrgClientCommand.Name, (int)OrgClientCommand.GoverningForm,
+        (int)OrgClientCommand.StopVote)]
+    [AoMember(3)]
+    public IOrgClientMessage IOrgClientMessage { get; set; }
+
+    #endregion
+}
+
+public interface IOrgClientMessage
+{
+}
+
+public class OrgClientNoCommandArgsMessage : IOrgClientMessage
+{
+}
+
+public class OrgClientCommandArgsMessage : IOrgClientMessage
+{
+    [AoMember(0, SerializeSize = ArraySizeType.Int16)]
+    public string CommandArgs { get; set; }
 }

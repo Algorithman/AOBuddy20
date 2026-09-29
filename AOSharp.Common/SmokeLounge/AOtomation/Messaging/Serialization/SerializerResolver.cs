@@ -12,39 +12,36 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Serialization
+namespace SmokeLounge.AOtomation.Messaging.Serialization;
+
+public class SerializerResolver
 {
-    using System;
+    #region Fields
 
-    public class SerializerResolver
+    private readonly SerializerResolverBuilder serializerResolverBuilder;
+
+    #endregion
+
+    #region Constructors and Destructors
+
+    public SerializerResolver(SerializerResolverBuilder serializerResolverBuilder)
     {
-        #region Fields
-
-        private readonly SerializerResolverBuilder serializerResolverBuilder;
-
-        #endregion
-
-        #region Constructors and Destructors
-
-        public SerializerResolver(SerializerResolverBuilder serializerResolverBuilder)
-        {
-            this.serializerResolverBuilder = serializerResolverBuilder;
-        }
-
-        #endregion
-
-        #region Public Methods and Operators
-
-        public void Add(Type type, ISerializer serializer)
-        {
-            throw new NotImplementedException();
-        }
-
-        public ISerializer GetSerializer(Type type)
-        {
-            return this.serializerResolverBuilder.GetSerializer(type);
-        }
-
-        #endregion
+        this.serializerResolverBuilder = serializerResolverBuilder;
     }
+
+    #endregion
+
+    #region Public Methods and Operators
+
+    public void Add(Type type, ISerializer serializer)
+    {
+        throw new NotImplementedException();
+    }
+
+    public ISerializer GetSerializer(Type type)
+    {
+        return serializerResolverBuilder.GetSerializer(type);
+    }
+
+    #endregion
 }

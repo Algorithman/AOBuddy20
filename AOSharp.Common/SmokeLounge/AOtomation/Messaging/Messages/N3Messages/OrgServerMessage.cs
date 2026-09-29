@@ -13,106 +13,97 @@
 // --------------------------------------------------------------------------------------------------------------------
 
 using AOSharp.Common.GameData;
+using SmokeLounge.AOtomation.Messaging.GameData;
+using SmokeLounge.AOtomation.Messaging.Serialization;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages
+namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
+
+[AoContract((int)N3MessageType.OrgServer)]
+public class OrgServerMessage : N3Message
 {
-    using SmokeLounge.AOtomation.Messaging.GameData;
-    using SmokeLounge.AOtomation.Messaging.Serialization;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Constructors and Destructors
 
-    [AoContract((int)N3MessageType.OrgServer)]
-    public class OrgServerMessage : N3Message
+    protected OrgServerMessage()
     {
-        #region Constructors and Destructors
-
-        protected OrgServerMessage()
-        {
-            this.N3MessageType = N3MessageType.OrgServer;
-        }
-
-        #endregion
-
-        #region AoMember Properties
-
-        [AoFlags("orgmessagetype")]
-        [AoMember(0)]
-        public OrgServerMessageType OrgServerMessageType { get; set; }
-
-        [AoMember(1)]
-        public int Unknown1 { get; set; }
-
-        [AoMember(2)]
-        public int Unknown2 { get; set; }
-
-        [AoMember(3)]
-        public Identity Organization { get; set; }
-
-        [AoUsesFlags("orgmessagetype", typeof(OrgInvite), FlagsCriteria.EqualsToAny, new[] { (int)OrgServerMessageType.OrgInvite })]
-        [AoUsesFlags("orgmessagetype", typeof(OrganizationInfo), FlagsCriteria.EqualsToAny, new[] { (int)OrgServerMessageType.OrgInfo })]
-        [AoUsesFlags("orgmessagetype", typeof(ContractsInfo), FlagsCriteria.EqualsToAny, new[] { (int)OrgServerMessageType.OrgContract })]
-        [AoMember(4)]
-        public IOrgServerMessage IOrgServerMessage { get; set; }
-
-        #endregion
+        N3MessageType = N3MessageType.OrgServer;
     }
 
-    public class OrgInvite : IOrgServerMessage
-    {
-        [AoMember(0)]
-        public int Unknown3 { get; set; }
-    }
+    #endregion
 
-    public class ContractsInfo : IOrgServerMessage
-    {
-        [AoMember(0, SerializeSize = ArraySizeType.X3F1)]
-        public OrgContractSlot[] Contracts { get; set; }
-    }
+    #region AoMember Properties
 
-    public class OrganizationInfo : IOrgServerMessage
-    {
-        [AoMember(0, SerializeSize = ArraySizeType.Int16)]
-        public string OrganizationName { get; set; }
+    [AoFlags("orgmessagetype")]
+    [AoMember(0)]
+    public OrgServerMessageType OrgServerMessageType { get; set; }
 
-        [AoMember(1, SerializeSize = ArraySizeType.Int16)]
-        public string Description { get; set; }
+    [AoMember(1)] public int Unknown1 { get; set; }
 
-        [AoMember(2, SerializeSize = ArraySizeType.Int16)]
-        public string Objective { get; set; }
+    [AoMember(2)] public int Unknown2 { get; set; }
 
-        [AoMember(3, SerializeSize = ArraySizeType.Int16)]
-        public string History { get; set; }
+    [AoMember(3)] public Identity Organization { get; set; }
 
-        [AoMember(4, SerializeSize = ArraySizeType.Int16)]
-        public string GoverningForm { get; set; }
+    [AoUsesFlags("orgmessagetype", typeof(OrgInvite), FlagsCriteria.EqualsToAny, (int)OrgServerMessageType.OrgInvite)]
+    [AoUsesFlags("orgmessagetype", typeof(OrganizationInfo), FlagsCriteria.EqualsToAny, (int)OrgServerMessageType.OrgInfo)]
+    [AoUsesFlags("orgmessagetype", typeof(ContractsInfo), FlagsCriteria.EqualsToAny, (int)OrgServerMessageType.OrgContract)]
+    [AoMember(4)]
+    public IOrgServerMessage IOrgServerMessage { get; set; }
 
-        [AoMember(5, SerializeSize = ArraySizeType.Int16)]
-        public string LeaderName { get; set; }
+    #endregion
+}
 
-        [AoMember(6, SerializeSize = ArraySizeType.Int16)]
-        public string Rank { get; set; }
+public class OrgInvite : IOrgServerMessage
+{
+    [AoMember(0)] public int Unknown3 { get; set; }
+}
 
-        [AoMember(7, SerializeSize = ArraySizeType.X3F1)]
-        public ControlledArea[] ControlledAreas { get; set; }
-    }
+public class ContractsInfo : IOrgServerMessage
+{
+    [AoMember(0, SerializeSize = ArraySizeType.X3F1)]
+    public OrgContractSlot[] Contracts { get; set; }
+}
 
-    public interface IOrgServerMessage { }
+public class OrganizationInfo : IOrgServerMessage
+{
+    [AoMember(0, SerializeSize = ArraySizeType.Int16)]
+    public string OrganizationName { get; set; }
 
-    public class ControlledArea
-    {
-        [AoMember(0)]
-        public PlayfieldId PlayfieldId { get; set; }
+    [AoMember(1, SerializeSize = ArraySizeType.Int16)]
+    public string Description { get; set; }
 
-        [AoMember(1)]
-        public Identity Identity { get; set; }
+    [AoMember(2, SerializeSize = ArraySizeType.Int16)]
+    public string Objective { get; set; }
 
-        [AoMember(2, SerializeSize = ArraySizeType.Int16)]
-        public string Area { get; set; }
+    [AoMember(3, SerializeSize = ArraySizeType.Int16)]
+    public string History { get; set; }
 
-        [AoMember(3)]
-        public int Level { get; set; }
+    [AoMember(4, SerializeSize = ArraySizeType.Int16)]
+    public string GoverningForm { get; set; }
 
-        [AoMember(4)]
-        public int Type { get; set; }
+    [AoMember(5, SerializeSize = ArraySizeType.Int16)]
+    public string LeaderName { get; set; }
 
-    }
+    [AoMember(6, SerializeSize = ArraySizeType.Int16)]
+    public string Rank { get; set; }
+
+    [AoMember(7, SerializeSize = ArraySizeType.X3F1)]
+    public ControlledArea[] ControlledAreas { get; set; }
+}
+
+public interface IOrgServerMessage
+{
+}
+
+public class ControlledArea
+{
+    [AoMember(0)] public PlayfieldId PlayfieldId { get; set; }
+
+    [AoMember(1)] public Identity Identity { get; set; }
+
+    [AoMember(2, SerializeSize = ArraySizeType.Int16)]
+    public string Area { get; set; }
+
+    [AoMember(3)] public int Level { get; set; }
+
+    [AoMember(4)] public int Type { get; set; }
 }

@@ -12,35 +12,32 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.SystemMessages
+using SmokeLounge.AOtomation.Messaging.GameData;
+using SmokeLounge.AOtomation.Messaging.Serialization;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+
+namespace SmokeLounge.AOtomation.Messaging.Messages.SystemMessages;
+
+[AoContract((int)SystemMessageType.CharacterList)]
+public class CharacterListMessage : SystemMessage
 {
-    using SmokeLounge.AOtomation.Messaging.GameData;
-    using SmokeLounge.AOtomation.Messaging.Serialization;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Constructors and Destructors
 
-    [AoContract((int)SystemMessageType.CharacterList)]
-    public class CharacterListMessage : SystemMessage
+    public CharacterListMessage()
     {
-        #region Constructors and Destructors
-
-        public CharacterListMessage()
-        {
-            this.SystemMessageType = SystemMessageType.CharacterList;
-        }
-
-        #endregion
-
-        #region AoMember Properties
-
-        [AoMember(0, SerializeSize = ArraySizeType.Int32)]
-        public LoginCharacterInfo[] Characters { get; set; }
-
-        [AoMember(1)]
-        public int AllowedCharacters { get; set; }
-
-        [AoMember(2)]
-        public int Expansions { get; set; }
-
-        #endregion
+        SystemMessageType = SystemMessageType.CharacterList;
     }
+
+    #endregion
+
+    #region AoMember Properties
+
+    [AoMember(0, SerializeSize = ArraySizeType.Int32)]
+    public LoginCharacterInfo[] Characters { get; set; }
+
+    [AoMember(1)] public int AllowedCharacters { get; set; }
+
+    [AoMember(2)] public int Expansions { get; set; }
+
+    #endregion
 }

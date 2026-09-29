@@ -1,6 +1,6 @@
 // --------------------------------------------------------------------------------------------------------------------
 // <copyright file="AoContractAttribute.cs" company="SmokeLounge">
-//   Copyright © 2013 SmokeLounge.
+//   Copyright ï¿½ 2013 SmokeLounge.
 //   This program is free software. It comes without any warranty, to
 //   the extent permitted by applicable law. You can redistribute it
 //   and/or modify it under the terms of the Do What The Fuck You Want
@@ -12,38 +12,27 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes
+namespace SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+
+[AttributeUsage(AttributeTargets.Class, Inherited = false)]
+public class AoContractAttribute : Attribute
 {
-    using System;
+    #region Fields
 
-    [AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = false)]
-    public class AoContractAttribute : Attribute
+    #endregion
+
+    #region Constructors and Destructors
+
+    public AoContractAttribute(int identifier)
     {
-        #region Fields
-
-        private readonly int identifier;
-
-        #endregion
-
-        #region Constructors and Destructors
-
-        public AoContractAttribute(int identifier)
-        {
-            this.identifier = identifier;
-        }
-
-        #endregion
-
-        #region Public Properties
-
-        public int Identifier
-        {
-            get
-            {
-                return this.identifier;
-            }
-        }
-
-        #endregion
+        this.Identifier = identifier;
     }
+
+    #endregion
+
+    #region Public Properties
+
+    public int Identifier { get; }
+
+    #endregion
 }

@@ -13,32 +13,27 @@
 // --------------------------------------------------------------------------------------------------------------------
 
 using AOSharp.Common.GameData;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages
+namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
+
+[AoContract((int)N3MessageType.AcceptBSInvite)]
+public class AcceptBSInviteMessage : N3Message
 {
-    using SmokeLounge.AOtomation.Messaging.GameData;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Constructors and Destructors
 
-    [AoContract((int)N3MessageType.AcceptBSInvite)]
-    public class AcceptBSInviteMessage : N3Message
+    public AcceptBSInviteMessage()
     {
-        #region Constructors and Destructors
-
-        public AcceptBSInviteMessage()
-        {
-            this.N3MessageType = N3MessageType.AcceptBSInvite;
-        }
-
-        #endregion
-
-        #region AoMember Properties
-
-        [AoMember(0)]
-        public Identity UnkIdentity { get; set; }
-
-        [AoMember(1)]
-        public byte UnkByte { get; set; }
-
-        #endregion
+        N3MessageType = N3MessageType.AcceptBSInvite;
     }
+
+    #endregion
+
+    #region AoMember Properties
+
+    [AoMember(0)] public Identity UnkIdentity { get; set; }
+
+    [AoMember(1)] public byte UnkByte { get; set; }
+
+    #endregion
 }

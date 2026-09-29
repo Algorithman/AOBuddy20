@@ -12,43 +12,34 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages
+using SmokeLounge.AOtomation.Messaging.GameData;
+using SmokeLounge.AOtomation.Messaging.Serialization;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+
+namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
+
+[AoContract((int)N3MessageType.InfoPacket)]
+public class InfoPacketMessage : N3Message
 {
-    using SmokeLounge.AOtomation.Messaging.GameData;
-    using SmokeLounge.AOtomation.Messaging.Serialization;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Constructors and Destructors
 
-    [AoContract((int)N3MessageType.InfoPacket)]
-    public class InfoPacketMessage : N3Message
+    public InfoPacketMessage()
     {
-        #region Constructors and Destructors
-
-        public InfoPacketMessage()
-        {
-            this.N3MessageType = N3MessageType.InfoPacket;
-        }
-
-        #endregion
-
-        #region AoMember Properties
-
-        [AoMember(0)]
-        [AoFlags("flags")]
-        public InfoPacketType Type { get; set; }
-
-        [AoMember(1)]
-        [AoUsesFlags("flags", typeof(CharacterInfoPacket), FlagsCriteria.EqualsToAny, 
-            new[]
-                {
-                    (int)InfoPacketType.Character, (int)InfoPacketType.CharacterOrg, (int)InfoPacketType.CharacterOrgSite, 
-                    (int)InfoPacketType.CharacterOrgSiteTower
-                })]
-        [AoUsesFlags("flags", typeof(MonsterInfoPacket), FlagsCriteria.EqualsToAny, 
-            new[] { (int)InfoPacketType.Monster, })]
-        [AoUsesFlags("flags", typeof(TowerInfoPacket), FlagsCriteria.EqualsToAny, 
-            new[] { (int)InfoPacketType.Tower, (int)InfoPacketType.ControlTower })]
-        public InfoPacket Info { get; set; }
-
-        #endregion
+        N3MessageType = N3MessageType.InfoPacket;
     }
+
+    #endregion
+
+    #region AoMember Properties
+
+    [AoMember(0)] [AoFlags("flags")] public InfoPacketType Type { get; set; }
+
+    [AoMember(1)]
+    [AoUsesFlags("flags", typeof(CharacterInfoPacket), FlagsCriteria.EqualsToAny, (int)InfoPacketType.Character, (int)InfoPacketType.CharacterOrg,
+        (int)InfoPacketType.CharacterOrgSite, (int)InfoPacketType.CharacterOrgSiteTower)]
+    [AoUsesFlags("flags", typeof(MonsterInfoPacket), FlagsCriteria.EqualsToAny, (int)InfoPacketType.Monster)]
+    [AoUsesFlags("flags", typeof(TowerInfoPacket), FlagsCriteria.EqualsToAny, (int)InfoPacketType.Tower, (int)InfoPacketType.ControlTower)]
+    public InfoPacket Info { get; set; }
+
+    #endregion
 }

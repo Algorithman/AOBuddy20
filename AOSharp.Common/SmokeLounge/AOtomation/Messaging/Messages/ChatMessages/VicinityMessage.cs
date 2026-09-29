@@ -12,36 +12,26 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.ChatMessages
+using SmokeLounge.AOtomation.Messaging.Serialization;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+
+namespace SmokeLounge.AOtomation.Messaging.Messages.ChatMessages;
+
+[AoContract((int)ChatMessageType.VicinityMessage)]
+public class VicinityMessage : ChatMessageBody
 {
-    using SmokeLounge.AOtomation.Messaging.Serialization;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Public Properties
 
-    [AoContract((int)ChatMessageType.VicinityMessage)]
-    public class VicinityMessage : ChatMessageBody
-    {
-        #region Public Properties
+    public override ChatMessageType PacketType => ChatMessageType.VicinityMessage;
 
-        public override ChatMessageType PacketType
-        {
-            get
-            {
-                return ChatMessageType.VicinityMessage;
-            }
-        }
+    #endregion
 
-        #endregion
+    [AoMember(0)] public uint Sender { get; set; }
 
-        [AoMember(0)]
-        public uint Sender { get; set; }
+    [AoMember(1, SerializeSize = ArraySizeType.Int16)]
+    public string Text { get; set; }
 
-        [AoMember(1, SerializeSize = ArraySizeType.Int16)]
-        public string Text { get; set; }
+    [AoMember(2)] public short Unk1 { get; set; }
 
-        [AoMember(2)]
-        public short Unk1 { get; set; }
-
-        [AoMember(3)]
-        public byte Unk2 { get; set; }
-    }
+    [AoMember(3)] public byte Unk2 { get; set; }
 }

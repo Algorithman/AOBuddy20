@@ -12,46 +12,29 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Serialization
+namespace SmokeLounge.AOtomation.Messaging.Serialization;
+
+public class Probe
 {
-    public class Probe
+    #region Constructors and Destructors
+
+    public Probe(Probe parent = null)
     {
-        #region Fields
-
-        private readonly DiagnosticInfo diagnosticInfo;
-
-        private readonly Probe parent;
-
-        #endregion
-
-        #region Constructors and Destructors
-
-        public Probe(Probe parent = null)
-        {
-            this.parent = parent;
-            this.diagnosticInfo = new DiagnosticInfo();
-        }
-
-        #endregion
-
-        #region Public Properties
-
-        public DiagnosticInfo DiagnosticInfo
-        {
-            get
-            {
-                return this.diagnosticInfo;
-            }
-        }
-
-        public Probe Parent
-        {
-            get
-            {
-                return this.parent;
-            }
-        }
-
-        #endregion
+        this.Parent = parent;
+        DiagnosticInfo = new DiagnosticInfo();
     }
+
+    #endregion
+
+    #region Fields
+
+    #endregion
+
+    #region Public Properties
+
+    public DiagnosticInfo DiagnosticInfo { get; }
+
+    public Probe Parent { get; }
+
+    #endregion
 }

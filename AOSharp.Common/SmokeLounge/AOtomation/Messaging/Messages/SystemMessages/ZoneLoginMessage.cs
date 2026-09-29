@@ -12,33 +12,29 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.SystemMessages
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+
+namespace SmokeLounge.AOtomation.Messaging.Messages.SystemMessages;
+
+[AoContract((int)SystemMessageType.ZoneLogin)]
+public class ZoneLoginMessage : SystemMessage
 {
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Constructors and Destructors
 
-    [AoContract((int)SystemMessageType.ZoneLogin)]
-    public class ZoneLoginMessage : SystemMessage
+    public ZoneLoginMessage()
     {
-        #region Constructors and Destructors
-
-        public ZoneLoginMessage()
-        {
-            this.SystemMessageType = SystemMessageType.ZoneLogin;
-        }
-
-        #endregion
-
-        #region AoMember Properties
-
-        [AoMember(0)]
-        public int CharacterId { get; set; }
-
-        [AoMember(1)]
-        public uint Cookie1 { get; set; }
-
-        [AoMember(2)]
-        public uint Cookie2 { get; set; }
-
-        #endregion
+        SystemMessageType = SystemMessageType.ZoneLogin;
     }
+
+    #endregion
+
+    #region AoMember Properties
+
+    [AoMember(0)] public int CharacterId { get; set; }
+
+    [AoMember(1)] public uint Cookie1 { get; set; }
+
+    [AoMember(2)] public uint Cookie2 { get; set; }
+
+    #endregion
 }

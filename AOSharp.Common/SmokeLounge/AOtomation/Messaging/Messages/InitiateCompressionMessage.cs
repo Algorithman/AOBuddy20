@@ -12,23 +12,16 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Messages
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+
+namespace SmokeLounge.AOtomation.Messaging.Messages;
+
+[AoContract((int)PacketType.InitiateCompressionMessage)]
+public class InitiateCompressionMessage : MessageBody
 {
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Public Properties
 
-    [AoContract((int)PacketType.InitiateCompressionMessage)]
-    public class InitiateCompressionMessage : MessageBody
-    {
-        #region Public Properties
+    public override PacketType PacketType => PacketType.InitiateCompressionMessage;
 
-        public override PacketType PacketType
-        {
-            get
-            {
-                return PacketType.InitiateCompressionMessage;
-            }
-        }
-
-        #endregion
-    }
+    #endregion
 }

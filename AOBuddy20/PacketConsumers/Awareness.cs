@@ -3,10 +3,10 @@
 // Project: AOBuddy20
 // Filename: Awareness.cs
 // 
-// Last modified: 2026-09-29 15:54
-// Created:       2026-09-29 15:09
+// Last modified: 2026-09-30 00:19
+// Created:       2026-09-29 23:09
 // 
-// Long live OmniCell and AOBuddy20
+// Long live OmniCell and AOBuddy
 // ---------------------------------------------------------------------------------------
 
 using AOBuddy20.Enums;
@@ -23,49 +23,21 @@ using SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
 namespace AOBuddy20.PacketConsumers;
 
 /// <summary>
-/// AWARENESS (owner, 2026-09-27: "he should always know how many mobs are near him, how many follow him, he needs to
-/// be aware"). One picture of the hostiles round him, rebuilt twice a second, that every decision reads:
-///   Near      - live hostiles within 40 m (a mob, or anything that has fought him or a pet this zone);
-///   OnUs      - those fighting him or one of his pets (every blow marks who it is on, AttackInfo);
-///   Following - those that keep up with him: over the last 4 s he moved 4 m or more, they moved 3 m or more,
-///               and they are no further from him than they were (Wailing Wastes 06:32: two Watchers 5-15 m behind
-///               for 30 s, which the monitor showed and the bot never read).
-/// A change is logged ("AWARE: ..."), and /status carries the summary.
+///     AWARENESS (owner, 2026-09-27: "he should always know how many mobs are near him, how many follow him, he needs to
+///     be aware"). One picture of the hostiles round him, rebuilt twice a second, that every decision reads:
+///     Near      - live hostiles within 40 m (a mob, or anything that has fought him or a pet this zone);
+///     OnUs      - those fighting him or one of his pets (every blow marks who it is on, AttackInfo);
+///     Following - those that keep up with him: over the last 4 s he moved 4 m or more, they moved 3 m or more,
+///     and they are no further from him than they were (Wailing Wastes 06:32: two Watchers 5-15 m behind
+///     for 30 s, which the monitor showed and the bot never read).
+///     A change is logged ("AWARE: ..."), and /status carries the summary.
 /// </summary>
 [MinLogLevel(LogEventLevel.Debug)]
 public sealed class Awareness : IPacketConsumer
 {
-    public sealed class Seen
-    {
-        public SimpleChar? Mob;
-        public float Dist;
-        public int Level;
-        public bool OnUs, Following;
-    }
-
-    private readonly ILogger<Awareness> _logger;
-    
     private const float NearRange = 40f;
     private const double Window = 4.0;
-    private readonly Queue<(double t, Vector3 me)> _myTrail = new Queue<(double, Vector3)>();
-    private readonly Dictionary<Identity, Queue<(double t, Vector3 p, float d)>> _trail = new Dictionary<Identity, Queue<(double, Vector3, float)>>();
-    private readonly HashSet<Identity> _foes = new HashSet<Identity>(); // fought him or a pet in this zone
-    private int _pf = -1;
-    private double _at = -1, _loggedAt = -99;
-    private string _last = "";
 
-    public List<Seen> Near { get; private set; } = new List<Seen>();
-    public IEnumerable<Seen> OnUs => Near.Where(s => s.OnUs);
-    public IEnumerable<Seen> Following => Near.Where(s => s.Following);
-    public int OnUsCount => Near.Count(s => s.OnUs);
-    public int FollowingCount => Near.Count(s => s.Following);
-
-    public Awareness(ILogger<Awareness> logger)
-    {
-        _logger = logger;
-        _logger.LogInformation("Awareness initialized");
-    }
-    
     // TODO all of that
 /*
     public void Tick(LocalPlayer me, double clock, bool inMission)
@@ -164,7 +136,7 @@ public sealed class Awareness : IPacketConsumer
             }
 
             MobDanger.SetLive(pf, live);
-            
+
         }
         else
         {
@@ -192,52 +164,90 @@ public sealed class Awareness : IPacketConsumer
     private const float Close = 15f;
     private const double Span = 20.0, Forget = 20.0;
 
-    private sealed class Track
-    {
-        public Queue<(double t, Vector3 me, bool close)> S = new Queue<(double, Vector3, bool)>();
-        public double seen, until = -1;
-        public Vector3 pos;
-        public int returns;
-        public bool wasClose;
-    }
-
-    private readonly Dictionary<Identity, Track> _shadow = new Dictionary<Identity, Track>();
-
-    private bool Shadow(Identity id, double clock, Vector3 mine, Vector3 pos, float d, bool keptUp)
-    {
-        if (!_shadow.TryGetValue(id, out var tr)) _shadow[id] = tr = new Track();
-        tr.seen = clock;
-        tr.pos = pos;
-        bool close = d <= Close;
-        tr.S.Enqueue((clock, mine, close));
-        while (tr.S.Count > 0 && clock - tr.S.Peek().t > Span) tr.S.Dequeue();
-        if (close && !tr.wasClose && tr.S.Count > 1) tr.returns++;
-        tr.wasClose = close;
-        var first = tr.S.Peek();
-        float walked = 0f; // TODO Movement.Flat(first.me, mine);
-        double share = tr.S.Count(x => x.close) / (double)tr.S.Count;
-        bool shadowing = walked >= 10f && clock - first.t >= Span * 0.5 && (share >= 0.6 || tr.returns >= 2);
-        if (keptUp || shadowing) tr.until = clock + Forget;
-        return clock < tr.until;
-    }
-
-    /// <summary>Where each mob he knows is after him was last seen, including ones out of sight (gone under 20 s).</summary>
-    public IEnumerable<(Identity id, Vector3 pos, double ago)> Trackers(double clock) =>
-        _shadow.Where(kv => clock < kv.Value.until).Select(kv => (kv.Key, kv.Value.pos, clock - kv.Value.seen));
-
     // WHO STARTED IT (owner, 2026-09-27): Longest Road mobs never aggro an Omni first, yet a Hammer Bull train built up
     // on him at 11:45 with no Attack from the bot; the pets' own swings never reached the log. Every change of fighting
     // target is logged for him and each pet (ENGAGE) and for each mob turning onto one of us (AGGRO), so the order
     // of the lines shows who opened.
     private readonly Dictionary<Identity, Identity?> _fighting = new Dictionary<Identity, Identity?>();
+    private readonly HashSet<Identity> _foes = new HashSet<Identity>(); // fought him or a pet in this zone
+
+    private readonly ILogger<Awareness> _logger;
+    private readonly Queue<(double t, Vector3 me)> _myTrail = new Queue<(double, Vector3)>();
 
     // Mobs one of us has fought this zone (then its turning on us is no proof it is aggressive), and mobs already noted
     // as having turned on us unprovoked (one aggro per mob: a mob switching from a pet to him logs AGGRO again).
     private readonly HashSet<Identity> _ourTargets = new HashSet<Identity>(), _noted = new HashSet<Identity>();
 
+    private readonly Dictionary<Identity, Track> _shadow = new Dictionary<Identity, Track>();
+    private readonly Dictionary<Identity, Queue<(double t, Vector3 p, float d)>> _trail = new Dictionary<Identity, Queue<(double, Vector3, float)>>();
+    private double _at = -1, _loggedAt = -99;
+    private string _last = "";
+    private int _pf = -1;
+
+    public Awareness(ILogger<Awareness> logger)
+    {
+        _logger = logger;
+        _logger.LogInformation("Awareness initialized");
+    }
+
+    public List<Seen> Near { get; } = new List<Seen>();
+    public IEnumerable<Seen> OnUs => Near.Where(s => s.OnUs);
+    public IEnumerable<Seen> Following => Near.Where(s => s.Following);
+    public int OnUsCount => Near.Count(s => s.OnUs);
+    public int FollowingCount => Near.Count(s => s.Following);
+
+    public void RegisterPackets(PacketRouter router)
+    {
+        router.Register(ProcessAttackMessage, N3MessageType.Attack, (int)ControlPriority.Combat);
+        router.Register(ProcessAttackInfoMessage, N3MessageType.AttackInfo, (int)ControlPriority.Combat);
+    }
+
+    private bool Shadow(Identity id, double clock, Vector3 mine, Vector3 pos, float d, bool keptUp)
+    {
+        if (!_shadow.TryGetValue(id, out var tr))
+        {
+            _shadow[id] = tr = new Track();
+        }
+
+        tr.seen = clock;
+        tr.pos = pos;
+        var close = d <= Close;
+        tr.S.Enqueue((clock, mine, close));
+        while (tr.S.Count > 0 && clock - tr.S.Peek().t > Span)
+        {
+            tr.S.Dequeue();
+        }
+
+        if (close && !tr.wasClose && tr.S.Count > 1)
+        {
+            tr.returns++;
+        }
+
+        tr.wasClose = close;
+        var first = tr.S.Peek();
+        var walked = 0f; // TODO Movement.Flat(first.me, mine);
+        var share = tr.S.Count(x => x.close) / (double)tr.S.Count;
+        var shadowing = walked >= 10f && clock - first.t >= Span * 0.5 && (share >= 0.6 || tr.returns >= 2);
+        if (keptUp || shadowing)
+        {
+            tr.until = clock + Forget;
+        }
+
+        return clock < tr.until;
+    }
+
+    /// <summary>Where each mob he knows is after him was last seen, including ones out of sight (gone under 20 s).</summary>
+    public IEnumerable<(Identity id, Vector3 pos, double ago)> Trackers(double clock)
+    {
+        return _shadow.Where(kv => clock < kv.Value.until).Select(kv => (kv.Key, kv.Value.pos, clock - kv.Value.seen));
+    }
+
     private void LogEngagements(LocalPlayer me, HashSet<Identity> guard, int outdoorPf)
     {
-        string Who(Identity id) => id == me.Identity ? "me" : (DynelManager.Characters.FirstOrDefault(c => c.Identity == id)?.Name ?? id.ToString());
+        string Who(Identity id)
+        {
+            return id == me.Identity ? "me" : DynelManager.Characters.FirstOrDefault(c => c.Identity == id)?.Name ?? id.ToString();
+        }
 
         string Dist(Identity id)
         {
@@ -248,49 +258,63 @@ public sealed class Awareness : IPacketConsumer
         var seen = new HashSet<Identity>();
         foreach (var c in DynelManager.Characters)
         {
-            if (c == null) continue;
-            bool ours = guard.Contains((Identity)c.Identity);
+            if (c == null)
+            {
+                continue;
+            }
+
+            var ours = guard.Contains(c.Identity);
             var ft = c.FightingIdentity;
-            if (!ours && !(ft.HasValue && guard.Contains((Identity)ft.Value)) && !_fighting.ContainsKey(c.Identity)) continue;
+            if (!ours && !(ft.HasValue && guard.Contains(ft.Value)) && !_fighting.ContainsKey(c.Identity))
+            {
+                continue;
+            }
+
             seen.Add(c.Identity);
             _fighting.TryGetValue(c.Identity, out var was);
-            if (Nullable.Equals(was, ft)) continue;
+            if (Nullable.Equals(was, ft))
+            {
+                continue;
+            }
+
             _fighting[c.Identity] = ft;
             if (ours && ft.HasValue)
             {
                 _ourTargets.Add(ft.Value);
                 _logger.LogInformation($"ENGAGE: {Who(c.Identity)} ({Dist(c.Identity)}) -> '{Who(ft.Value)}' ({Dist(ft.Value)}).");
             }
-            else if (!ours && ft.HasValue && guard.Contains((Identity)ft.Value))
+            else if (!ours && ft.HasValue && guard.Contains(ft.Value))
             {
                 _logger.LogInformation($"AGGRO: '{c.Name}' ({Dist(c.Identity)}) on {Who(ft.Value)}.");
                 // Outdoors and none of us had fought it: its kind attacks on sight (MobDanger, for the walk grid).
-                if (outdoorPf >= 0 && !_ourTargets.Contains((Identity)c.Identity) && _noted.Add(c.Identity))
+                if (outdoorPf >= 0 && !_ourTargets.Contains(c.Identity) && _noted.Add(c.Identity))
                 {
-                    c.TryGetStat(Stat.Level, out int lvl);
-                    
+                    c.TryGetStat(Stat.Level, out var lvl);
                 }
             }
         }
 
         foreach (var id in _fighting.Keys.ToList())
+        {
             if (!seen.Contains(id))
+            {
                 _fighting.Remove(id);
+            }
+        }
     }
 
-    public string Summary() => $"{OnUsCount} on us, {FollowingCount} following, {Near.Count} near";
+    public string Summary()
+    {
+        return $"{OnUsCount} on us, {FollowingCount} following, {Near.Count} near";
+    }
 
     /// <summary>The nearest one fighting him/a pet or following him, or null.</summary>
-    public SimpleChar? Chaser() => Near.FirstOrDefault(s => s.OnUs || s.Following)?.Mob;
-
-    public void RegisterPackets(PacketRouter router)
+    public SimpleChar? Chaser()
     {
-        router.Register(ProcessAttackMessage, N3MessageType.Attack, (int)ControlPriority.Combat);
-        router.Register(ProcessAttackInfoMessage, N3MessageType.AttackInfo, (int)ControlPriority.Combat);
-        
+        return Near.FirstOrDefault(s => s.OnUs || s.Following)?.Mob;
     }
 
-    
+
     private bool ProcessAttackInfoMessage(AOMessage arg)
     {
         var m = (AttackInfoMessage)arg.Body;
@@ -301,15 +325,37 @@ public sealed class Awareness : IPacketConsumer
     private bool ProcessAttackMessage(AOMessage arg)
     {
         var m = (AttackMessage)arg.Body;
-        NoteBlow(m.Identity,m.Target);
+        NoteBlow(m.Identity, m.Target);
         return false;
     }
 
     private void NoteBlow(Identity attacker, Identity target)
     {
-        if (attacker.Instance == 0 || target.Instance == 0 || DynelManager.Dead.Contains(attacker)) return;
-        if (DynelManager.Find(attacker, out SimpleChar a) && a is not LocalPlayer) a.FightingIdentity = attacker;
+        if (attacker.Instance == 0 || target.Instance == 0 || DynelManager.Dead.Contains(attacker))
+        {
+            return;
+        }
+
+        if (DynelManager.Find(attacker, out SimpleChar a) && a is not LocalPlayer)
+        {
+            a.FightingIdentity = attacker;
+        }
     }
 
+    public sealed class Seen
+    {
+        public float Dist;
+        public int Level;
+        public SimpleChar? Mob;
+        public bool OnUs, Following;
+    }
 
+    private sealed class Track
+    {
+        public readonly Queue<(double t, Vector3 me, bool close)> S = new Queue<(double, Vector3, bool)>();
+        public Vector3 pos;
+        public int returns;
+        public double seen, until = -1;
+        public bool wasClose;
+    }
 }

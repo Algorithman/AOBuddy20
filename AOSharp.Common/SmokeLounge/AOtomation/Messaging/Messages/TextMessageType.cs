@@ -12,12 +12,11 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Messages
+namespace SmokeLounge.AOtomation.Messaging.Messages;
+
+public enum TextMessageType
 {
-    public enum TextMessageType
-    {
-        Whisper = 2, 
-        Say = 3, 
-        Shout = 4
-    }
+    Whisper = 2,
+    Say = 3,
+    Shout = 4,
 }

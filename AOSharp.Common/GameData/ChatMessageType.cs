@@ -1,9 +1,8 @@
-﻿namespace AOSharp.Common.GameData
+﻿namespace AOSharp.Common.GameData;
+
+public enum ChatRange : byte
 {
-    public enum ChatRange: byte
-    {
-        Say = 0x00,
-        Whisper = 0x01,
-        Shout = 0x02
-    }
+    Say = 0x00,
+    Whisper = 0x01,
+    Shout = 0x02,
 }

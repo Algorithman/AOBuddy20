@@ -12,37 +12,27 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.GameData
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+
+namespace SmokeLounge.AOtomation.Messaging.GameData;
+
+public class MissionSliders
 {
-    using AOSharp.Common.GameData;
-    using SmokeLounge.AOtomation.Messaging.Serialization;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region AoMember Properties
 
-    public class MissionSliders
-    {
-        #region AoMember Properties
+    [AoMember(0)] public byte Difficulty { get; set; }
 
-        [AoMember(0)]
-        public byte Difficulty { get; set; }
+    [AoMember(1)] public byte GoodBad { get; set; }
 
-        [AoMember(1)]
-        public byte GoodBad { get; set; }
+    [AoMember(2)] public byte OrderChaos { get; set; }
 
-        [AoMember(2)]
-        public byte OrderChaos { get; set; }
+    [AoMember(3)] public byte OpenHidden { get; set; }
 
-        [AoMember(3)]
-        public byte OpenHidden { get; set; }
+    [AoMember(4)] public byte PhysicalMystical { get; set; }
 
-        [AoMember(4)]
-        public byte PhysicalMystical { get; set; }
+    [AoMember(5)] public byte HeadonStealth { get; set; }
 
-        [AoMember(5)]
-        public byte HeadonStealth { get; set; }
+    [AoMember(6)] public byte CreditsXp { get; set; }
 
-        [AoMember(6)]
-        public byte CreditsXp { get; set; }
-
-        #endregion
-    }
+    #endregion
 }

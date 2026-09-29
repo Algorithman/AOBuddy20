@@ -12,45 +12,32 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Messages
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+
+namespace SmokeLounge.AOtomation.Messaging.Messages;
+
+[AoContract((int)PacketType.PingMessage)]
+public class PingMessage : MessageBody
 {
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Public Properties
 
-    [AoContract((int)PacketType.PingMessage)]
-    public class PingMessage : MessageBody
-    {
-        #region Public Properties
+    public override PacketType PacketType => PacketType.PingMessage;
 
-        public override PacketType PacketType
-        {
-            get
-            {
-                return PacketType.PingMessage;
-            }
-        }
+    #endregion
 
-        #endregion
+    #region AoMember Properties
 
-        #region AoMember Properties
+    [AoMember(0)] public PingMessageType PingMessageType { get; set; }
 
-        [AoMember(0)]
-        public PingMessageType PingMessageType { get; set; }
+    [AoMember(1)] public int HopCount { get; set; }
 
-        [AoMember(1)]
-        public int HopCount { get; set; }
+    [AoMember(2)] public uint ServerTime { get; set; }
 
-        [AoMember(2)]
-        public uint ServerTime { get; set; }
+    [AoMember(3)] public uint UpTime1 { get; set; }
 
-        [AoMember(3)]
-        public uint UpTime1 { get; set; }
+    [AoMember(4)] public uint UpTime2 { get; set; }
 
-        [AoMember(4)]
-        public uint UpTime2 { get; set; }
+    [AoMember(5)] public uint Unk2 { get; set; }
 
-        [AoMember(5)]
-        public uint Unk2 { get; set; }
-
-        #endregion
-    }
+    #endregion
 }

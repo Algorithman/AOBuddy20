@@ -12,39 +12,30 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.GameData
+using AOSharp.Common.GameData;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+
+namespace SmokeLounge.AOtomation.Messaging.GameData;
+
+public class TowerInfo
 {
-    using AOSharp.Common.GameData;
-    using SmokeLounge.AOtomation.Messaging.Serialization;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region AoMember Properties
 
-    public class TowerInfo
-    {
-        #region AoMember Properties
+    [AoMember(0)] public Identity PlaceholderId { get; set; }
 
-        [AoMember(0)]
-        public Identity PlaceholderId { get; set; }
+    [AoMember(1)] public Identity TowerCharId { get; set; }
 
-        [AoMember(1)]
-        public Identity TowerCharId { get; set; }
+    [AoMember(2)] public Vector3 Position { get; set; }
 
-        [AoMember(2)]
-        public Vector3 Position { get; set; }
+    [AoMember(3)] public int MeshId { get; set; }
 
-        [AoMember(3)]
-        public int MeshId { get; set; }
+    [AoMember(4)] public Side Side { get; set; }
 
-        [AoMember(4)]
-        public Side Side { get; set; }
+    [AoMember(5)] public int DestroyedMeshId { get; set; }
 
-        [AoMember(5)]
-        public int DestroyedMeshId { get; set; }
+    [AoMember(6)] public float Scale { get; set; }
 
-        [AoMember(6)]
-        public float Scale { get; set; }
+    [AoMember(7)] public TowerClass Class { get; set; }
 
-        [AoMember(7)]
-        public TowerClass Class { get; set; }
-        #endregion
-    }
+    #endregion
 }

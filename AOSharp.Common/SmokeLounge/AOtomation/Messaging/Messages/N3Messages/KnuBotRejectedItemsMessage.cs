@@ -13,38 +13,32 @@
 // --------------------------------------------------------------------------------------------------------------------
 
 using AOSharp.Common.GameData;
+using SmokeLounge.AOtomation.Messaging.GameData;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages
+namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
+
+[AoContract((int)N3MessageType.KnubotRejectedItems)]
+public class KnuBotRejectedItemsMessage : N3Message
 {
-    using SmokeLounge.AOtomation.Messaging.GameData;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Constructors and Destructors
 
-    [AoContract((int)N3MessageType.KnubotRejectedItems)]
-    public class KnuBotRejectedItemsMessage : N3Message
+    public KnuBotRejectedItemsMessage()
     {
-        #region Constructors and Destructors
-
-        public KnuBotRejectedItemsMessage()
-        {
-            this.N3MessageType = N3MessageType.KnubotRejectedItems;
-        }
-
-        #endregion
-
-        #region AoMember Properties
-
-        [AoMember(0)]
-        public short Version { get; set; }
-
-        [AoMember(1)]
-        public Identity Target { get; set; }
-
-        [AoMember(2)]
-        public KnuBotRejectedItem[] Items { get; set; }
-
-        [AoMember(3)]
-        public int CashReturned { get; set; }
-
-        #endregion
+        N3MessageType = N3MessageType.KnubotRejectedItems;
     }
+
+    #endregion
+
+    #region AoMember Properties
+
+    [AoMember(0)] public short Version { get; set; }
+
+    [AoMember(1)] public Identity Target { get; set; }
+
+    [AoMember(2)] public KnuBotRejectedItem[] Items { get; set; }
+
+    [AoMember(3)] public int CashReturned { get; set; }
+
+    #endregion
 }

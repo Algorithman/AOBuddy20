@@ -13,34 +13,29 @@
 // --------------------------------------------------------------------------------------------------------------------
 
 using AOSharp.Common.GameData;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages
+namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
+
+[AoContract((int)N3MessageType.ReflectAttack)]
+public class ReflectAttackMessage : N3Message
 {
-    using SmokeLounge.AOtomation.Messaging.GameData;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Constructors and Destructors
 
-    [AoContract((int)N3MessageType.ReflectAttack)]
-    public class ReflectAttackMessage : N3Message
+    public ReflectAttackMessage()
     {
-        #region Constructors and Destructors
-
-        public ReflectAttackMessage()
-        {
-            this.N3MessageType = N3MessageType.ReflectAttack;
-        }
-
-        #endregion
-
-        #region AoMember Properties
-
-        [AoMember(0)]
-        public int Amount { get; set; }
-
-        [AoMember(1)]
-        public Identity Target { get; set; }
-
-        [AoMember(2)]
-        public Stat Stat { get; set; }
-        #endregion
+        N3MessageType = N3MessageType.ReflectAttack;
     }
+
+    #endregion
+
+    #region AoMember Properties
+
+    [AoMember(0)] public int Amount { get; set; }
+
+    [AoMember(1)] public Identity Target { get; set; }
+
+    [AoMember(2)] public Stat Stat { get; set; }
+
+    #endregion
 }

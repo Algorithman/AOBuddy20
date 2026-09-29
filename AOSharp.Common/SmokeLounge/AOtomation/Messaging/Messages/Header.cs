@@ -1,6 +1,6 @@
 // --------------------------------------------------------------------------------------------------------------------
 // <copyright file="Header.cs" company="SmokeLounge">
-//   Copyright © 2013 SmokeLounge.
+//   Copyright ï¿½ 2013 SmokeLounge.
 //   This program is free software. It comes without any warranty, to
 //   the extent permitted by applicable law. You can redistribute it
 //   and/or modify it under the terms of the Do What The Fuck You Want
@@ -12,29 +12,28 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Messages
+namespace SmokeLounge.AOtomation.Messaging.Messages;
+
+public class Header
 {
-    public class Header
+    public Header()
     {
-        public Header()
-        {
-            Unknown = 1;
-        }
-
-        #region Public Properties
-
-        public ushort MessageId { get; set; }
-
-        public PacketType PacketType { get; set; }
-
-        public int Receiver { get; set; }
-
-        public int Sender { get; set; }
-
-        public short Size { get; set; }
-
-        public short Unknown { get; set; }
-
-        #endregion
+        Unknown = 1;
     }
+
+    #region Public Properties
+
+    public ushort MessageId { get; set; }
+
+    public PacketType PacketType { get; set; }
+
+    public int Receiver { get; set; }
+
+    public int Sender { get; set; }
+
+    public short Size { get; set; }
+
+    public short Unknown { get; set; }
+
+    #endregion
 }

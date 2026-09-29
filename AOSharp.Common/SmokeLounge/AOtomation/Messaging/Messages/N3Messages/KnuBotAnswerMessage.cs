@@ -13,35 +13,29 @@
 // --------------------------------------------------------------------------------------------------------------------
 
 using AOSharp.Common.GameData;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages
+namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
+
+[AoContract((int)N3MessageType.KnubotAnswer)]
+public class KnuBotAnswerMessage : N3Message
 {
-    using SmokeLounge.AOtomation.Messaging.GameData;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Constructors and Destructors
 
-    [AoContract((int)N3MessageType.KnubotAnswer)]
-    public class KnuBotAnswerMessage : N3Message
+    public KnuBotAnswerMessage()
     {
-        #region Constructors and Destructors
-
-        public KnuBotAnswerMessage()
-        {
-            this.N3MessageType = N3MessageType.KnubotAnswer;
-        }
-
-        #endregion
-
-        #region AoMember Properties
-
-        [AoMember(0)]
-        public short Version { get; set; }
-
-        [AoMember(1)]
-        public Identity Target { get; set; }
-
-        [AoMember(2)]
-        public int Answer { get; set; }
-
-        #endregion
+        N3MessageType = N3MessageType.KnubotAnswer;
     }
+
+    #endregion
+
+    #region AoMember Properties
+
+    [AoMember(0)] public short Version { get; set; }
+
+    [AoMember(1)] public Identity Target { get; set; }
+
+    [AoMember(2)] public int Answer { get; set; }
+
+    #endregion
 }

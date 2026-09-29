@@ -1,142 +1,148 @@
-﻿using Serilog.Core;
-using SmokeLounge.AOtomation.Messaging.Messages;
-using SmokeLounge.AOtomation.Messaging.Serialization.Serializers;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Net.Sockets;
-using StreamReader = SmokeLounge.AOtomation.Messaging.Serialization.StreamReader;
+﻿using System.Net.Sockets;
 using Ionic.Zlib;
 using Serilog;
+using SmokeLounge.AOtomation.Messaging.Messages;
+using SmokeLounge.AOtomation.Messaging.Serialization.Serializers;
+using StreamReader = SmokeLounge.AOtomation.Messaging.Serialization.StreamReader;
 
-namespace AOSharp.Clientless.Net
+namespace AOSharp.Clientless.Net;
+
+internal class ZlibTcpClient : TcpClient
 {
-    internal class ZlibTcpClient : TcpClient
+    private const ushort HeaderSize = 16;
+    private const ushort RecvBufferSize = 8192;
+    private readonly List<byte> _buffer;
+    private readonly HeaderSerializer _headerSerializer;
+    private readonly ILogger _logger;
+    public EventHandler Disconnected;
+
+    public EventHandler<byte[]> PacketRecv;
+    private byte[] _recvBuffer;
+
+    private bool _usingZlib;
+    private ZlibStream _zlibStream;
+
+    public ZlibTcpClient(ILogger logger) : base(AddressFamily.InterNetwork)
     {
-        private readonly ILogger _logger;
-        private const ushort HeaderSize = 16;
-        private const ushort RecvBufferSize = 8192;
-        private List<byte> _buffer;
-        private byte[] _recvBuffer;
-        private HeaderSerializer _headerSerializer;
+        _logger = logger;
+        _buffer = new List<byte>();
+        _headerSerializer = new HeaderSerializer();
+        ReceiveTimeout = 180000;
+    }
 
-        private bool _usingZlib = false;
-        private ZlibStream _zlibStream;
-
-        public EventHandler<byte[]> PacketRecv;
-        public EventHandler Disconnected;
-
-        public ZlibTcpClient(ILogger logger) : base(AddressFamily.InterNetwork)
+    public void Send(byte[] bytes)
+    {
+        if (Connected)
         {
-            _logger = logger;
-            _buffer = new List<byte>();
-            _headerSerializer = new HeaderSerializer();
-            ReceiveTimeout = 180000;
+            GetStream().BeginWrite(bytes, 0, bytes.Length, SendCallback, null);
+        }
+    }
+
+    private void SendCallback(IAsyncResult result)
+    {
+        try
+        {
+            GetStream().EndWrite(result);
+        }
+        catch (Exception e)
+        {
+            _logger.Error($"Failed to send message: {e}");
+        }
+    }
+
+    private void ProcessBuffer()
+    {
+        while (_buffer.Count >= HeaderSize)
+        {
+            var header = DeserializeHeader(_buffer.Take(HeaderSize).ToArray());
+
+            if (header.PacketType == PacketType.InitiateCompressionMessage)
+            {
+                _usingZlib = true;
+                _zlibStream = new ZlibStream(GetStream(), CompressionMode.Decompress);
+                _zlibStream.FlushMode = FlushType.Sync;
+            }
+
+            if (_buffer.Count < header.Size)
+            {
+                break;
+            }
+
+            PacketRecv?.Invoke(null, _buffer.Take(header.Size).ToArray());
+
+            var padding = header.Size % 4 == 0 ? 0 : 4 - header.Size % 4;
+            _buffer.RemoveRange(0, header.Size + (!_usingZlib ? padding : 0));
+        }
+    }
+
+    private void ReceiveCallback(IAsyncResult result)
+    {
+        if (!Connected)
+        {
+            return;
         }
 
-        public void Send(byte[] bytes)
+        try
         {
-            if(Connected)
-                GetStream().BeginWrite(bytes, 0, bytes.Length, SendCallback, null);
-        }
+            var stream = _usingZlib ? _zlibStream : (Stream)GetStream();
+            var bytesRead = stream.EndRead(result);
 
-        private void SendCallback(IAsyncResult result)
-        {
-            try
+            if (bytesRead == 0)
             {
-                GetStream().EndWrite(result);
-            }
-            catch (Exception e) 
-            {
-                _logger.Error($"Failed to send message: {e}");
-            }
-        }
-
-        private void ProcessBuffer()
-        {
-            while (_buffer.Count >= HeaderSize)
-            {
-                Header header = DeserializeHeader(_buffer.Take(HeaderSize).ToArray());
-
-                if (header.PacketType == PacketType.InitiateCompressionMessage)
-                {
-                    _usingZlib = true;
-                    _zlibStream = new ZlibStream(GetStream(), CompressionMode.Decompress);
-                    _zlibStream.FlushMode = FlushType.Sync;
-                }
-
-                if (_buffer.Count < header.Size)
-                    break;
-
-                PacketRecv?.Invoke(null, _buffer.Take(header.Size).ToArray());
-
-                int padding = header.Size % 4 == 0 ? 0 : 4 - header.Size % 4;
-                _buffer.RemoveRange(0, header.Size + (!_usingZlib ? padding : 0));
-            }
-        }
-
-        private void ReceiveCallback(IAsyncResult result)
-        {
-            if (!Connected)
-                return;
-
-            try
-            {
-                Stream stream = _usingZlib ? _zlibStream : (Stream)GetStream();
-                int bytesRead = stream.EndRead(result);
-
-                if(bytesRead == 0)
-                {
-                    Disconnected?.Invoke(null, null);
-                    return;
-                }
-
-                byte[] readBytes = _recvBuffer.Take(bytesRead).ToArray();
-                _buffer.AddRange(readBytes);
-
-                ProcessBuffer();
-            }
-            catch (Exception e)
-            {
-                _logger.Error("Error on EndRead:\n" + e);
+                Disconnected?.Invoke(null, null);
                 return;
             }
 
-            BeginReceiving();
-        }
+            var readBytes = _recvBuffer.Take(bytesRead).ToArray();
+            _buffer.AddRange(readBytes);
 
-        public void BeginReceiving()
+            ProcessBuffer();
+        }
+        catch (Exception e)
         {
-            if (!Connected)
-                return;
-
-            try
-            {
-                _recvBuffer = new byte[RecvBufferSize];
-
-                Stream stream = _usingZlib ? _zlibStream : (Stream)GetStream();
-                stream.BeginRead(_recvBuffer, 0, RecvBufferSize, new AsyncCallback(ReceiveCallback), null);
-            }
-            catch (Exception e)
-            {
-                _logger.Error($"BeginRecv Error: {e}");
-            }
+            _logger.Error("Error on EndRead:\n" + e);
+            return;
         }
 
-        private Header DeserializeHeader(byte[] header)
+        BeginReceiving();
+    }
+
+    public void BeginReceiving()
+    {
+        if (!Connected)
         {
-            using (MemoryStream memStream = new MemoryStream(header))
-                using(StreamReader reader = new StreamReader(memStream))
-                    return (Header)_headerSerializer.Deserialize(reader, null);
+            return;
         }
 
-        protected override void Dispose(bool disposing)
+        try
         {
-            if (disposing)
-                _zlibStream?.Dispose();
+            _recvBuffer = new byte[RecvBufferSize];
 
-            base.Dispose(disposing);
+            var stream = _usingZlib ? _zlibStream : (Stream)GetStream();
+            stream.BeginRead(_recvBuffer, 0, RecvBufferSize, ReceiveCallback, null);
         }
+        catch (Exception e)
+        {
+            _logger.Error($"BeginRecv Error: {e}");
+        }
+    }
+
+    private Header DeserializeHeader(byte[] header)
+    {
+        using (var memStream = new MemoryStream(header))
+        using (var reader = new StreamReader(memStream))
+        {
+            return (Header)_headerSerializer.Deserialize(reader, null);
+        }
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _zlibStream?.Dispose();
+        }
+
+        base.Dispose(disposing);
     }
 }

@@ -12,68 +12,67 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages
+namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
+
+public enum OrgClientCommand : byte
 {
-    public enum OrgClientCommand : byte
-    {
-        None = 0, 
+    None = 0,
 
-        Create = 1, 
+    Create = 1,
 
-        Ranks = 2, 
+    Ranks = 2,
 
-        Contract = 3, 
+    Contract = 3,
 
-        Unknown1 = 4, 
+    Unknown1 = 4,
 
-        Info = 5, 
+    Info = 5,
 
-        Disband = 6, 
+    Disband = 6,
 
-        StartVote = 7, 
+    StartVote = 7,
 
-        VoteInfo = 8, 
+    VoteInfo = 8,
 
-        Vote = 9, 
+    Vote = 9,
 
-        Promote = 10, 
+    Promote = 10,
 
-        Demote = 11, 
+    Demote = 11,
 
-        Unknown2 = 12, 
+    Unknown2 = 12,
 
-        Kick = 13, 
+    Kick = 13,
 
-        Invite = 14, 
+    Invite = 14,
 
-        Join = 15, 
+    Join = 15,
 
-        Leave = 16, 
+    Leave = 16,
 
-        Tax = 17, 
+    Tax = 17,
 
-        Bank = 18, 
+    Bank = 18,
 
-        BankAdd = 19, 
+    BankAdd = 19,
 
-        BankRemove = 20, 
+    BankRemove = 20,
 
-        BankPaymembers = 21, 
+    BankPaymembers = 21,
 
-        Debt = 22, 
+    Debt = 22,
 
-        History = 23, 
+    History = 23,
 
-        Objective = 24, 
+    Objective = 24,
 
-        Description = 25, 
+    Description = 25,
 
-        Name = 26, 
+    Name = 26,
 
-        GoverningForm = 27, 
+    GoverningForm = 27,
 
-        StopVote = 28,
+    StopVote = 28,
 
-        Benefits = 31
-    }
+    Benefits = 31,
 }

@@ -12,59 +12,43 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.GameData
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+
+namespace SmokeLounge.AOtomation.Messaging.GameData;
+
+public class AnimationEffect
 {
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region AoMember Properties
 
-    public class AnimationEffect
-    {
-        #region AoMember Properties
+    [AoMember(0)] public int IdentityType { get; set; }
 
-        [AoMember(0)]
-        public int IdentityType { get; set; }
+    [AoMember(1)] public int NanoId { get; set; }
 
-        [AoMember(1)]
-        public int NanoId { get; set; }
+    [AoMember(2)] public int NanoInstance { get; set; }
 
-        [AoMember(2)]
-        public int NanoInstance { get; set; }
+    [AoMember(3)] public int Time1 { get; set; }
 
-        [AoMember(3)]
-        public int Time1 { get; set; }
+    [AoMember(4)] public int Time2 { get; set; }
 
-        [AoMember(4)]
-        public int Time2 { get; set; }
+    [AoMember(5)] public int Unknown1 { get; set; }
 
-        [AoMember(5)]
-        public int Unknown1 { get; set; }
+    [AoMember(6)] public int Unknown2 { get; set; }
 
-        [AoMember(6)]
-        public int Unknown2 { get; set; }
+    [AoMember(7)] public int Unknown3 { get; set; }
 
-        [AoMember(7)]
-        public int Unknown3 { get; set; }
+    [AoMember(8)] public int Unknown4 { get; set; }
 
-        [AoMember(8)]
-        public int Unknown4 { get; set; }
+    [AoMember(9)] public int Unknown5 { get; set; }
 
-        [AoMember(9)]
-        public int Unknown5 { get; set; }
+    [AoMember(10)] public int Unknown6 { get; set; }
 
-        [AoMember(10)]
-        public int Unknown6 { get; set; }
+    [AoMember(11)] public int Unknown7 { get; set; }
 
-        [AoMember(11)]
-        public int Unknown7 { get; set; }
+    [AoMember(12)] public int Unknown8 { get; set; }
 
-        [AoMember(12)]
-        public int Unknown8 { get; set; }
+    [AoMember(13)] public int VisualDataId { get; set; }
 
-        [AoMember(13)]
-        public int VisualDataId { get; set; }
+    [AoMember(14)] public int Unknown9 { get; set; }
 
-        [AoMember(14)]
-        public int Unknown9 { get; set; }
-
-        #endregion
-    }
+    #endregion
 }

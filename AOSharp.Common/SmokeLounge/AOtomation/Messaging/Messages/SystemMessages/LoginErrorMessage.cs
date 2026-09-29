@@ -12,27 +12,25 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.SystemMessages
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+
+namespace SmokeLounge.AOtomation.Messaging.Messages.SystemMessages;
+
+[AoContract((int)SystemMessageType.LoginError)]
+public class LoginErrorMessage : SystemMessage
 {
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Constructors and Destructors
 
-    [AoContract((int)SystemMessageType.LoginError)]
-    public class LoginErrorMessage : SystemMessage
+    public LoginErrorMessage()
     {
-        #region Constructors and Destructors
-
-        public LoginErrorMessage()
-        {
-            this.SystemMessageType = SystemMessageType.LoginError;
-        }
-
-        #endregion
-
-        #region AoMember Properties
-
-        [AoMember(0)]
-        public LoginError Error { get; set; }
-
-        #endregion
+        SystemMessageType = SystemMessageType.LoginError;
     }
+
+    #endregion
+
+    #region AoMember Properties
+
+    [AoMember(0)] public LoginError Error { get; set; }
+
+    #endregion
 }

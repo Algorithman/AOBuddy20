@@ -1,10 +1,10 @@
 ﻿using System.Runtime.InteropServices;
 
-namespace AOSharp.Common.Unmanaged.Imports
+namespace AOSharp.Common.Unmanaged.Imports;
+
+public class LDBFace
 {
-    public class LDBFace
-    {
-        [DllImport("ldb.dll", EntryPoint = "?GetText@LDBface@@SA?AV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@II@Z", CallingConvention = CallingConvention.Cdecl)]
-        public static extern IntPtr GetText(IntPtr pString, int type, int instance);
-    }
+    [DllImport("ldb.dll", EntryPoint = "?GetText@LDBface@@SA?AV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@std@@II@Z",
+        CallingConvention = CallingConvention.Cdecl)]
+    public static extern IntPtr GetText(IntPtr pString, int type, int instance);
 }

@@ -1,38 +1,39 @@
 ﻿using SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
 
-namespace AOSharp.Clientless
+namespace AOSharp.Clientless;
+
+public class LocalPlayerProxy
 {
-    public class LocalPlayerProxy
+    public static LocalPlayer LocalPlayer;
+    public FullCharacterMessage FullCharMsg;
+
+    public void ApplySimpleCharFullUpdate(SimpleCharFullUpdateMessage simpleCharMsg)
     {
-        public static LocalPlayer LocalPlayer;
-        public FullCharacterMessage FullCharMsg;
+        LocalPlayer = new LocalPlayer(simpleCharMsg);
 
-        public void ApplySimpleCharFullUpdate(SimpleCharFullUpdateMessage simpleCharMsg)
+        if (FullCharMsg == null)
         {
-            LocalPlayer = new LocalPlayer(simpleCharMsg);
-
-            if (FullCharMsg == null)
-                return;
-
-            ApplyChanges(FullCharMsg);
+            return;
         }
 
-        public void ApplyFullCharUpdate(FullCharacterMessage fullCharMsg)
-        {
-            if (LocalPlayer == null)
-            {
-                FullCharMsg = fullCharMsg;
-                return;
-            }
+        ApplyChanges(FullCharMsg);
+    }
 
-            ApplyChanges(fullCharMsg);
+    public void ApplyFullCharUpdate(FullCharacterMessage fullCharMsg)
+    {
+        if (LocalPlayer == null)
+        {
+            FullCharMsg = fullCharMsg;
+            return;
         }
 
-        private void ApplyChanges(FullCharacterMessage fullCharMsg)
-        {
-            LocalPlayer.ApplyFullCharacter(fullCharMsg);
-            Inventory.OnFullCharacterMessage(fullCharMsg.InventorySlots);
-            FullCharMsg = null;
-        }
+        ApplyChanges(fullCharMsg);
+    }
+
+    private void ApplyChanges(FullCharacterMessage fullCharMsg)
+    {
+        LocalPlayer.ApplyFullCharacter(fullCharMsg);
+        Inventory.OnFullCharacterMessage(fullCharMsg.InventorySlots);
+        FullCharMsg = null;
     }
 }

@@ -1,47 +1,53 @@
 ﻿using AOSharp.Common.GameData;
 using SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
 
-namespace AOSharp.Clientless
+namespace AOSharp.Clientless;
+
+public class Dynel : StatHolder
 {
-    public class Dynel : StatHolder
+    public readonly Identity Identity;
+
+    public Dynel(Identity identity, Vector3 position, Quaternion heading) : this(identity)
     {
-        public string Name { get; internal set; }
-        public readonly Identity Identity;
-        public Transform Transform { get; private set; }
+        InitTransform(position, heading);
+    }
 
-        public Dynel(Identity identity, Vector3 position, Quaternion heading) : this(identity)
+    public Dynel(Identity identity)
+    {
+        Identity = identity;
+    }
+
+    public string Name { get; internal set; }
+    public Transform Transform { get; private set; }
+
+    protected void InitTransform(Vector3 position, Quaternion heading)
+    {
+        Transform = new Transform
         {
-            InitTransform(position, heading);
-        }
+            Position = position,
+            Heading = heading,
+        };
+    }
 
-        public Dynel(Identity identity)
+    public void Use()
+    {
+        Client.Send(new GenericCmdMessage
         {
-            Identity = identity;
-        }
+            Action = GenericCmdAction.Use,
+            User = DynelManager.LocalPlayer.Identity,
+            Target = Identity,
+            Count = 1,
+            Temp4 = 1,
+        });
+    }
 
-        protected void InitTransform(Vector3 position, Quaternion heading)
-        {
-            Transform = new Transform
-            {
-                Position = position,
-                Heading = heading,
-            };
-        }
+    public float DistanceFrom(Vector3 pos)
+    {
+        return Vector3.Distance(Transform.Position, pos);
+    }
 
-        public void Use()
-        {
-            Client.Send(new GenericCmdMessage()
-            {
-                Action = GenericCmdAction.Use,
-                User = DynelManager.LocalPlayer.Identity,
-                Target = Identity,
-                Count = 1,
-                Temp4 = 1,
-            });
-        }
-
-        public float DistanceFrom(Vector3 pos) => Vector3.Distance(Transform.Position, pos);
-
-        public float DistanceFrom(Dynel dynel) => DistanceFrom(dynel.Transform.Position);
+    public float DistanceFrom(Dynel dynel)
+    {
+        return DistanceFrom(dynel.Transform.Position);
     }
 }

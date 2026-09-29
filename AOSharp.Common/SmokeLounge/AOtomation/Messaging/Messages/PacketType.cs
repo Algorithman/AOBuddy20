@@ -1,6 +1,6 @@
 // --------------------------------------------------------------------------------------------------------------------
 // <copyright file="PacketType.cs" company="SmokeLounge">
-//   Copyright © 2013 SmokeLounge.
+//   Copyright ï¿½ 2013 SmokeLounge.
 //   This program is free software. It comes without any warranty, to
 //   the extent permitted by applicable law. You can redistribute it
 //   and/or modify it under the terms of the Do What The Fuck You Want
@@ -12,20 +12,19 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Messages
+namespace SmokeLounge.AOtomation.Messaging.Messages;
+
+public enum PacketType : short
 {
-    public enum PacketType : short
-    {
-        SystemMessage = 0x0001, 
+    SystemMessage = 0x0001,
 
-        TextMessage = 0x0005, 
+    TextMessage = 0x0005,
 
-        N3Message = 0x000A, 
+    N3Message = 0x000A,
 
-        PingMessage = 0x000B, 
+    PingMessage = 0x000B,
 
-        OperatorMessage = 0x000E, 
+    OperatorMessage = 0x000E,
 
-        InitiateCompressionMessage = 0x7F00
-    }
+    InitiateCompressionMessage = 0x7F00,
 }

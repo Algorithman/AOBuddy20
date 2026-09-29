@@ -1,16 +1,16 @@
-﻿namespace AOSharp.Clientless
-{
-    public interface IClientlessPluginEntry
-    {
-        void Init(string pluginDir);
-        void Teardown();
-    }
+﻿namespace AOSharp.Clientless;
 
-    public abstract class ClientlessPluginEntry : IClientlessPluginEntry
+public interface IClientlessPluginEntry
+{
+    void Init(string pluginDir);
+    void Teardown();
+}
+
+public abstract class ClientlessPluginEntry : IClientlessPluginEntry
+{
+    public abstract void Init(string pluginDir);
+
+    public virtual void Teardown()
     {
-        public abstract void Init(string pluginDir);
-        public virtual void Teardown()
-        {
-        }
     }
 }

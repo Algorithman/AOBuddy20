@@ -15,23 +15,20 @@
 using SmokeLounge.AOtomation.Messaging.Serialization;
 using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
 
-namespace SmokeLounge.AOtomation.Messaging.GameData
+namespace SmokeLounge.AOtomation.Messaging.GameData;
+
+public class FightModeName
 {
-    public class FightModeName
-    {
-        #region AoMember Properties
+    #region AoMember Properties
 
-        [AoMember(0)]
-        public int Unknown1 { get; set; }
+    [AoMember(0)] public int Unknown1 { get; set; }
 
-        [AoMember(1, SerializeSize = ArraySizeType.Int16)]
-        public string Text { get; set; }
-      
-        [AoMember(2)]
-        public byte Unknown2 { get; set; }
+    [AoMember(1, SerializeSize = ArraySizeType.Int16)]
+    public string Text { get; set; }
 
-        [AoMember(3)]
-        public byte Unknown3 { get; set; }
-        #endregion
-    }
+    [AoMember(2)] public byte Unknown2 { get; set; }
+
+    [AoMember(3)] public byte Unknown3 { get; set; }
+
+    #endregion
 }

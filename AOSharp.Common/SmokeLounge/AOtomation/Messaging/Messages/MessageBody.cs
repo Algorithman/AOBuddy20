@@ -1,6 +1,6 @@
 // --------------------------------------------------------------------------------------------------------------------
 // <copyright file="MessageBody.cs" company="SmokeLounge">
-//   Copyright © 2013 SmokeLounge.
+//   Copyright ï¿½ 2013 SmokeLounge.
 //   This program is free software. It comes without any warranty, to
 //   the extent permitted by applicable law. You can redistribute it
 //   and/or modify it under the terms of the Do What The Fuck You Want
@@ -12,19 +12,17 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Messages
+using SmokeLounge.AOtomation.Messaging.Serialization;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+
+namespace SmokeLounge.AOtomation.Messaging.Messages;
+
+[AoKnownType(2, IdentifierType.Int16)]
+public abstract class MessageBody
 {
-    using SmokeLounge.AOtomation.Messaging.Serialization;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
-    using System;
+    #region Public Properties
 
-    [AoKnownType(2, IdentifierType.Int16)]
-    public abstract class MessageBody
-    {
-        #region Public Properties
+    public abstract PacketType PacketType { get; }
 
-        public abstract PacketType PacketType { get; }
-
-        #endregion
-    }
+    #endregion
 }

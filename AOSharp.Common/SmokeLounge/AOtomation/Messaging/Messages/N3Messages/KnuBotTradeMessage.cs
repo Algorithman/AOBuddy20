@@ -13,44 +13,36 @@
 // --------------------------------------------------------------------------------------------------------------------
 
 using AOSharp.Common.GameData;
+using SmokeLounge.AOtomation.Messaging.GameData;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages
+namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
+
+[AoContract((int)N3MessageType.KnubotTrade)]
+public class KnuBotTradeMessage : N3Message
 {
-    using SmokeLounge.AOtomation.Messaging.GameData;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Constructors and Destructors
 
-    [AoContract((int)N3MessageType.KnubotTrade)]
-    public class KnuBotTradeMessage : N3Message
+    public KnuBotTradeMessage()
     {
-        #region Constructors and Destructors
-
-        public KnuBotTradeMessage()
-        {
-            this.N3MessageType = N3MessageType.KnubotTrade;
-        }
-
-        #endregion
-
-        #region AoMember Properties
-
-        [AoMember(0)]
-        public short Version { get; set; }
-
-        [AoMember(1)]
-        public Identity Target { get; set; }
-
-        [AoMember(2)]
-        public KnuBotTradeAction Action { get; set; }
-
-        [AoMember(3)]
-        public int Unknown3 { get; set; }
-
-        [AoMember(4)]
-        public int Unknown4 { get; set; }
-
-        [AoMember(5)]
-        public Identity Slot { get; set; }
-
-        #endregion
+        N3MessageType = N3MessageType.KnubotTrade;
     }
+
+    #endregion
+
+    #region AoMember Properties
+
+    [AoMember(0)] public short Version { get; set; }
+
+    [AoMember(1)] public Identity Target { get; set; }
+
+    [AoMember(2)] public KnuBotTradeAction Action { get; set; }
+
+    [AoMember(3)] public int Unknown3 { get; set; }
+
+    [AoMember(4)] public int Unknown4 { get; set; }
+
+    [AoMember(5)] public Identity Slot { get; set; }
+
+    #endregion
 }

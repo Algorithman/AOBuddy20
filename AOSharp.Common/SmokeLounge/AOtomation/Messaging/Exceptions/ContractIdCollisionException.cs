@@ -1,12 +1,8 @@
-﻿using System;
+﻿namespace SmokeLounge.AOtomation.Messaging.Exceptions;
 
-namespace SmokeLounge.AOtomation.Messaging.Exceptions
+public class ContractIdCollisionException : Exception
 {
-    public class ContractIdCollisionException : Exception
+    public ContractIdCollisionException(string message) : base(message)
     {
-        public ContractIdCollisionException(string message) : base(message)
-        {
-
-        }
     }
 }

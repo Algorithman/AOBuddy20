@@ -3,10 +3,10 @@
 // Project: AOBuddy20
 // Filename: Program.cs
 // 
-// Last modified: 2026-09-29 22:45
-// Created:       2026-09-29 15:09
+// Last modified: 2026-09-30 00:19
+// Created:       2026-09-29 23:09
 // 
-// Long live OmniCell and AOBuddy20
+// Long live OmniCell and AOBuddy
 // ---------------------------------------------------------------------------------------
 
 using System.Reflection;
@@ -35,8 +35,8 @@ internal class Program
 
     public static async Task Main(string[] args)
     {
-        int index = Array.IndexOf(args.Select(x => x.ToLower()).ToArray(), "--logfile");
-        string logfile = "AOBuddy.log";
+        var index = Array.IndexOf(args.Select(x => x.ToLower()).ToArray(), "--logfile");
+        var logfile = "AOBuddy.log";
         if (index >= 0)
         {
             logfile = args[index + 1];

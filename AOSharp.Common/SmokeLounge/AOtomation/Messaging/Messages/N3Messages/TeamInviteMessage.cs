@@ -12,35 +12,32 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages
+using AOSharp.Common.GameData;
+using SmokeLounge.AOtomation.Messaging.Serialization;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+
+namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
+
+[AoContract((int)N3MessageType.TeamInvite)]
+public class TeamInviteMessage : N3Message
 {
-    using AOSharp.Common.GameData;
-    using SmokeLounge.AOtomation.Messaging.Serialization;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Constructors and Destructors
 
-    [AoContract((int)N3MessageType.TeamInvite)]
-    public class TeamInviteMessage : N3Message
+    public TeamInviteMessage()
     {
-        #region Constructors and Destructors
-
-        public TeamInviteMessage()
-        {
-            this.N3MessageType = N3MessageType.TeamInvite;
-        }
-
-        #endregion
-
-        #region AoMember Properties
-
-        [AoMember(0)]
-        public Identity Requestor { get; set; }
-
-        [AoMember(1)]
-        public byte Unknown1 { get; set; }
-
-        [AoMember(2, SerializeSize = ArraySizeType.Int16)]
-        public string Name { get; set; }
-
-        #endregion
+        N3MessageType = N3MessageType.TeamInvite;
     }
+
+    #endregion
+
+    #region AoMember Properties
+
+    [AoMember(0)] public Identity Requestor { get; set; }
+
+    [AoMember(1)] public byte Unknown1 { get; set; }
+
+    [AoMember(2, SerializeSize = ArraySizeType.Int16)]
+    public string Name { get; set; }
+
+    #endregion
 }

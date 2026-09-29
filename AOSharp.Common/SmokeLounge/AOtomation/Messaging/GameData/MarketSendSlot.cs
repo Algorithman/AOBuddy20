@@ -12,18 +12,16 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.GameData
+using AOSharp.Common.GameData;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+
+namespace SmokeLounge.AOtomation.Messaging.GameData;
+
+public class MarketSendSlot
 {
-    using AOSharp.Common.GameData;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region AoMember Properties
 
-    public class MarketSendSlot
-    {
-        #region AoMember Properties
+    [AoMember(0)] public Identity Slot { get; set; }
 
-        [AoMember(0)]
-        public Identity Slot { get; set; }
-
-        #endregion
-    }
+    #endregion
 }

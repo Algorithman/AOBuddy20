@@ -12,53 +12,44 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages
+using AOSharp.Common.GameData;
+using SmokeLounge.AOtomation.Messaging.GameData;
+using SmokeLounge.AOtomation.Messaging.Serialization;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+
+namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
+
+[AoContract((int)N3MessageType.ChestFullUpdate)]
+public class ChestFullUpdateMessage : N3Message
 {
-    using AOSharp.Common.GameData;
-    using SmokeLounge.AOtomation.Messaging.GameData;
-    using SmokeLounge.AOtomation.Messaging.Serialization;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Constructors and Destructors
 
-    [AoContract((int)N3MessageType.ChestFullUpdate)]
-    public class ChestFullUpdateMessage : N3Message
+    public ChestFullUpdateMessage()
     {
-        #region Constructors and Destructors
-
-        public ChestFullUpdateMessage()
-        {
-            this.N3MessageType = N3MessageType.ChestFullUpdate;
-        }
-
-        [AoMember(0)]
-        public int Unknown1 { get; set; }
-
-        [AoMember(1)]
-        public Identity Owner { get; set; }
-
-        [AoMember(2)]
-        public int PlayfieldId { get; set; }
-
-        [AoMember(3)]
-        public Identity StateMachine { get; set; }
-
-        [AoMember(4)]
-        public short Unknown5 { get; set; }
-
-        [AoMember(5, SerializeSize = ArraySizeType.X3F1)]
-        public GameTuple<Stat,int>[] Stats { get; set; }
-
-        [AoMember(6)]
-        public int Unknown6 { get; set; }
-
-        [AoMember(7)]
-        public int Unknown7 { get; set; }
-
-        [AoMember(8)]
-        public int Unknown8 { get; set; }
-       
-        [AoMember(9, SerializeSize = ArraySizeType.X3F1)]
-        public int[] UnknownArray { get; set; }
-
-        #endregion
+        N3MessageType = N3MessageType.ChestFullUpdate;
     }
+
+    [AoMember(0)] public int Unknown1 { get; set; }
+
+    [AoMember(1)] public Identity Owner { get; set; }
+
+    [AoMember(2)] public int PlayfieldId { get; set; }
+
+    [AoMember(3)] public Identity StateMachine { get; set; }
+
+    [AoMember(4)] public short Unknown5 { get; set; }
+
+    [AoMember(5, SerializeSize = ArraySizeType.X3F1)]
+    public GameTuple<Stat, int>[] Stats { get; set; }
+
+    [AoMember(6)] public int Unknown6 { get; set; }
+
+    [AoMember(7)] public int Unknown7 { get; set; }
+
+    [AoMember(8)] public int Unknown8 { get; set; }
+
+    [AoMember(9, SerializeSize = ArraySizeType.X3F1)]
+    public int[] UnknownArray { get; set; }
+
+    #endregion
 }

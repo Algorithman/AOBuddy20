@@ -12,23 +12,20 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Serialization
+using SmokeLounge.AOtomation.Messaging.Serialization.Serializers;
+
+namespace SmokeLounge.AOtomation.Messaging.Serialization;
+
+public class DebuggingSerializerResolverBuilder<T> : SerializerResolverBuilder<T>
 {
-    using System;
+    #region Methods
 
-    using SmokeLounge.AOtomation.Messaging.Serialization.Serializers;
-
-    public class DebuggingSerializerResolverBuilder<T> : SerializerResolverBuilder<T>
+    internal override ISerializer GetSerializer(Type type)
     {
-        #region Methods
-
-        internal override ISerializer GetSerializer(Type type)
-        {
-            var serializer = base.GetSerializer(type);
-            var debuggingSerializer = new DiagnosticSerializer(serializer);
-            return debuggingSerializer;
-        }
-
-        #endregion
+        var serializer = base.GetSerializer(type);
+        var debuggingSerializer = new DiagnosticSerializer(serializer);
+        return debuggingSerializer;
     }
+
+    #endregion
 }

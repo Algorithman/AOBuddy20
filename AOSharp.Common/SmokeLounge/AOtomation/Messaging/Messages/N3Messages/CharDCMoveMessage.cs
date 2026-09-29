@@ -13,44 +13,35 @@
 // --------------------------------------------------------------------------------------------------------------------
 
 using AOSharp.Common.GameData;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages
+namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
+
+[AoContract((int)N3MessageType.CharDCMove)]
+public class CharDCMoveMessage : N3Message
 {
-    using SmokeLounge.AOtomation.Messaging.GameData;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Constructors and Destructors
 
-    [AoContract((int)N3MessageType.CharDCMove)]
-    public class CharDCMoveMessage : N3Message
+    public CharDCMoveMessage()
     {
-        #region Constructors and Destructors
-
-        public CharDCMoveMessage()
-        {
-            this.N3MessageType = N3MessageType.CharDCMove;
-        }
-
-        #endregion
-
-        #region AoMember Properties
-
-        [AoMember(0)]
-        public MovementAction MoveType { get; set; }
-
-        [AoMember(1)]
-        public Quaternion Heading { get; set; }
-
-        [AoMember(2)]
-        public Vector3 Position { get; set; }
-
-        [AoMember(3)]
-        public int DeltaTime { get; set; }
-
-        [AoMember(4)]
-        public int Unknown2 { get; set; }
-
-        [AoMember(5)]
-        public int Unknown3 { get; set; }
-
-        #endregion
+        N3MessageType = N3MessageType.CharDCMove;
     }
+
+    #endregion
+
+    #region AoMember Properties
+
+    [AoMember(0)] public MovementAction MoveType { get; set; }
+
+    [AoMember(1)] public Quaternion Heading { get; set; }
+
+    [AoMember(2)] public Vector3 Position { get; set; }
+
+    [AoMember(3)] public int DeltaTime { get; set; }
+
+    [AoMember(4)] public int Unknown2 { get; set; }
+
+    [AoMember(5)] public int Unknown3 { get; set; }
+
+    #endregion
 }

@@ -13,40 +13,38 @@
 // --------------------------------------------------------------------------------------------------------------------
 
 using AOSharp.Common.GameData;
+using SmokeLounge.AOtomation.Messaging.GameData;
+using SmokeLounge.AOtomation.Messaging.Serialization;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages
+namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
+
+[AoContract((int)N3MessageType.PlayfieldTowerUpdateClient)]
+public class PlayfieldTowerUpdateClientMessage : N3Message
 {
-    using SmokeLounge.AOtomation.Messaging.GameData;
-    using SmokeLounge.AOtomation.Messaging.Serialization;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Constructors and Destructors
 
-    [AoContract((int)N3MessageType.PlayfieldTowerUpdateClient)]
-    public class PlayfieldTowerUpdateClientMessage : N3Message
+    public PlayfieldTowerUpdateClientMessage()
     {
-        #region Constructors and Destructors
-
-        public PlayfieldTowerUpdateClientMessage()
-        {
-            this.N3MessageType = N3MessageType.PlayfieldTowerUpdateClient;
-        }
-
-        #endregion
-
-        #region AoMember Properties
-        [AoMember(0)]
-        public Identity TowerId { get; set; }
-
-        [AoMember(1)]
-        public PlayfieldUpdateClientType UpdateType { get; set; }
-
-        [AoMember(2, SerializeSize = ArraySizeType.X3F1)]
-        public TowerInfo Tower { get; set; }
-
-        #endregion
+        N3MessageType = N3MessageType.PlayfieldTowerUpdateClient;
     }
-    public enum PlayfieldUpdateClientType
-    {
-        Destroyed = 1,
-        Planted = 2
-    }
+
+    #endregion
+
+    #region AoMember Properties
+
+    [AoMember(0)] public Identity TowerId { get; set; }
+
+    [AoMember(1)] public PlayfieldUpdateClientType UpdateType { get; set; }
+
+    [AoMember(2, SerializeSize = ArraySizeType.X3F1)]
+    public TowerInfo Tower { get; set; }
+
+    #endregion
+}
+
+public enum PlayfieldUpdateClientType
+{
+    Destroyed = 1,
+    Planted = 2,
 }

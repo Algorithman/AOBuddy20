@@ -1,8 +1,7 @@
-﻿namespace AOSharp.Common.GameData
+﻿namespace AOSharp.Common.GameData;
+
+public enum ItemActionInfo
 {
-    public enum ItemActionInfo
-    {
-        UseCriteria = 3,
-        Activate = 10
-    }
+    UseCriteria = 3,
+    Activate = 10,
 }

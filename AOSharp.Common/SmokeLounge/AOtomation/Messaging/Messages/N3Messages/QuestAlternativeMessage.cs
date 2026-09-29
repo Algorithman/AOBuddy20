@@ -13,45 +13,38 @@
 // --------------------------------------------------------------------------------------------------------------------
 
 using AOSharp.Common.GameData;
+using SmokeLounge.AOtomation.Messaging.GameData;
+using SmokeLounge.AOtomation.Messaging.Serialization;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages
+namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
+
+[AoContract((int)N3MessageType.QuestAlternative)]
+public class QuestAlternativeMessage : N3Message
 {
-    using SmokeLounge.AOtomation.Messaging.GameData;
-    using SmokeLounge.AOtomation.Messaging.Serialization;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Constructors and Destructors
 
-    [AoContract((int)N3MessageType.QuestAlternative)]
-    public class QuestAlternativeMessage : N3Message
+    public QuestAlternativeMessage()
     {
-        #region Constructors and Destructors
-
-        public QuestAlternativeMessage()
-        {
-            this.N3MessageType = N3MessageType.QuestAlternative;
-        }
-
-        #endregion
-
-        #region AoMember Properties
-
-        [AoMember(0)]
-        public byte VersionId { get; set; }
-
-        [AoMember(1)]
-        public MissionSliders MissionSliders { get; set; }
-
-        [AoMember(2)]
-        public int Unknown2 { get; set; }
-
-        [AoMember(3)]
-        public MissionScope Scope { get; set; }
-
-        [AoMember(4)]
-        public Identity Terminal { get; set; }
-
-        [AoMember(5, SerializeSize = ArraySizeType.Byte)]
-        public MissionInfo[] MissionDetails { get; set; }
-
-        #endregion
+        N3MessageType = N3MessageType.QuestAlternative;
     }
+
+    #endregion
+
+    #region AoMember Properties
+
+    [AoMember(0)] public byte VersionId { get; set; }
+
+    [AoMember(1)] public MissionSliders MissionSliders { get; set; }
+
+    [AoMember(2)] public int Unknown2 { get; set; }
+
+    [AoMember(3)] public MissionScope Scope { get; set; }
+
+    [AoMember(4)] public Identity Terminal { get; set; }
+
+    [AoMember(5, SerializeSize = ArraySizeType.Byte)]
+    public MissionInfo[] MissionDetails { get; set; }
+
+    #endregion
 }

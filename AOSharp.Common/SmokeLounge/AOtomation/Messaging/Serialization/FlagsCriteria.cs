@@ -1,6 +1,6 @@
 // --------------------------------------------------------------------------------------------------------------------
 // <copyright file="FlagsCriteria.cs" company="SmokeLounge">
-//   Copyright © 2013 SmokeLounge.
+//   Copyright ï¿½ 2013 SmokeLounge.
 //   This program is free software. It comes without any warranty, to
 //   the extent permitted by applicable law. You can redistribute it
 //   and/or modify it under the terms of the Do What The Fuck You Want
@@ -12,16 +12,15 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Serialization
+namespace SmokeLounge.AOtomation.Messaging.Serialization;
+
+public enum FlagsCriteria
 {
-    public enum FlagsCriteria
-    {
-        HasAll, 
+    HasAll,
 
-        HasAny, 
+    HasAny,
 
-        EqualsToAny, 
+    EqualsToAny,
 
-        Default
-    }
+    Default,
 }

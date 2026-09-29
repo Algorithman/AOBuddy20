@@ -13,31 +13,27 @@
 // --------------------------------------------------------------------------------------------------------------------
 
 using AOSharp.Common.GameData;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages
+namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
+
+[AoContract((int)N3MessageType.ClientContainerAddItem)]
+public class ClientContainerAddItem : N3Message
 {
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Constructors and Destructors
 
-    [AoContract((int)N3MessageType.ClientContainerAddItem)]
-    public class ClientContainerAddItem : N3Message
+    public ClientContainerAddItem()
     {
-        #region Constructors and Destructors
-
-        public ClientContainerAddItem()
-        {
-            this.N3MessageType = N3MessageType.ClientContainerAddItem;
-        }
-
-        #endregion
-
-        #region AoMember Properties
-
-        [AoMember(0)]
-        public Identity Target { get; set; }
-
-        [AoMember(1)]
-        public Identity Source { get; set; }
-
-        #endregion
+        N3MessageType = N3MessageType.ClientContainerAddItem;
     }
+
+    #endregion
+
+    #region AoMember Properties
+
+    [AoMember(0)] public Identity Target { get; set; }
+
+    [AoMember(1)] public Identity Source { get; set; }
+
+    #endregion
 }

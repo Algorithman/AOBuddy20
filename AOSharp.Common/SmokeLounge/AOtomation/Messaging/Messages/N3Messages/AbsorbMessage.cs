@@ -13,31 +13,27 @@
 // --------------------------------------------------------------------------------------------------------------------
 
 using AOSharp.Common.GameData;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages
+namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
+
+[AoContract((int)N3MessageType.Absorb)]
+public class AbsorbMessage : N3Message
 {
-    using SmokeLounge.AOtomation.Messaging.GameData;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Constructors and Destructors
 
-    [AoContract((int)N3MessageType.Absorb)]
-    public class AbsorbMessage : N3Message
+    public AbsorbMessage()
     {
-        #region Constructors and Destructors
-
-        public AbsorbMessage()
-        {
-            this.N3MessageType = N3MessageType.Absorb;
-        }
-
-        #endregion
-
-        #region AoMember Properties
-
-        [AoMember(0)]
-        public int Amount { get; set; }
-
-        [AoMember(1)]
-        public Stat DmgType { get; set; }
-        #endregion
+        N3MessageType = N3MessageType.Absorb;
     }
+
+    #endregion
+
+    #region AoMember Properties
+
+    [AoMember(0)] public int Amount { get; set; }
+
+    [AoMember(1)] public Stat DmgType { get; set; }
+
+    #endregion
 }

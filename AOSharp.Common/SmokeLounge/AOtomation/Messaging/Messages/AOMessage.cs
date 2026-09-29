@@ -12,18 +12,17 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Messages
+namespace SmokeLounge.AOtomation.Messaging.Messages;
+
+public class AOMessage
 {
-    public class AOMessage
-    {
-        #region Public Properties
+    #region Public Properties
 
-        public MessageBody Body { get; set; }
+    public MessageBody Body { get; set; }
 
-        public Header Header { get; set; }
+    public Header Header { get; set; }
 
-        public byte[] RawPacket {  get; set; }
+    public byte[] RawPacket { get; set; }
 
-        #endregion
-    }
+    #endregion
 }

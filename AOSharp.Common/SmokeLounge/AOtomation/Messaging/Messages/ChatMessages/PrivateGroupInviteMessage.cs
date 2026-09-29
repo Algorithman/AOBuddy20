@@ -12,27 +12,18 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.ChatMessages
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+
+namespace SmokeLounge.AOtomation.Messaging.Messages.ChatMessages;
+
+[AoContract((int)ChatMessageType.PrivateGroupInvite)]
+public class PrivateGroupInviteMessage : ChatMessageBody
 {
-    using SmokeLounge.AOtomation.Messaging.Serialization;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Public Properties
 
-    [AoContract((int)ChatMessageType.PrivateGroupInvite)]
-    public class PrivateGroupInviteMessage : ChatMessageBody
-    {
-        #region Public Properties
+    public override ChatMessageType PacketType => ChatMessageType.PrivateGroupInvite;
 
-        public override ChatMessageType PacketType
-        {
-            get
-            {
-                return ChatMessageType.PrivateGroupInvite;
-            }
-        }
+    #endregion
 
-        #endregion
-
-        [AoMember(0)]
-        public uint Sender { get; set; }
-    }
+    [AoMember(0)] public uint Sender { get; set; }
 }

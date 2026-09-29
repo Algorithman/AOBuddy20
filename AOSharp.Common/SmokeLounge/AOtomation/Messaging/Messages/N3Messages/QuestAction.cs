@@ -12,10 +12,9 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages
+namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
+
+public enum QuestAction
 {
-    public enum QuestAction : int
-    {
-        Delete = 0x01,
-    }
+    Delete = 0x01,
 }

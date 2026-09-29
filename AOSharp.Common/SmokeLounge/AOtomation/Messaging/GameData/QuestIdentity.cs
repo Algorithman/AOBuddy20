@@ -12,22 +12,18 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.GameData
+using AOSharp.Common.GameData;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+
+namespace SmokeLounge.AOtomation.Messaging.GameData;
+
+public class QuestIdentity
 {
-    using AOSharp.Common.GameData;
-    using SmokeLounge.AOtomation.Messaging.Serialization;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region AoMember Properties
 
-    public class QuestIdentity
-    {
-        #region AoMember Properties
+    [AoMember(0)] public Identity Identity { get; set; }
 
-        [AoMember(0)]
-        public Identity Identity { get; set; }
+    [AoMember(1)] public int Unknown1 { get; set; }
 
-        [AoMember(1)]
-        public int Unknown1 { get; set; }
-
-        #endregion
-    }
+    #endregion
 }

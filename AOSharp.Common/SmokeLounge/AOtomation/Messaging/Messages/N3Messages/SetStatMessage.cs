@@ -13,39 +13,34 @@
 // --------------------------------------------------------------------------------------------------------------------
 
 using AOSharp.Common.GameData;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages
+namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
+
+[AoContract((int)N3MessageType.SetStat)]
+public class SetStatMessage : N3Message
 {
-    using SmokeLounge.AOtomation.Messaging.GameData;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Constructors and Destructors
 
-    [AoContract((int)N3MessageType.SetStat)]
-    public class SetStatMessage : N3Message
+    public SetStatMessage(Stat stat, int value)
+        : this()
     {
-        #region Constructors and Destructors
-
-        public SetStatMessage(Stat stat, int value)
-            : this()
-        {
-            this.Stat = stat;
-            this.Value = value;
-        }
-
-        public SetStatMessage()
-        {
-            this.N3MessageType = N3MessageType.SetStat;
-        }
-
-        #endregion
-
-        #region AoMember Properties
-
-        [AoMember(0)]
-        public int Value { get; set; }
-
-        [AoMember(1)]
-        public Stat Stat { get; set; }
-
-        #endregion
+        Stat = stat;
+        Value = value;
     }
+
+    public SetStatMessage()
+    {
+        N3MessageType = N3MessageType.SetStat;
+    }
+
+    #endregion
+
+    #region AoMember Properties
+
+    [AoMember(0)] public int Value { get; set; }
+
+    [AoMember(1)] public Stat Stat { get; set; }
+
+    #endregion
 }

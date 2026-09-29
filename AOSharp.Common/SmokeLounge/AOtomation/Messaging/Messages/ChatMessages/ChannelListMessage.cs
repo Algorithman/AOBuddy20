@@ -12,47 +12,34 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.ChatMessages
+using SmokeLounge.AOtomation.Messaging.Serialization;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+
+namespace SmokeLounge.AOtomation.Messaging.Messages.ChatMessages;
+
+[AoContract((int)ChatMessageType.ChannelList)]
+public class ChannelListMessage : ChatMessageBody
 {
-    using AOSharp.Common.GameData;
-    using SmokeLounge.AOtomation.Messaging.Serialization;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Public Properties
 
-    [AoContract((int)ChatMessageType.ChannelList)]
-    public class ChannelListMessage : ChatMessageBody
-    {
-        #region Public Properties
+    public override ChatMessageType PacketType => ChatMessageType.ChannelList;
 
-        public override ChatMessageType PacketType
-        {
-            get
-            {
-                return ChatMessageType.ChannelList;
-            }
-        }
+    #endregion
 
-        #endregion
+    #region AoMember Properties
 
-        #region AoMember Properties
+    [AoMember(0)] public byte Unk1 { get; set; }
 
-        [AoMember(0)]
-        public byte Unk1 { get; set; }
+    [AoMember(1)] public int ChannelId { get; set; }
 
-        [AoMember(1)]
-        public int ChannelId { get; set; }
+    [AoMember(2, SerializeSize = ArraySizeType.Int16)]
+    public string ChannelName { get; set; }
 
-        [AoMember(2, SerializeSize = ArraySizeType.Int16)]
-        public string ChannelName { get; set; }
+    [AoMember(3)] public short Unk2 { get; set; }
 
-        [AoMember(3)]
-        public short Unk2 { get; set; }
+    [AoMember(4)] public short Unk3 { get; set; }
 
-        [AoMember(4)]
-        public short Unk3 { get; set; }
+    [AoMember(5)] public short Unk4 { get; set; }
 
-        [AoMember(5)]
-        public short Unk4 { get; set; }
-
-        #endregion
-    }
+    #endregion
 }

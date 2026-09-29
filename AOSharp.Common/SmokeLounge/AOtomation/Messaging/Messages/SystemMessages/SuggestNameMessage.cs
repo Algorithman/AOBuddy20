@@ -12,28 +12,27 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.SystemMessages
+using SmokeLounge.AOtomation.Messaging.Serialization;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+
+namespace SmokeLounge.AOtomation.Messaging.Messages.SystemMessages;
+
+[AoContract((int)SystemMessageType.SuggestName)]
+public class SuggestNameMessage : SystemMessage
 {
-    using SmokeLounge.AOtomation.Messaging.Serialization;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Constructors and Destructors
 
-    [AoContract((int)SystemMessageType.SuggestName)]
-    public class SuggestNameMessage : SystemMessage
+    public SuggestNameMessage()
     {
-        #region Constructors and Destructors
-
-        public SuggestNameMessage()
-        {
-            this.SystemMessageType = SystemMessageType.SuggestName;
-        }
-
-        #endregion
-
-        #region AoMember Properties
-
-        [AoMember(0, SerializeSize = ArraySizeType.Int16)]
-        public string Name { get; set; }
-
-        #endregion
+        SystemMessageType = SystemMessageType.SuggestName;
     }
+
+    #endregion
+
+    #region AoMember Properties
+
+    [AoMember(0, SerializeSize = ArraySizeType.Int16)]
+    public string Name { get; set; }
+
+    #endregion
 }

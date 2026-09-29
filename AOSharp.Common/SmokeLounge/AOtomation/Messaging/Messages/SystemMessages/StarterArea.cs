@@ -12,12 +12,11 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.SystemMessages
-{
-    public enum StarterArea
-    {
-        RubiKa = 0, 
+namespace SmokeLounge.AOtomation.Messaging.Messages.SystemMessages;
 
-        Shadowlands = 1
-    }
+public enum StarterArea
+{
+    RubiKa = 0,
+
+    Shadowlands = 1,
 }

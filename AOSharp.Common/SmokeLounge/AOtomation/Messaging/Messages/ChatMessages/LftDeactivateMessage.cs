@@ -12,24 +12,14 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.ChatMessages
+namespace SmokeLounge.AOtomation.Messaging.Messages.ChatMessages;
+
+//[AoContract((int)ChatMessageType.LftDeactivate)]
+public class LftDeactivateMessage : ChatMessageBody
 {
-    using SmokeLounge.AOtomation.Messaging.Serialization;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Public Properties
 
-    //[AoContract((int)ChatMessageType.LftDeactivate)]
-    public class LftDeactivateMessage : ChatMessageBody
-    {
-        #region Public Properties
+    public override ChatMessageType PacketType => ChatMessageType.LftDeactivate;
 
-        public override ChatMessageType PacketType
-        {
-            get
-            {
-                return ChatMessageType.LftDeactivate;
-            }
-        }
-
-        #endregion
-    }
+    #endregion
 }

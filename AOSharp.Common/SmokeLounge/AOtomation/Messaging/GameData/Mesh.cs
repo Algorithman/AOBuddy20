@@ -12,26 +12,21 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.GameData
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+
+namespace SmokeLounge.AOtomation.Messaging.GameData;
+
+public class Mesh
 {
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region AoMember Properties
 
-    public class Mesh
-    {
-        #region AoMember Properties
+    [AoMember(0)] public byte Position { get; set; }
 
-        [AoMember(0)]
-        public byte Position { get; set; }
+    [AoMember(2)] public int OverrideTextureId { get; set; }
 
-        [AoMember(2)]
-        public int OverrideTextureId { get; set; }
+    [AoMember(1)] public uint Id { get; set; }
 
-        [AoMember(1)]
-        public uint Id { get; set; }
+    [AoMember(3)] public byte Layer { get; set; }
 
-        [AoMember(3)]
-        public byte Layer { get; set; }
-
-        #endregion
-    }
+    #endregion
 }

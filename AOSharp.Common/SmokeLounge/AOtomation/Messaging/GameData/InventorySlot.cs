@@ -13,39 +13,29 @@
 // --------------------------------------------------------------------------------------------------------------------
 
 using AOSharp.Common.GameData;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
 
-namespace SmokeLounge.AOtomation.Messaging.GameData
+namespace SmokeLounge.AOtomation.Messaging.GameData;
+
+public class InventorySlot
 {
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region AoMember Properties
 
-    public class InventorySlot
-    {
-        #region AoMember Properties
+    [AoMember(0)] public int Placement { get; set; }
 
-        [AoMember(0)]
-        public int Placement { get; set; }
+    [AoMember(1)] public short Flags { get; set; }
 
-        [AoMember(1)]
-        public short Flags { get; set; }
+    [AoMember(2)] public short Count { get; set; }
 
-        [AoMember(2)]
-        public short Count { get; set; }
+    [AoMember(3)] public Identity Identity { get; set; }
 
-        [AoMember(3)]
-        public Identity Identity { get; set; }
+    [AoMember(4)] public int ItemLowId { get; set; }
 
-        [AoMember(4)]
-        public int ItemLowId { get; set; }
+    [AoMember(5)] public int ItemHighId { get; set; }
 
-        [AoMember(5)]
-        public int ItemHighId { get; set; }
+    [AoMember(6)] public int Quality { get; set; }
 
-        [AoMember(6)]
-        public int Quality { get; set; }
+    [AoMember(7)] public int Unused { get; set; }
 
-        [AoMember(7)]
-        public int Unused { get; set; }
-
-        #endregion
-    }
+    #endregion
 }

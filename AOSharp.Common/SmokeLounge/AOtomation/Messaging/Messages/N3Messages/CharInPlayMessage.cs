@@ -12,20 +12,19 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+
+namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
+
+[AoContract((int)N3MessageType.CharInPlay)]
+public class CharInPlayMessage : N3Message
 {
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Constructors and Destructors
 
-    [AoContract((int)N3MessageType.CharInPlay)]
-    public class CharInPlayMessage : N3Message
+    public CharInPlayMessage()
     {
-        #region Constructors and Destructors
-
-        public CharInPlayMessage()
-        {
-            this.N3MessageType = N3MessageType.CharInPlay;
-        }
-
-        #endregion
+        N3MessageType = N3MessageType.CharInPlay;
     }
+
+    #endregion
 }

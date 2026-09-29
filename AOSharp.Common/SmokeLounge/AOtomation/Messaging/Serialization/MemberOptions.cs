@@ -12,112 +12,53 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Serialization
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+
+namespace SmokeLounge.AOtomation.Messaging.Serialization;
+
+public class MemberOptions
 {
-    using System;
+    #region Constructors and Destructors
 
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
-
-    public class MemberOptions
+    public MemberOptions(
+        Type type,
+        bool isFixedSize,
+        int fixedSizeLength,
+        ArraySizeType serializeSize,
+        int padAfter,
+        int padBefore,
+        AoUsesFlagsAttribute[] usesFlagsAttributes)
     {
-        #region Fields
-
-        private readonly int fixedSizeLength;
-
-        private readonly bool isFixedSize;
-
-        private readonly int padAfter;
-
-        private readonly int padBefore;
-
-        private readonly ArraySizeType serializeSize;
-
-        private readonly Type type;
-
-        private readonly AoUsesFlagsAttribute[] usesFlagsAttributes;
-
-        #endregion
-
-        #region Constructors and Destructors
-
-        public MemberOptions(
-            Type type, 
-            bool isFixedSize, 
-            int fixedSizeLength, 
-            ArraySizeType serializeSize, 
-            int padAfter, 
-            int padBefore, 
-            AoUsesFlagsAttribute[] usesFlagsAttributes)
-        {
-            this.type = type;
-            this.isFixedSize = isFixedSize;
-            this.fixedSizeLength = fixedSizeLength;
-            this.serializeSize = serializeSize;
-            this.padAfter = padAfter;
-            this.padBefore = padBefore;
-            this.usesFlagsAttributes = usesFlagsAttributes;
-        }
-
-        #endregion
-
-        #region Public Properties
-
-        public int FixedSizeLength
-        {
-            get
-            {
-                return this.fixedSizeLength;
-            }
-        }
-
-        public bool IsFixedSize
-        {
-            get
-            {
-                return this.isFixedSize;
-            }
-        }
-
-        public int PadAfter
-        {
-            get
-            {
-                return this.padAfter;
-            }
-        }
-
-        public int PadBefore
-        {
-            get
-            {
-                return this.padBefore;
-            }
-        }
-
-        public ArraySizeType SerializeSize
-        {
-            get
-            {
-                return this.serializeSize;
-            }
-        }
-
-        public Type Type
-        {
-            get
-            {
-                return this.type;
-            }
-        }
-
-        public AoUsesFlagsAttribute[] UsesFlagsAttributes
-        {
-            get
-            {
-                return this.usesFlagsAttributes;
-            }
-        }
-
-        #endregion
+        this.Type = type;
+        this.IsFixedSize = isFixedSize;
+        this.FixedSizeLength = fixedSizeLength;
+        this.SerializeSize = serializeSize;
+        this.PadAfter = padAfter;
+        this.PadBefore = padBefore;
+        this.UsesFlagsAttributes = usesFlagsAttributes;
     }
+
+    #endregion
+
+    #region Fields
+
+    #endregion
+
+    #region Public Properties
+
+    public int FixedSizeLength { get; }
+
+    public bool IsFixedSize { get; }
+
+    public int PadAfter { get; }
+
+    public int PadBefore { get; }
+
+    public ArraySizeType SerializeSize { get; }
+
+    public Type Type { get; }
+
+    public AoUsesFlagsAttribute[] UsesFlagsAttributes { get; }
+
+    #endregion
 }

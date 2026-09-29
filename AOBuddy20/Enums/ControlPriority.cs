@@ -3,10 +3,10 @@
 // Project: AOBuddy20
 // Filename: ControlPriority.cs
 // 
-// Last modified: 2026-09-29 13:47
-// Created:       2026-09-28 18:09
+// Last modified: 2026-09-30 00:19
+// Created:       2026-09-29 23:09
 // 
-// Long live OmniCell and AOBuddy20
+// Long live OmniCell and AOBuddy
 // ---------------------------------------------------------------------------------------
 
 namespace AOBuddy20.Enums;

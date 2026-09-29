@@ -12,12 +12,11 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages
+namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
+
+public enum OrgServerMessageType : byte
 {
-    public enum OrgServerMessageType : byte
-    {
-        OrgContract = 0x01,
-        OrgInfo = 0x02, 
-        OrgInvite = 0x05
-    }
+    OrgContract = 0x01,
+    OrgInfo = 0x02,
+    OrgInvite = 0x05,
 }

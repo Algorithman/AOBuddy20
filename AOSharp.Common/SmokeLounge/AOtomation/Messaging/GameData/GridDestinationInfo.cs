@@ -12,27 +12,23 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.GameData
+using SmokeLounge.AOtomation.Messaging.Serialization;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+
+namespace SmokeLounge.AOtomation.Messaging.GameData;
+
+public class GridDestinationInfo
 {
-    using SmokeLounge.AOtomation.Messaging.Serialization;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region AoMember Properties
 
-    public class GridDestinationInfo
-    {
-        #region AoMember Properties
+    [AoMember(0)] public DestinationInfo DestinationInfo { get; set; }
 
-        [AoMember(0)]
-        public DestinationInfo DestinationInfo { get; set; }
+    [AoMember(1, SerializeSize = ArraySizeType.Int16)]
+    public string Location { get; set; }
 
-        [AoMember(1, SerializeSize = ArraySizeType.Int16)]
-        public string Location { get; set; }
+    [AoMember(2)] public int Unknown1 { get; set; }
 
-        [AoMember(2)]
-        public int Unknown1 { get; set; }
+    [AoMember(3)] public int Unknown2 { get; set; }
 
-        [AoMember(3)]
-        public int Unknown2 { get; set; }
-
-        #endregion
-    }
+    #endregion
 }

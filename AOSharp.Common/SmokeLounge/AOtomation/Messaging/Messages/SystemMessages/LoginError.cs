@@ -12,14 +12,13 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.SystemMessages
+namespace SmokeLounge.AOtomation.Messaging.Messages.SystemMessages;
+
+public enum LoginError
 {
-    public enum LoginError
-    {
-        AlreadyLoggedIn = 0x00000014, 
+    AlreadyLoggedIn = 0x00000014,
 
-        InvalidUserNamePassword = 0x0000006A, 
+    InvalidUserNamePassword = 0x0000006A,
 
-        PlayerBannedOrNotPaid = 0x0000006C
-    }
+    PlayerBannedOrNotPaid = 0x0000006C,
 }

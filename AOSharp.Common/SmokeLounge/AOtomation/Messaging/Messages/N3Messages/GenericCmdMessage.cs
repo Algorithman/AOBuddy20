@@ -13,55 +13,41 @@
 // --------------------------------------------------------------------------------------------------------------------
 
 using AOSharp.Common.GameData;
+using SmokeLounge.AOtomation.Messaging.Serialization;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages
+namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
+
+[AoContract((int)N3MessageType.GenericCmd)]
+public class GenericCmdMessage : N3Message
 {
-    using SmokeLounge.AOtomation.Messaging.GameData;
-    using SmokeLounge.AOtomation.Messaging.Serialization;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
-    using static SmokeLounge.AOtomation.Messaging.Messages.N3Messages.PlayfieldAnarchyFMessage;
+    #region Constructors and Destructors
 
-    [AoContract((int)N3MessageType.GenericCmd)]
-    public class GenericCmdMessage : N3Message
+    public GenericCmdMessage()
     {
-        #region Constructors and Destructors
-
-        public GenericCmdMessage()
-        {
-            this.N3MessageType = N3MessageType.GenericCmd;
-        }
-
-        #endregion
-
-        #region AoMember Properties
-
-        [AoMember(0)]
-        public int Temp1 { get; set; }
-
-        [AoMember(1)]
-        public int Count { get; set; }
-
-        [AoFlags("action")]
-        [AoMember(2)]
-        public GenericCmdAction Action { get; set; }
-
-        [AoMember(3)]
-        public int Temp4 { get; set; }
-
-        [AoMember(4)]
-        public Identity User { get; set; }
-
-        [AoUsesFlags("action", typeof(Identity), FlagsCriteria.EqualsToAny, new[] {
-            (int)GenericCmdAction.Repair,
-            (int)GenericCmdAction.UseItemOnItem,
-            (int)GenericCmdAction.UseItemOnCharacter
-        })]
-        [AoMember(5)]
-        public Identity? Source { get; set; }
-        
-        [AoMember(6)]
-        public Identity Target { get; set; }
-        
-        #endregion
+        N3MessageType = N3MessageType.GenericCmd;
     }
+
+    #endregion
+
+    #region AoMember Properties
+
+    [AoMember(0)] public int Temp1 { get; set; }
+
+    [AoMember(1)] public int Count { get; set; }
+
+    [AoFlags("action")] [AoMember(2)] public GenericCmdAction Action { get; set; }
+
+    [AoMember(3)] public int Temp4 { get; set; }
+
+    [AoMember(4)] public Identity User { get; set; }
+
+    [AoUsesFlags("action", typeof(Identity), FlagsCriteria.EqualsToAny, (int)GenericCmdAction.Repair, (int)GenericCmdAction.UseItemOnItem,
+        (int)GenericCmdAction.UseItemOnCharacter)]
+    [AoMember(5)]
+    public Identity? Source { get; set; }
+
+    [AoMember(6)] public Identity Target { get; set; }
+
+    #endregion
 }

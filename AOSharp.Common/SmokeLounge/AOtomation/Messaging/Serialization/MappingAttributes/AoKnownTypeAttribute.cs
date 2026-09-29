@@ -1,6 +1,6 @@
 // --------------------------------------------------------------------------------------------------------------------
 // <copyright file="AoKnownTypeAttribute.cs" company="SmokeLounge">
-//   Copyright © 2013 SmokeLounge.
+//   Copyright ï¿½ 2013 SmokeLounge.
 //   This program is free software. It comes without any warranty, to
 //   the extent permitted by applicable law. You can redistribute it
 //   and/or modify it under the terms of the Do What The Fuck You Want
@@ -12,49 +12,30 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes
+namespace SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+
+[AttributeUsage(AttributeTargets.Class, Inherited = false)]
+public class AoKnownTypeAttribute : Attribute
 {
-    using System;
+    #region Constructors and Destructors
 
-    [AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = false)]
-    public class AoKnownTypeAttribute : Attribute
+    public AoKnownTypeAttribute(int offset, IdentifierType identifierType)
     {
-        #region Fields
-
-        private readonly IdentifierType identifierType;
-
-        private readonly int offset;
-
-        #endregion
-
-        #region Constructors and Destructors
-
-        public AoKnownTypeAttribute(int offset, IdentifierType identifierType)
-        {
-            this.offset = offset;
-            this.identifierType = identifierType;
-        }
-
-        #endregion
-
-        #region Public Properties
-
-        public IdentifierType IdentifierType
-        {
-            get
-            {
-                return this.identifierType;
-            }
-        }
-
-        public int Offset
-        {
-            get
-            {
-                return this.offset;
-            }
-        }
-
-        #endregion
+        this.Offset = offset;
+        this.IdentifierType = identifierType;
     }
+
+    #endregion
+
+    #region Fields
+
+    #endregion
+
+    #region Public Properties
+
+    public IdentifierType IdentifierType { get; }
+
+    public int Offset { get; }
+
+    #endregion
 }

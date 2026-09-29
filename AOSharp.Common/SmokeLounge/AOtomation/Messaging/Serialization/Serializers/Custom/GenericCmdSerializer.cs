@@ -32,7 +32,7 @@
 //                Type = (IdentityType) streamReader.ReadInt32(),
 //                Instance = streamReader.ReadInt32()
 //            };
-            
+
 //            if (genericCmdMessage.Action == GenericCmdAction.UseItemOnItem)
 //            {
 //                genericCmdMessage.Source = new Identity
@@ -40,7 +40,7 @@
 //                    Type = (IdentityType)streamReader.ReadInt32(),
 //                    Instance = streamReader.ReadInt32()
 //                };
-                
+
 //                genericCmdMessage.Target = new Identity
 //                {
 //                    Type = (IdentityType)streamReader.ReadInt32(),
@@ -130,3 +130,4 @@
 //        }
 //    }
 //}
+

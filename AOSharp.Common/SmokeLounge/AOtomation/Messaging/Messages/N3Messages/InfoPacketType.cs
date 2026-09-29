@@ -12,22 +12,21 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages
+namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
+
+public enum InfoPacketType : byte
 {
-    public enum InfoPacketType : byte
-    {
-        Character = 0x40, // 0100 0000
+    Character = 0x40, // 0100 0000
 
-        CharacterOrg = 0x41, // 0100 0001
+    CharacterOrg = 0x41, // 0100 0001
 
-        CharacterOrgSite = 0x43, // 0100 0011
+    CharacterOrgSite = 0x43, // 0100 0011
 
-        CharacterOrgSiteTower = 0x47, // 0100 0111
+    CharacterOrgSiteTower = 0x47, // 0100 0111
 
-        Monster = 0x50, // 0101 0000
+    Monster = 0x50, // 0101 0000
 
-        Tower = 0x54, // 0101 0100
+    Tower = 0x54, // 0101 0100
 
-        ControlTower = 0x5C // 0101 1100
-    }
+    ControlTower = 0x5C, // 0101 1100
 }

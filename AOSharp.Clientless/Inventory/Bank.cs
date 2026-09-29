@@ -1,57 +1,49 @@
-﻿using AOSharp.Clientless.Logging;
-using AOSharp.Common.GameData;
-using Newtonsoft.Json;
+﻿using AOSharp.Common.GameData;
 using SmokeLounge.AOtomation.Messaging.GameData;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
-namespace AOSharp.Clientless
+namespace AOSharp.Clientless;
+
+public class Bank
 {
-    public class Bank
+    private const int INVENTORY_CAPACITY = 104;
+    private const int INVENTORY_START = 0;
+    private const int INVENTORY_END = INVENTORY_START + INVENTORY_CAPACITY;
+    private readonly List<Item> _items;
+    public bool IsOpen;
+    public Action Opened;
+
+    internal Bank()
     {
-        private const int INVENTORY_CAPACITY = 104;
-        private const int INVENTORY_START = 0;
-        private const int INVENTORY_END = INVENTORY_START + INVENTORY_CAPACITY;
-        public int NumFreeSlots => INVENTORY_CAPACITY - _items.Count();
-        public int? NextAvailableSlot => Inventory.GetNextAvailableSlot(INVENTORY_START, INVENTORY_END, _items);
-        public bool IsFull => NextAvailableSlot == null;
-        public bool IsOpen;
-        private List<Item> _items;
-        public IReadOnlyList<Item> Items => _items;
-        public Action Opened;
+        IsOpen = false;
+        _items = new List<Item>();
+    }
 
-        internal Bank()
+    public int NumFreeSlots => INVENTORY_CAPACITY - _items.Count();
+    public int? NextAvailableSlot => Inventory.GetNextAvailableSlot(INVENTORY_START, INVENTORY_END, _items);
+    public bool IsFull => NextAvailableSlot == null;
+    public IReadOnlyList<Item> Items => _items;
+
+    internal void RegisterItems(InventorySlot[] invSlots)
+    {
+        foreach (var slot in invSlots)
         {
-            IsOpen = false;
-            _items = new List<Item>();
+            //Logger.Information($"Registering Bank Item: {slot.ItemLowId} @ {slot.Placement}");
+
+            _items.Add(new Item(new Identity(IdentityType.BankByRef, slot.Placement), slot.Identity, slot.ItemLowId, slot.ItemHighId, slot.Quality));
         }
 
-        internal void RegisterItems(InventorySlot[] invSlots)
-        {
-            foreach (var slot in invSlots)
-            {
-                //Logger.Information($"Registering Bank Item: {slot.ItemLowId} @ {slot.Placement}");
+        Opened?.Invoke();
+    }
 
-                _items.Add(new Item(new Identity(IdentityType.BankByRef, slot.Placement), slot.Identity, slot.ItemLowId, slot.ItemHighId, slot.Quality));
-            }
+    internal void AddItemToAvailableSlot(Item item)
+    {
+        //Logger.Information($"Adding {item.Id} to bank in slot {NextAvailableSlot.Value}");
+        item.Slot = new Identity(IdentityType.BankByRef, NextAvailableSlot.Value);
+        _items.Add(item);
+    }
 
-            Opened?.Invoke();
-        }
-
-        internal void AddItemToAvailableSlot(Item item)
-        {
-            //Logger.Information($"Adding {item.Id} to bank in slot {NextAvailableSlot.Value}");
-            item.Slot = new Identity(IdentityType.BankByRef, NextAvailableSlot.Value);
-            _items.Add(item);
-        }
-
-        internal void RemoveItem(Item item)
-        {
-            _items.Remove(item);
-        }
+    internal void RemoveItem(Item item)
+    {
+        _items.Remove(item);
     }
 }

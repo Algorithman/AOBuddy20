@@ -12,27 +12,25 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.SystemMessages
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+
+namespace SmokeLounge.AOtomation.Messaging.Messages.SystemMessages;
+
+[AoContract((int)SystemMessageType.DeleteCharacter)]
+public class DeleteCharacterMessage : SystemMessage
 {
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Constructors and Destructors
 
-    [AoContract((int)SystemMessageType.DeleteCharacter)]
-    public class DeleteCharacterMessage : SystemMessage
+    public DeleteCharacterMessage()
     {
-        #region Constructors and Destructors
-
-        public DeleteCharacterMessage()
-        {
-            this.SystemMessageType = SystemMessageType.DeleteCharacter;
-        }
-
-        #endregion
-
-        #region AoMember Properties
-
-        [AoMember(0)]
-        public int CharacterId { get; set; }
-
-        #endregion
+        SystemMessageType = SystemMessageType.DeleteCharacter;
     }
+
+    #endregion
+
+    #region AoMember Properties
+
+    [AoMember(0)] public int CharacterId { get; set; }
+
+    #endregion
 }

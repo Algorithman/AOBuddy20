@@ -13,52 +13,44 @@
 // --------------------------------------------------------------------------------------------------------------------
 
 using AOSharp.Common.GameData;
+using SmokeLounge.AOtomation.Messaging.Serialization;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages
+namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
+
+[AoContract((int)N3MessageType.TeamMember)]
+public class TeamMemberMessage : N3Message
 {
-    using SmokeLounge.AOtomation.Messaging.GameData;
-    using SmokeLounge.AOtomation.Messaging.Serialization;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Constructors and Destructors
 
-    [AoContract((int)N3MessageType.TeamMember)]
-    public class TeamMemberMessage : N3Message
+    public TeamMemberMessage()
     {
-        #region Constructors and Destructors
-
-        public TeamMemberMessage()
-        {
-            this.N3MessageType = N3MessageType.TeamMember;
-        }
-
-        #endregion
-
-        #region AoMember Properties
-
-        [AoMember(0)]
-        public Identity Character { get; set; }
-
-        [AoMember(1)]
-        public Identity Team { get; set; }
-
-        // Wire-verified (sniffs/20260913-154958_s11.csv seq 627/630):
-        //   one member: RaidGroup=-1 Level=15 Profession=8  (8 = Bureaucrat, and his pet in that
-        //       same capture is a "Bureaucrat Worker", which is what confirms the field)
-        //   the other:  RaidGroup=-1 Level=17 Profession=14 (14 = Keeper)
-        // The previous layout read Profession and the name's length as one int32 plus an int16
-        // count. It parsed the name correctly by accident - the count's high half is zero for any
-        // real name - while losing the profession entirely.
-        [AoMember(2)]
-        public int RaidGroup { get; set; }
-
-        [AoMember(3)]
-        public int Level { get; set; }
-
-        [AoMember(4)]
-        public short Profession { get; set; }
-
-        [AoMember(5, SerializeSize = ArraySizeType.Int32)]
-        public string Name { get; set; }
-
-        #endregion
+        N3MessageType = N3MessageType.TeamMember;
     }
+
+    #endregion
+
+    #region AoMember Properties
+
+    [AoMember(0)] public Identity Character { get; set; }
+
+    [AoMember(1)] public Identity Team { get; set; }
+
+    // Wire-verified (sniffs/20260913-154958_s11.csv seq 627/630):
+    //   one member: RaidGroup=-1 Level=15 Profession=8  (8 = Bureaucrat, and his pet in that
+    //       same capture is a "Bureaucrat Worker", which is what confirms the field)
+    //   the other:  RaidGroup=-1 Level=17 Profession=14 (14 = Keeper)
+    // The previous layout read Profession and the name's length as one int32 plus an int16
+    // count. It parsed the name correctly by accident - the count's high half is zero for any
+    // real name - while losing the profession entirely.
+    [AoMember(2)] public int RaidGroup { get; set; }
+
+    [AoMember(3)] public int Level { get; set; }
+
+    [AoMember(4)] public short Profession { get; set; }
+
+    [AoMember(5, SerializeSize = ArraySizeType.Int32)]
+    public string Name { get; set; }
+
+    #endregion
 }

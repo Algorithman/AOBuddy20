@@ -14,31 +14,27 @@
 
 using AOSharp.Common.GameData;
 using SmokeLounge.AOtomation.Messaging.Messages;
-using SmokeLounge.AOtomation.Messaging.Serialization;
 using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
 
-namespace AOSharp.Common.SmokeLounge.AOtomation.Messaging.Messages.N3Messages
+namespace AOSharp.Common.SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
+
+[AoContract((int)N3MessageType.Buff)]
+public class BuffMessage : N3Message
 {
-    [AoContract((int)N3MessageType.Buff)]
-    public class BuffMessage : N3Message
+    #region Constructors and Destructors
+
+    public BuffMessage()
     {
-        #region Constructors and Destructors
-
-        public BuffMessage()
-        {
-            this.N3MessageType = N3MessageType.Buff;
-        }
-
-        #endregion
-
-        #region AoMember Properties
-
-        [AoMember(0)]
-        public short Unknown1 { get; set; }
-
-        [AoMember(1)]
-        public Identity Buff { get; set; }
-
-        #endregion
+        N3MessageType = N3MessageType.Buff;
     }
+
+    #endregion
+
+    #region AoMember Properties
+
+    [AoMember(0)] public short Unknown1 { get; set; }
+
+    [AoMember(1)] public Identity Buff { get; set; }
+
+    #endregion
 }

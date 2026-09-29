@@ -12,23 +12,16 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Messages
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+
+namespace SmokeLounge.AOtomation.Messaging.Messages;
+
+[AoContract((int)PacketType.OperatorMessage)]
+public class OperatorMessage : MessageBody
 {
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Public Properties
 
-    [AoContract((int)PacketType.OperatorMessage)]
-    public class OperatorMessage : MessageBody
-    {
-        #region Public Properties
+    public override PacketType PacketType => PacketType.OperatorMessage;
 
-        public override PacketType PacketType
-        {
-            get
-            {
-                return PacketType.OperatorMessage;
-            }
-        }
-
-        #endregion
-    }
+    #endregion
 }

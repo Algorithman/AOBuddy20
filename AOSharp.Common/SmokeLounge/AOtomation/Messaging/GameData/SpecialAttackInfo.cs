@@ -12,26 +12,22 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.GameData
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+
+namespace SmokeLounge.AOtomation.Messaging.GameData;
+
+public class SpecialAttackInfo
 {
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region AoMember Properties
 
-    public class SpecialAttackInfo
-    {
-        #region AoMember Properties
+    [AoMember(0)] public int LowTemplateId { get; set; }
 
-        [AoMember(0)]
-        public int LowTemplateId { get; set; }
+    [AoMember(1)] public int HighTemplateId { get; set; }
 
-        [AoMember(1)]
-        public int HighTemplateId { get; set; }
+    [AoMember(2)] public int AttackSelector { get; set; }
 
-        [AoMember(2)]
-        public int AttackSelector { get; set; }
+    [AoMember(3, IsFixedSize = true, FixedSizeLength = 4)]
+    public string AttackCode { get; set; }
 
-        [AoMember(3, IsFixedSize = true, FixedSizeLength = 4)]
-        public string AttackCode { get; set; }
-
-        #endregion
-    }
+    #endregion
 }

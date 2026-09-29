@@ -1,15 +1,14 @@
 ﻿using SmokeLounge.AOtomation.Messaging.Messages.ChatMessages;
 
-namespace AOSharp.Clientless
+namespace AOSharp.Clientless;
+
+public static class PrivateGroupChat
 {
-    public static class PrivateGroupChat
+    public static void Join(uint charId)
     {
-        public static void Join(uint charId)
+        Client.Send(new PrivateGroupInviteAcceptMessage
         {
-            Client.Send(new PrivateGroupInviteAcceptMessage()
-            {
-                Sender = charId
-            });
-        }
+            Sender = charId,
+        });
     }
 }

@@ -1,6 +1,6 @@
 // --------------------------------------------------------------------------------------------------------------------
 // <copyright file="UserLoginMessage.cs" company="SmokeLounge">
-//   Copyright © 2013 SmokeLounge.
+//   Copyright ï¿½ 2013 SmokeLounge.
 //   This program is free software. It comes without any warranty, to
 //   the extent permitted by applicable law. You can redistribute it
 //   and/or modify it under the terms of the Do What The Fuck You Want
@@ -12,34 +12,32 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.SystemMessages
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+
+namespace SmokeLounge.AOtomation.Messaging.Messages.SystemMessages;
+
+[AoContract((int)SystemMessageType.UserLogin)]
+public class UserLoginMessage : SystemMessage
 {
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Constructors and Destructors
 
-    [AoContract((int)SystemMessageType.UserLogin)]
-    public class UserLoginMessage : SystemMessage
+    public UserLoginMessage()
     {
-        #region Constructors and Destructors
-
-        public UserLoginMessage()
-        {
-            this.SystemMessageType = SystemMessageType.UserLogin;
-            this.Unknown = 2;
-        }
-
-        #endregion
-
-        #region AoMember Properties
-
-        [AoMember(0)]
-        public int Unknown { get; set; }
-
-        [AoMember(1, IsFixedSize = true, FixedSizeLength = 40)]
-        public string UserName { get; set; }
-
-        [AoMember(2, IsFixedSize = true, FixedSizeLength = 20)]
-        public string ClientVersion { get; set; }
-
-        #endregion
+        SystemMessageType = SystemMessageType.UserLogin;
+        Unknown = 2;
     }
+
+    #endregion
+
+    #region AoMember Properties
+
+    [AoMember(0)] public int Unknown { get; set; }
+
+    [AoMember(1, IsFixedSize = true, FixedSizeLength = 40)]
+    public string UserName { get; set; }
+
+    [AoMember(2, IsFixedSize = true, FixedSizeLength = 20)]
+    public string ClientVersion { get; set; }
+
+    #endregion
 }

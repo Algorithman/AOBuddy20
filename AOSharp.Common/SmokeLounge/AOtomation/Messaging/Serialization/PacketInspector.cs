@@ -12,69 +12,66 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Serialization
+namespace SmokeLounge.AOtomation.Messaging.Serialization;
+
+public class PacketInspector
 {
-    using SmokeLounge.AOtomation.Messaging.Messages;
+    #region Fields
 
-    public class PacketInspector
+    private readonly TypeInfo typeInfo;
+
+    #endregion
+
+    #region Constructors and Destructors
+
+    public PacketInspector(TypeInfo typeInfo)
     {
-        #region Fields
+        this.typeInfo = typeInfo;
+    }
 
-        private readonly TypeInfo typeInfo;
+    #endregion
 
-        #endregion
+    #region Public Methods and Operators
 
-        #region Constructors and Destructors
+    public TypeInfo FindSubType(StreamReader reader, out int identifier)
+    {
+        identifier = 0;
+        var current = typeInfo;
 
-        public PacketInspector(TypeInfo typeInfo)
+        while (current != null)
         {
-            this.typeInfo = typeInfo;
-        }
-
-        #endregion
-
-        #region Public Methods and Operators
-
-        public TypeInfo FindSubType(StreamReader reader, out int identifier)
-        {
-            identifier = 0;
-            var current = this.typeInfo;
-
-            while (current != null)
+            if (current.KnownType == null)
             {
-                if (current.KnownType == null)
-                {
-                    return current;
-                }
-
-                reader.Position = current.KnownType.Offset;
-                switch (current.KnownType.IdentifierType)
-                {
-                    case IdentifierType.Byte:
-                        identifier = reader.ReadByte();
-                        break;
-                    case IdentifierType.Int16:
-                        identifier = reader.ReadInt16();
-                        break;
-                    case IdentifierType.Int32:
-                        identifier = reader.ReadInt32();
-                        break;
-                    default:
-                        return null;
-                }
-
-                var subType = current.GetSubType(identifier);
-                if (subType == null)
-                {
-                    return null;
-                }
-
-                current = subType;
+                return current;
             }
 
-            return null;
+            reader.Position = current.KnownType.Offset;
+            switch (current.KnownType.IdentifierType)
+            {
+                case IdentifierType.Byte:
+                    identifier = reader.ReadByte();
+                    break;
+                case IdentifierType.Int16:
+                    identifier = reader.ReadInt16();
+                    break;
+                case IdentifierType.Int32:
+                    identifier = reader.ReadInt32();
+                    break;
+                default:
+                    return null;
+            }
+
+            var subType = current.GetSubType(identifier);
+            if (subType == null)
+            {
+                return null;
+            }
+
+            current = subType;
         }
 
-        #endregion
+        return null;
     }
+
+    #endregion
 }

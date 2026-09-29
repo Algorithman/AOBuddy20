@@ -1,21 +1,23 @@
-﻿using System;
-using AOSharp.Common.GameData;
+﻿using AOSharp.Common.GameData;
 
-namespace AOSharp.Common.SharedEventArgs
+namespace AOSharp.Common.SharedEventArgs;
+
+public class AttemptingSpellCastEventArgs : EventArgs
 {
-    public class AttemptingSpellCastEventArgs : EventArgs
+    public readonly Identity Nano;
+    public readonly Identity Target;
+
+    public AttemptingSpellCastEventArgs(Identity nano, Identity target)
     {
-        public readonly Identity Nano;
-        public readonly Identity Target;
-        public bool Blocked { get; private set; }
+        Nano = nano;
+        Target = target;
+        Blocked = false;
+    }
 
-        public AttemptingSpellCastEventArgs(Identity nano, Identity target)
-        {
-            Nano = nano;
-            Target = target;
-            Blocked = false;
-        }
+    public bool Blocked { get; private set; }
 
-        public void Block() => Blocked = true;
+    public void Block()
+    {
+        Blocked = true;
     }
 }

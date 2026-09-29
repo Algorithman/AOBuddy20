@@ -1,9 +1,8 @@
-﻿namespace AOSharp.Common.GameData
+﻿namespace AOSharp.Common.GameData;
+
+public enum HitType
 {
-    public enum HitType
-    {
-        Glancing = 0x2,
-        Normal = 0x3,
-        Critical = 0x4
-    }
+    Glancing = 0x2,
+    Normal = 0x3,
+    Critical = 0x4,
 }

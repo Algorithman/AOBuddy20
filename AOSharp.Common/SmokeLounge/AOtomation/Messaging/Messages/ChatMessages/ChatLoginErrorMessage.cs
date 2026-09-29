@@ -1,24 +1,17 @@
-﻿namespace SmokeLounge.AOtomation.Messaging.Messages.ChatMessages
+﻿using SmokeLounge.AOtomation.Messaging.Serialization;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+
+namespace SmokeLounge.AOtomation.Messaging.Messages.ChatMessages;
+
+[AoContract((int)ChatMessageType.LoginError)]
+public class ChatLoginErrorMessage : ChatMessageBody
 {
-    using SmokeLounge.AOtomation.Messaging.Serialization;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Public Properties
 
-    [AoContract((int)ChatMessageType.LoginError)]
-    public class ChatLoginErrorMessage : ChatMessageBody
-    {
-        #region Public Properties
+    public override ChatMessageType PacketType => ChatMessageType.LoginError;
 
-        public override ChatMessageType PacketType
-        {
-            get
-            {
-                return ChatMessageType.LoginError;
-            }
-        }
+    #endregion
 
-        #endregion
-
-        [AoMember(0, SerializeSize = ArraySizeType.Int16)]
-        public string Message { get; set; }
-    }
+    [AoMember(0, SerializeSize = ArraySizeType.Int16)]
+    public string Message { get; set; }
 }

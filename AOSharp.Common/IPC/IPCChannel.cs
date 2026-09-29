@@ -1,192 +1,215 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Collections.Concurrent;
-using System.Linq;
+﻿using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
-using System.IO;
+using System.Reflection;
 using SmokeLounge.AOtomation.Messaging.Serialization;
-using SmokeLounge.AOtomation.Messaging.Serialization.Serializers;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
 using StreamWriter = SmokeLounge.AOtomation.Messaging.Serialization.StreamWriter;
 using StreamReader = SmokeLounge.AOtomation.Messaging.Serialization.StreamReader;
 using TypeInfo = SmokeLounge.AOtomation.Messaging.Serialization.TypeInfo;
-using System.Reflection;
-using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
 
-namespace AOSharp.Core.IPC
+namespace AOSharp.Core.IPC;
+
+public abstract class IPCChannelBase
 {
-    public abstract class IPCChannelBase
+    private const int Port = 1911;
+    private const ushort PacketPrefix = 0xFFFF;
+
+    private static readonly IPAddress MulticastIP = IPAddress.Parse("224.0.0.111");
+
+    private static readonly SerializerResolver _serializerResolver = new SerializerResolverBuilder<IPCMessage>().Build();
+    private static readonly TypeInfo _typeInfo = new TypeInfo(typeof(IPCMessage));
+    private static PacketInspector _packetInspector;
+    private static readonly List<IPCChannelBase> _ipcChannels = new List<IPCChannelBase>();
+    private readonly Dictionary<int, List<Action<int, IPCMessage>>> _callbacks = new Dictionary<int, List<Action<int, IPCMessage>>>();
+
+    private readonly ConcurrentQueue<byte[]> _packetQueue = new ConcurrentQueue<byte[]>();
+    private readonly IPEndPoint _remoteEndPoint = new IPEndPoint(MulticastIP, Port);
+    private readonly UdpClient _udpClient;
+
+    private byte _channelId;
+    private IPEndPoint _localEndPoint = new IPEndPoint(IPAddress.Any, Port);
+
+    protected IPCChannelBase(byte channelId)
     {
-        protected abstract int _localDynelId { get; }
+        _channelId = channelId;
 
-        private static IPAddress MulticastIP = IPAddress.Parse("224.0.0.111");
-        private IPEndPoint _localEndPoint = new IPEndPoint(IPAddress.Any, Port);
-        private IPEndPoint _remoteEndPoint = new IPEndPoint(MulticastIP, Port);
-        private const int Port = 1911;
-        private const ushort PacketPrefix = 0xFFFF;
+        _udpClient = new UdpClient();
+        _udpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+        _udpClient.Client.Bind(_localEndPoint);
 
-        private byte _channelId;
-        private UdpClient _udpClient;
+        _udpClient.JoinMulticastGroup(MulticastIP);
+        _udpClient.BeginReceive(ReceiveCallback, null);
 
-        private static SerializerResolver _serializerResolver = new SerializerResolverBuilder<IPCMessage>().Build();
-        private static TypeInfo _typeInfo = new TypeInfo(typeof(IPCMessage));
-        private static PacketInspector _packetInspector;
+        _packetInspector = new PacketInspector(_typeInfo);
+        _ipcChannels.Add(this);
+    }
 
-        private ConcurrentQueue<byte[]> _packetQueue = new ConcurrentQueue<byte[]>();
-        private Dictionary<int, List<Action<int, IPCMessage>>> _callbacks = new Dictionary<int, List<Action<int, IPCMessage>>>();
-        private static List<IPCChannelBase> _ipcChannels = new List<IPCChannelBase>();
+    protected abstract int _localDynelId { get; }
 
-        protected IPCChannelBase(byte channelId)
+    ~IPCChannelBase()
+    {
+        _ipcChannels.Remove(this);
+    }
+
+    protected static void Update()
+    {
+        try
         {
-            _channelId = channelId;
-
-            _udpClient = new UdpClient();
-            _udpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
-            _udpClient.Client.Bind(_localEndPoint);
-
-            _udpClient.JoinMulticastGroup(MulticastIP);
-            _udpClient.BeginReceive(ReceiveCallback, null);
-
-            _packetInspector = new PacketInspector(_typeInfo);
-            _ipcChannels.Add(this);
-        }
-
-        ~IPCChannelBase()
-        {
-            _ipcChannels.Remove(this);
-        }
-
-        protected static void Update()
-        {
-            try
+            foreach (var ipcChannel in _ipcChannels)
             {
-                foreach (IPCChannelBase ipcChannel in _ipcChannels)
-                    ipcChannel.ProcessQueue();
-            }
-            catch (Exception)
-            {
-                // ignored
+                ipcChannel.ProcessQueue();
             }
         }
-
-        private void ProcessQueue()
+        catch (Exception)
         {
-            while (_packetQueue.TryDequeue(out byte[] msgBytes))
-                ProcessIPCMessage(msgBytes);
+            // ignored
+        }
+    }
+
+    private void ProcessQueue()
+    {
+        while (_packetQueue.TryDequeue(out var msgBytes))
+        {
+            ProcessIPCMessage(msgBytes);
+        }
+    }
+
+    private void ReceiveCallback(IAsyncResult ar)
+    {
+        var receiveBytes = _udpClient.EndReceive(ar, ref _localEndPoint);
+        _udpClient.BeginReceive(ReceiveCallback, null);
+
+        if (receiveBytes.Length < 11)
+        {
+            return;
         }
 
-        private void ReceiveCallback(IAsyncResult ar)
+        _packetQueue.Enqueue(receiveBytes);
+    }
+
+    private void ProcessIPCMessage(byte[] msgBytes)
+    {
+        try
         {
-            byte[] receiveBytes = _udpClient.EndReceive(ar, ref _localEndPoint);
-            _udpClient.BeginReceive(ReceiveCallback, null);
-
-            if (receiveBytes.Length < 11)
-                return;
-
-            _packetQueue.Enqueue(receiveBytes);
-        }
-
-        private void ProcessIPCMessage(byte[] msgBytes)
-        {
-            try
+            using (var stream = new MemoryStream(msgBytes))
             {
-                using (MemoryStream stream = new MemoryStream(msgBytes))
+                var reader = new StreamReader(stream) { Position = 0, };
+
+                if (reader.ReadUInt16() != 0xFFFF)
                 {
-                    StreamReader reader = new StreamReader(stream) { Position = 0 };
+                    return;
+                }
 
-                    if (reader.ReadUInt16() != 0xFFFF)
-                        return;
+                var len = reader.ReadUInt16();
 
-                    ushort len = reader.ReadUInt16();
+                if (len != msgBytes.Length)
+                {
+                    return;
+                }
 
-                    if (len != msgBytes.Length)
-                        return;
+                var channelId = reader.ReadByte();
 
-                    byte channelId = reader.ReadByte();
+                if (channelId != _channelId)
+                {
+                    return;
+                }
 
-                    if (channelId != _channelId)
-                        return;
+                var charId = reader.ReadInt32();
 
-                    int charId = reader.ReadInt32();
+                if (charId == _localDynelId)
+                {
+                    return;
+                }
 
-                    if (charId == _localDynelId)
-                        return;
+                reader.Position = 2;
+                var subTypeInfo = _packetInspector.FindSubType(reader, out var opCode);
 
-                    reader.Position = 2;
-                    TypeInfo subTypeInfo = _packetInspector.FindSubType(reader, out int opCode);
+                if (subTypeInfo == null)
+                {
+                    return;
+                }
 
-                    if (subTypeInfo == null)
-                        return;
+                var serializer = _serializerResolver.GetSerializer(subTypeInfo.Type);
+                if (serializer == null)
+                {
+                    return;
+                }
 
-                    var serializer = _serializerResolver.GetSerializer(subTypeInfo.Type);
-                    if (serializer == null)
-                        return;
+                reader.Position = 11;
+                var serializationContext = new SerializationContext(_serializerResolver);
 
-                    reader.Position = 11;
-                    SerializationContext serializationContext = new SerializationContext(_serializerResolver);
+                var message = (IPCMessage)serializer.Deserialize(reader, serializationContext);
 
-                    IPCMessage message = (IPCMessage)serializer.Deserialize(reader, serializationContext);
-
-                    if (_callbacks.ContainsKey(opCode))
-                        foreach(var callback in _callbacks[opCode])
-                            callback?.Invoke(charId, message);
+                if (_callbacks.ContainsKey(opCode))
+                {
+                    foreach (var callback in _callbacks[opCode])
+                    {
+                        callback?.Invoke(charId, message);
+                    }
                 }
             }
-            catch (Exception)
+        }
+        catch (Exception)
+        {
+            // ignored
+        }
+    }
+
+    public void Broadcast(IPCMessage msg)
+    {
+        using (var stream = new MemoryStream())
+        {
+            var serializer = _serializerResolver.GetSerializer(msg.GetType());
+
+            if (serializer == null)
             {
-                // ignored
+                return;
             }
-        }
 
-        public void Broadcast(IPCMessage msg)
+            var opcode = ((AoContractAttribute)msg.GetType().GetCustomAttributes(typeof(AoContractAttribute)).FirstOrDefault()).Identifier;
+
+            var serializationContext = new SerializationContext(_serializerResolver);
+            var writer = new StreamWriter(stream) { Position = 0, };
+            writer.WriteUInt16(PacketPrefix);
+            writer.WriteInt16(0);
+            writer.WriteByte(_channelId);
+            writer.WriteInt32(_localDynelId);
+            writer.WriteInt16((short)opcode);
+            serializer.Serialize(writer, serializationContext, msg);
+            var length = writer.Position;
+            writer.Position = 2;
+            writer.WriteInt16((short)length);
+            writer.Dispose();
+
+            var serialized = stream.ToArray();
+            _udpClient.Send(serialized, serialized.Length, _remoteEndPoint);
+        }
+    }
+
+    public void RegisterCallback(int opCode, Action<int, IPCMessage> callback)
+    {
+        if (!_callbacks.ContainsKey(opCode))
         {
-            using (MemoryStream stream = new MemoryStream())
-            {
-                ISerializer serializer = _serializerResolver.GetSerializer(msg.GetType());
-
-                if (serializer == null)
-                    return;
-
-                int opcode = ((AoContractAttribute)msg.GetType().GetCustomAttributes(typeof(AoContractAttribute)).FirstOrDefault()).Identifier;
-
-                SerializationContext serializationContext = new SerializationContext(_serializerResolver);
-                StreamWriter writer = new StreamWriter(stream) { Position = 0 };
-                writer.WriteUInt16(PacketPrefix);
-                writer.WriteInt16(0);
-                writer.WriteByte(_channelId);
-                writer.WriteInt32(_localDynelId);
-                writer.WriteInt16((short)opcode);
-                serializer.Serialize(writer, serializationContext, msg);
-                long length = writer.Position;
-                writer.Position = 2;
-                writer.WriteInt16((short)length);
-                writer.Dispose();
-
-                byte[] serialized = stream.ToArray();
-                _udpClient.Send(serialized, serialized.Length, _remoteEndPoint);
-            }
+            _callbacks[opCode] = new List<Action<int, IPCMessage>>();
         }
 
-        public void RegisterCallback(int opCode, Action<int, IPCMessage> callback)
+        _callbacks[opCode].Add(callback);
+    }
+
+    public static void LoadMessages(Assembly assembly)
+    {
+        _typeInfo.InitializeSubTypesForAssembly(assembly);
+    }
+
+    public bool SetChannelId(byte channelId)
+    {
+        if (_ipcChannels.Any(x => x._channelId == channelId))
         {
-            if (!_callbacks.ContainsKey(opCode))
-                _callbacks[opCode] = new List<Action<int, IPCMessage>>();
-
-            _callbacks[opCode].Add(callback);
+            return false;
         }
 
-        public static void LoadMessages(Assembly assembly)
-        {
-            _typeInfo.InitializeSubTypesForAssembly(assembly);
-        }
-
-        public bool SetChannelId(byte channelId)
-        {
-            if (_ipcChannels.Any(x => x._channelId == channelId))
-                return false;
-
-            _channelId = channelId;
-            return true;
-        }
+        _channelId = channelId;
+        return true;
     }
 }

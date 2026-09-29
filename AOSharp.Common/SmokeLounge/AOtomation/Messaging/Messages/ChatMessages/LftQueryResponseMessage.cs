@@ -12,50 +12,36 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.ChatMessages
+using SmokeLounge.AOtomation.Messaging.Serialization;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+
+namespace SmokeLounge.AOtomation.Messaging.Messages.ChatMessages;
+
+[AoContract((int)ChatMessageType.LftQueryResponse)]
+//[AoContract(1190359187)]
+public class LftQueryResponseMessage : ChatMessageBody
 {
-    using SmokeLounge.AOtomation.Messaging.Serialization;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Public Properties
 
-    [AoContract((int)ChatMessageType.LftQueryResponse)]
-    //[AoContract(1190359187)]
-    public class LftQueryResponseMessage : ChatMessageBody
-    {
-        #region Public Properties
+    public override ChatMessageType PacketType => ChatMessageType.LftQueryResponse;
 
-        public override ChatMessageType PacketType
-        {
-            get
-            {
-                return ChatMessageType.LftQueryResponse;
-            }
-        }
+    #endregion
 
-        #endregion
+    [AoMember(0)] public byte Unknown { get; set; }
 
-        [AoMember(0)]
-        public byte Unknown { get; set; }
+    [AoMember(1)] public uint Id { get; set; }
 
-        [AoMember(1)]
-        public uint Id { get; set; }
+    [AoMember(2, SerializeSize = ArraySizeType.Int16)]
+    public string Name { get; set; }
 
-        [AoMember(2, SerializeSize = ArraySizeType.Int16)]
-        public string Name { get; set; }
+    [AoMember(3)] public uint Level { get; set; }
 
-        [AoMember(3)]
-        public uint Level { get; set; }
+    [AoMember(4)] public uint Playfield { get; set; }
 
-        [AoMember(4)]
-        public uint Playfield { get; set; }
+    [AoMember(5)] public byte Side { get; set; }
 
-        [AoMember(5)]
-        public byte Side { get; set; }
+    [AoMember(6)] public byte Profession { get; set; }
 
-        [AoMember(6)]
-        public byte Profession { get; set; }
-
-        [AoMember(7, SerializeSize = ArraySizeType.Int16)]
-        public string Message { get; set; }
-
-    }
+    [AoMember(7, SerializeSize = ArraySizeType.Int16)]
+    public string Message { get; set; }
 }

@@ -13,38 +13,31 @@
 // --------------------------------------------------------------------------------------------------------------------
 
 using AOSharp.Common.GameData;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages
+namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
+
+[AoContract((int)N3MessageType.CastNanoSpell)]
+public class CastNanoSpellMessage : N3Message
 {
-    using SmokeLounge.AOtomation.Messaging.GameData;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Constructors and Destructors
 
-    [AoContract((int)N3MessageType.CastNanoSpell)]
-    public class CastNanoSpellMessage : N3Message
+    public CastNanoSpellMessage()
     {
-        #region Constructors and Destructors
-
-        public CastNanoSpellMessage()
-        {
-            this.N3MessageType = N3MessageType.CastNanoSpell;
-        }
-
-        #endregion
-
-        #region AoMember Properties
-
-        [AoMember(0)]
-        public int NanoId { get; set; }
-
-        [AoMember(1)]
-        public Identity Target { get; set; }
-
-        [AoMember(2)]
-        public int TargetPresent { get; set; }
-
-        [AoMember(3)]
-        public Identity Caster { get; set; }
-
-        #endregion
+        N3MessageType = N3MessageType.CastNanoSpell;
     }
+
+    #endregion
+
+    #region AoMember Properties
+
+    [AoMember(0)] public int NanoId { get; set; }
+
+    [AoMember(1)] public Identity Target { get; set; }
+
+    [AoMember(2)] public int TargetPresent { get; set; }
+
+    [AoMember(3)] public Identity Caster { get; set; }
+
+    #endregion
 }

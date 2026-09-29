@@ -13,41 +13,33 @@
 // --------------------------------------------------------------------------------------------------------------------
 
 using AOSharp.Common.GameData;
+using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
 
-namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages
+namespace SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
+
+[AoContract((int)N3MessageType.MissedAttackInfo)]
+public class MissedAttackInfoMessage : N3Message
 {
-    using SmokeLounge.AOtomation.Messaging.GameData;
-    using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
+    #region Constructors and Destructors
 
-    [AoContract((int)N3MessageType.MissedAttackInfo)]
-    public class MissedAttackInfoMessage : N3Message
+    public MissedAttackInfoMessage()
     {
-        #region Constructors and Destructors
-
-        public MissedAttackInfoMessage()
-        {
-            this.N3MessageType = N3MessageType.MissedAttackInfo;
-        }
-
-        #endregion
-
-        #region AoMember Properties
-
-        [AoMember(0)]
-        public int Unknown1 { get; set; }
-
-        [AoMember(1)]
-        public int WeaponEnergy { get; set; }
-
-        [AoMember(2)]
-        public Identity Attacker { get; set; }
-
-        [AoMember(3)]
-        public Identity Defender { get; set; }
-
-        [AoMember(4)]
-        public int Unknown3 { get; set; }
-
-        #endregion
+        N3MessageType = N3MessageType.MissedAttackInfo;
     }
+
+    #endregion
+
+    #region AoMember Properties
+
+    [AoMember(0)] public int Unknown1 { get; set; }
+
+    [AoMember(1)] public int WeaponEnergy { get; set; }
+
+    [AoMember(2)] public Identity Attacker { get; set; }
+
+    [AoMember(3)] public Identity Defender { get; set; }
+
+    [AoMember(4)] public int Unknown3 { get; set; }
+
+    #endregion
 }

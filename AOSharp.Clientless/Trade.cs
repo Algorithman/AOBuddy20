@@ -2,16 +2,13 @@
 using AOSharp.Common.GameData;
 using SmokeLounge.AOtomation.Messaging.GameData;
 using SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 
 namespace AOSharp.Clientless
 {
     public class KnuBotTradeWindowCache
     {
-        public List<Item> Items = new List<Item>();
         public int Credits;
+        public List<Item> Items = new List<Item>();
     }
 
     public static class Trade
@@ -20,36 +17,45 @@ namespace AOSharp.Clientless
         public const int TRADE_STARTSLOT = 0x0;
         public const int TRADE_ENDSLOT = TRADE_STARTSLOT + TRADE_CAPACITY;
 
-        public static Identity CurrentTarget
-        {
-            get { return _tradeTarget; }
-            internal set { _tradeTarget = value; }
-        }
-
-        public static bool IsTrading => _tradeTarget != Identity.None;
-
         public static TradeStatus Status;
 
         public static Action<Identity> TradeOpened;
         public static Action<Identity, TradeStatus> TradeStatusChanged;
 
-        public static KnuBotTradeWindowCache PlayerWindowCache => _windowCache[TradeWindow.Player];
-
-        public static KnuBotTradeWindowCache TargetWindowCache => _windowCache[TradeWindow.Target];
-
-        private static Dictionary<TradeWindow, KnuBotTradeWindowCache> _windowCache = new Dictionary<TradeWindow, KnuBotTradeWindowCache>
+        private static readonly Dictionary<TradeWindow, KnuBotTradeWindowCache> _windowCache = new Dictionary<TradeWindow, KnuBotTradeWindowCache>
         {
-            { TradeWindow.Player, new KnuBotTradeWindowCache()},
-            { TradeWindow.Target, new KnuBotTradeWindowCache()},
+            { TradeWindow.Player, new KnuBotTradeWindowCache() },
+            { TradeWindow.Target, new KnuBotTradeWindowCache() },
         };
 
         private static Identity _tradeTarget = Identity.None;
 
-        internal static int? GetNextAvailableSlot(TradeWindow window) => Enumerable.Range(TRADE_STARTSLOT, TRADE_ENDSLOT).Except(_windowCache[window].Items.Select(x => x.Slot.Instance)).FirstOrDefault();
+        public static Identity CurrentTarget
+        {
+            get => _tradeTarget;
+            internal set => _tradeTarget = value;
+        }
 
-        public static void Open(Identity target) => TradeMessage(TradeAction.Open, target);
+        public static bool IsTrading => _tradeTarget != Identity.None;
 
-        public static void Decline() => TradeMessage(TradeAction.Decline, _tradeTarget);
+        public static KnuBotTradeWindowCache PlayerWindowCache => _windowCache[TradeWindow.Player];
+
+        public static KnuBotTradeWindowCache TargetWindowCache => _windowCache[TradeWindow.Target];
+
+        internal static int? GetNextAvailableSlot(TradeWindow window)
+        {
+            return Enumerable.Range(TRADE_STARTSLOT, TRADE_ENDSLOT).Except(_windowCache[window].Items.Select(x => x.Slot.Instance)).FirstOrDefault();
+        }
+
+        public static void Open(Identity target)
+        {
+            TradeMessage(TradeAction.Open, target);
+        }
+
+        public static void Decline()
+        {
+            TradeMessage(TradeAction.Decline, _tradeTarget);
+        }
 
         public static void AddItem(int itemIndex)
         {
@@ -60,7 +66,7 @@ namespace AOSharp.Clientless
                 Param1 = (int)_tradeTarget.Type,
                 Param2 = _tradeTarget.Instance,
                 Param3 = 0x6f,
-                Param4 = itemIndex
+                Param4 = itemIndex,
             });
         }
 
@@ -113,9 +119,11 @@ namespace AOSharp.Clientless
         internal static void OnTemplateAction(int lowId, int highId, int ql)
         {
             if (NoAvailableSlots(TradeWindow.Target))
+            {
                 return;
+            }
 
-            Item item = new Item(Identity.None, Identity.None, lowId, highId, ql);
+            var item = new Item(Identity.None, Identity.None, lowId, highId, ql);
             RegisterItem(TradeWindow.Target, item);
             //ShowDebug();
         }
@@ -126,7 +134,10 @@ namespace AOSharp.Clientless
             {
                 case TradeAction.Accept:
                     if (Status != TradeStatus.Confirm)
+                    {
                         Status = TradeStatus.Accept;
+                    }
+
                     break;
             }
         }
@@ -134,7 +145,9 @@ namespace AOSharp.Clientless
         internal static void OnTradeMessageReceived(TradeMessage tradeMsg)
         {
             if (tradeMsg.Identity != DynelManager.LocalPlayer.Identity && tradeMsg.Action != TradeAction.UpdateCredits)
+            {
                 return;
+            }
 
 
             var iden = new Identity((IdentityType)tradeMsg.Param1, tradeMsg.Param2);
@@ -169,12 +182,16 @@ namespace AOSharp.Clientless
                     TradeStatusChanged?.Invoke(iden, Status);
                     break;
                 case TradeAction.UpdateCredits:
-                    TradeWindow wind = tradeMsg.Identity == DynelManager.LocalPlayer.Identity ? TradeWindow.Player : TradeWindow.Target;
+                    var wind = tradeMsg.Identity == DynelManager.LocalPlayer.Identity ? TradeWindow.Player : TradeWindow.Target;
                     _windowCache[wind].Credits = tradeMsg.Param2;
                     break;
                 case TradeAction.OtherPlayerAddItem:
                     if (FullUpdateProxy.Find(new Identity((IdentityType)tradeMsg.Param3, tradeMsg.Param4), out SimpleItem simpleItem))
-                        OtherPlayerAddItemAction(TradeWindow.Target, simpleItem); // id data from chestfullupdate, weaponfullupdate, simpleitemfullupdate
+                    {
+                        OtherPlayerAddItemAction(TradeWindow.Target,
+                            simpleItem); // id data from chestfullupdate, weaponfullupdate, simpleitemfullupdate
+                    }
+
                     break;
             }
 
@@ -183,18 +200,22 @@ namespace AOSharp.Clientless
 
         private static void ShowDebug()
         {
-            Logger.Debug($"PLAYER KNUBOT TRADE WINDOW:");
+            Logger.Debug("PLAYER KNUBOT TRADE WINDOW:");
 
             foreach (var item in _windowCache[TradeWindow.Player].Items)
+            {
                 Logger.Debug($"{item.Id}");
+            }
 
             Logger.Debug($"Credits: {_windowCache[TradeWindow.Player].Credits}");
             Logger.Debug($"Items Count: {_windowCache[TradeWindow.Player].Items.Count()}");
 
-            Logger.Debug($"TARGET KNUBOT TRADE WINDOW:");
+            Logger.Debug("TARGET KNUBOT TRADE WINDOW:");
 
             foreach (var item in _windowCache[TradeWindow.Target].Items)
+            {
                 Logger.Debug($"{item.Id}");
+            }
 
             Logger.Debug($"Credits: {_windowCache[TradeWindow.Target].Credits}");
             Logger.Debug($"Items Count: {_windowCache[TradeWindow.Target].Items.Count()}");
@@ -210,9 +231,11 @@ namespace AOSharp.Clientless
             var nextSlot = GetNextAvailableSlot(window);
 
             if (nextSlot == null)
+            {
                 return;
+            }
 
-            Item item = new Item(Identity.None, simpleItem.Identity, simpleItem.ACGItem);
+            var item = new Item(Identity.None, simpleItem.Identity, simpleItem.ACGItem);
             RegisterItem(window, item);
         }
 
@@ -221,10 +244,14 @@ namespace AOSharp.Clientless
             var nextAvailableSlot = Inventory.GetNextAvailableSlot();
 
             if (Inventory.NoAvailableSlots) //TODO: Overflow
+            {
                 return;
+            }
 
             foreach (var item in _windowCache[TradeWindow.Player].Items.OrderBy(x => x.Slot.Instance).ToList())
+            {
                 Inventory.AddToNextAvailableSlot(item, false);
+            }
 
             Reset();
         }
@@ -240,7 +267,7 @@ namespace AOSharp.Clientless
             foreach (var item in _windowCache[TradeWindow.Player].Items)
             {
                 //Logger.Information($"Gave item {item.Id} in trade.");
-                Inventory.RemoveItem(item); 
+                Inventory.RemoveItem(item);
             }
 
             Reset();
@@ -248,11 +275,15 @@ namespace AOSharp.Clientless
 
         private static void PlayerAddItemAction(Identity itemSlot)
         {
-            if (!Inventory.Find(itemSlot, out Item item))
+            if (!Inventory.Find(itemSlot, out var item))
+            {
                 return;
+            }
 
             if (NoAvailableSlots(TradeWindow.Player))
+            {
                 return;
+            }
 
             Inventory.RemoveItem(item, false);
 
@@ -261,13 +292,17 @@ namespace AOSharp.Clientless
 
         private static void RemoveItemAction(int dynelInstance, int itemSlot)
         {
-            TradeWindow window = dynelInstance == DynelManager.LocalPlayer.Identity.Instance ? TradeWindow.Player : TradeWindow.Target;
+            var window = dynelInstance == DynelManager.LocalPlayer.Identity.Instance ? TradeWindow.Player : TradeWindow.Target;
 
-            if (!FindItem(window, itemSlot, out Item item))
+            if (!FindItem(window, itemSlot, out var item))
+            {
                 return;
+            }
 
             if (Inventory.NoAvailableSlots)
+            {
                 return;
+            }
 
             RemoveItem(window, item);
             Inventory.AddToNextAvailableSlot(item);
@@ -291,16 +326,22 @@ namespace AOSharp.Clientless
             _windowCache[window].Items.Add(item);
         }
 
-        private static bool NoAvailableSlots(TradeWindow window) => GetNextAvailableSlot(window) == null;
+        private static bool NoAvailableSlots(TradeWindow window)
+        {
+            return GetNextAvailableSlot(window) == null;
+        }
 
-        private static void RemoveItem(TradeWindow window, Item item) => _windowCache[window].Items.Remove(item);
+        private static void RemoveItem(TradeWindow window, Item item)
+        {
+            _windowCache[window].Items.Remove(item);
+        }
     }
 }
 
 public enum TradeWindow
 {
     Player,
-    Target
+    Target,
 }
 
 public enum TradeStatus
@@ -310,5 +351,5 @@ public enum TradeStatus
     Confirm,
     Finished,
     Declined,
-    Opened
+    Opened,
 }

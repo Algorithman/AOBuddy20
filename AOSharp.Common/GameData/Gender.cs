@@ -1,10 +1,9 @@
-﻿namespace AOSharp.Common.GameData
+﻿namespace AOSharp.Common.GameData;
+
+public enum Gender
 {
-    public enum Gender
-    {
-        None = 0,
-        Uni = 1,
-        Male = 2,
-        Female = 3
-    }
+    None = 0,
+    Uni = 1,
+    Male = 2,
+    Female = 3,
 }

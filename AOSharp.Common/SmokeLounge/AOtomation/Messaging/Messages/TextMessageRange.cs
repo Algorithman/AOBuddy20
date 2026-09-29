@@ -12,13 +12,12 @@
 // </summary>
 // --------------------------------------------------------------------------------------------------------------------
 
-namespace SmokeLounge.AOtomation.Messaging.Messages
+namespace SmokeLounge.AOtomation.Messaging.Messages;
+
+public enum TextMessageRange : byte
 {
-    public enum TextMessageRange : byte
-    {
-        Vicinity = 0,
-        Whisper = 1,
-        Shout = 2,
-        RP = 3
-    }
+    Vicinity = 0,
+    Whisper = 1,
+    Shout = 2,
+    RP = 3,
 }
