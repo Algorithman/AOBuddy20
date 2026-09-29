@@ -34,6 +34,13 @@ internal class Program
 
     public static async Task Main(string[] args)
     {
+        int index = Array.IndexOf(args, "--logfile");
+        string logfile = "AOBuddy.log";
+        if (index >= 0)
+        {
+            logfile = args[index + 1];
+        }
+        
         var loggerConfiguration = new LoggerConfiguration();
         loggerConfiguration.MinimumLevel.Verbose();
         foreach (var type in Assembly.GetExecutingAssembly().GetTypes())
@@ -47,7 +54,7 @@ internal class Program
 
         Log.Logger = loggerConfiguration
             .WriteTo.Console()
-            .WriteTo.File("AOBuddy.log")
+            .WriteTo.File(logfile, rollingInterval: RollingInterval.Month)
             .CreateLogger();
         _logger = Log.Logger;
         Log.Logger.Information("Starting AOBuddy...");
