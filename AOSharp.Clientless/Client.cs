@@ -13,6 +13,7 @@ using SmokeLounge.AOtomation.Messaging.GameData;
 using AOSharp.Common.SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
 using SmokeLounge.AOtomation.Messaging.Messages.SystemMessages;
 using System.Threading.Tasks;
+using Serilog;
 using Stateless;
 
 namespace AOSharp.Clientless
@@ -60,7 +61,7 @@ namespace AOSharp.Clientless
         private static UpdateLoop _updateLoop;
         private static bool _isFirstPlayshift = true;
 
-        internal static Logger Logger;
+        internal static ILogger Logger;
         internal static HostProxy HostProxy = null;
         internal static bool LogDeserializationErrors = false;
         internal static bool ItemDataLoaded = true;
@@ -94,14 +95,14 @@ namespace AOSharp.Clientless
         private static Dictionary<SystemMessageType, Action<SystemMessage>> _sysMsgCallbacks;
         private static Dictionary<N3MessageType, Action<N3Message>> _n3MsgCallbacks;
 
-        public static ClientDomain CreateInstance(string username, string password, string characterName, Dimension dimension, Logger logger)
+        public static ClientDomain CreateInstance(string username, string password, string characterName, Dimension dimension, ILogger logger)
         {
             //TODO: Validate params
 
             return ClientDomain.CreateDomain(username, password, characterName, dimension, logger);
         }
 
-        public static void UseCurrentDomain(string username, string password, string characterName, Dimension dimension, Logger logger, bool useBuiltInLooper = true, bool useChat = true)
+        public static void UseCurrentDomain(string username, string password, string characterName, Dimension dimension, ILogger logger, bool useBuiltInLooper = true, bool useChat = true)
         {
             Credentials = new Credentials(username, password);
             CharacterName = characterName;
@@ -232,7 +233,6 @@ namespace AOSharp.Clientless
         {
             _updateLoop?.Stop();
             _netSession?.Disconnect();
-            Logger.Dispose();
         }
 
         internal static void Update(double deltaTime)

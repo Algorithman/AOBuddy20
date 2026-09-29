@@ -38,7 +38,7 @@ namespace AOBuddy20.Utils;
         public Movement(ILogger<Movement> logger)
         {
             _logger = logger;
-            _logger.LogDebug("Movement initialized");
+            _logger.LogInformation("Movement initialized");
         }
         
         public static readonly Vector3 Up = new Vector3(0f, 1f, 0f);

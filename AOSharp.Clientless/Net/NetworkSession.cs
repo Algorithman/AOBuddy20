@@ -19,6 +19,7 @@ using System.Linq;
 using System.Net;
 using System.Security.Principal;
 using System.Threading.Tasks;
+using Serilog;
 
 namespace AOSharp.Clientless.Net
 {
@@ -41,7 +42,7 @@ namespace AOSharp.Clientless.Net
         private SessionCookie _sessionCookie = null;
         private ushort _messageId = 1;
 
-        private Logger _logger;
+        private ILogger _logger;
 
         // private System.Timers.Timer _reconnectTimer; - never used
         // private System.Timers.Timer _pingTimer; - never used
@@ -60,7 +61,7 @@ namespace AOSharp.Clientless.Net
         // every time the server sends it. See ProcessCachedPacket's catch.
         private readonly HashSet<string> _loggedBadPackets = new HashSet<string>();
 
-        internal NetworkSession(Logger logger, Dictionary<SystemMessageType, Action<SystemMessage>> sysMsgCallbacks, Dictionary<N3MessageType, Action<N3Message>> n3MsgCallbacks)
+        internal NetworkSession(ILogger logger, Dictionary<SystemMessageType, Action<SystemMessage>> sysMsgCallbacks, Dictionary<N3MessageType, Action<N3Message>> n3MsgCallbacks)
         {
             _logger = logger;
             InitializeStateMachine();

@@ -12,6 +12,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
+using Serilog;
 
 namespace AOSharp.Clientless.Chat
 {
@@ -27,7 +28,7 @@ namespace AOSharp.Clientless.Chat
         public readonly ChatConfig Config;
         public readonly string Character;
 
-        protected readonly Logger _logger;
+        protected readonly ILogger _logger;
         private UpdateLoop _updateLoop;
         private double _timeTillNextPing;
         private const int AvailableMessagePool = 4;
@@ -44,11 +45,11 @@ namespace AOSharp.Clientless.Chat
 
         internal readonly Credentials Credentials;
 
-        public ChatClient(Credentials credentials, string character, Dimension dimension, Logger logger) : this(credentials, character, dimension, logger, new ChatConfig())
+        public ChatClient(Credentials credentials, string character, Dimension dimension, ILogger logger) : this(credentials, character, dimension, logger, new ChatConfig())
         {
         }
 
-        public ChatClient(Credentials credentials, string character, Dimension dimension, Logger logger, ChatConfig config) : base(dimension, logger)
+        public ChatClient(Credentials credentials, string character, Dimension dimension, ILogger logger, ChatConfig config) : base(dimension, logger)
         {
             Credentials = credentials;
             Character = character;

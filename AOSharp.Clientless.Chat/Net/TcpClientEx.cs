@@ -6,13 +6,14 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net.Sockets;
+using Serilog;
 using StreamReader = SmokeLounge.AOtomation.Messaging.Serialization.StreamReader;
 
 namespace AOSharp.Clientless.Chat.Net
 {
     internal class TcpClientEx : TcpClient
     {
-        private readonly Logger _logger;
+        private readonly ILogger _logger;
         private const ushort HeaderSize = 4;
         private const ushort RecvBufferSize = 8192;
         private List<byte> _buffer;
@@ -22,7 +23,7 @@ namespace AOSharp.Clientless.Chat.Net
         public EventHandler Disconnected;
         public EventHandler<byte[]> PacketRecv;
 
-        public TcpClientEx(Logger logger) : base(AddressFamily.InterNetwork)
+        public TcpClientEx(ILogger logger) : base(AddressFamily.InterNetwork)
         {
             _logger = logger;
             _buffer = new List<byte>();

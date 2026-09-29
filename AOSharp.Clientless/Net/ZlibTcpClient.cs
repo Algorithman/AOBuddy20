@@ -8,12 +8,13 @@ using System.Linq;
 using System.Net.Sockets;
 using StreamReader = SmokeLounge.AOtomation.Messaging.Serialization.StreamReader;
 using Ionic.Zlib;
+using Serilog;
 
 namespace AOSharp.Clientless.Net
 {
     internal class ZlibTcpClient : TcpClient
     {
-        private readonly Logger _logger;
+        private readonly ILogger _logger;
         private const ushort HeaderSize = 16;
         private const ushort RecvBufferSize = 8192;
         private List<byte> _buffer;
@@ -26,7 +27,7 @@ namespace AOSharp.Clientless.Net
         public EventHandler<byte[]> PacketRecv;
         public EventHandler Disconnected;
 
-        public ZlibTcpClient(Logger logger) : base(AddressFamily.InterNetwork)
+        public ZlibTcpClient(ILogger logger) : base(AddressFamily.InterNetwork)
         {
             _logger = logger;
             _buffer = new List<byte>();

@@ -13,6 +13,7 @@ using AOBuddy20.Controlling;
 using AOBuddy20.Enums;
 using AOBuddy20.Utils;
 using AOSharp.Clientless;
+using Microsoft.Extensions.Logging;
 using Serilog.Events;
 using SmokeLounge.AOtomation.Messaging.Serialization;
 
@@ -23,13 +24,16 @@ public sealed class BotLoop : ClientlessPluginEntry
 {
     private readonly ControlArbiter _controlArbiter;
     private readonly MissionController _missionController;
+    private readonly ILogger<BotLoop> _logger;
 
     private readonly Tasks CurrentTask = Tasks.Nothing;
 
-    public BotLoop(ControlArbiter controlArbiter, MissionController missionController)
+    public BotLoop(ControlArbiter controlArbiter, MissionController missionController, ILogger<BotLoop> logger)
     {
         _controlArbiter = controlArbiter;
         _missionController = missionController;
+        _logger = logger;
+        _logger.LogInformation("Bot loop started");
     }
 
 

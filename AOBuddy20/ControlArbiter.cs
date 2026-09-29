@@ -34,7 +34,7 @@ public sealed class ControlArbiter
         }
 
         _priorityLevels[ControlPriority.None]++;
-        _logger.LogDebug("ControlArbiter initialized.");
+        _logger.LogInformation("ControlArbiter initialized.");
     }
         
     

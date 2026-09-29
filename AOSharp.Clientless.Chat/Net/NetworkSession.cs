@@ -16,6 +16,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading.Tasks;
+using Serilog;
 
 namespace AOSharp.Clientless.Chat.Net
 {
@@ -25,7 +26,7 @@ namespace AOSharp.Clientless.Chat.Net
         private TcpClientEx _tcpClient;
         private ChatMessageSerializer _serializer = new ChatMessageSerializer();
 
-        private Logger _logger;
+        private ILogger _logger;
         private bool _isFirstLogin = true;
         public Dimension Dimension;
         protected bool _autoReconnect = true;
@@ -43,7 +44,7 @@ namespace AOSharp.Clientless.Chat.Net
         public EventHandler<PrivateGroupMsg> PrivateGroupMessageReceived;
         public EventHandler<PrivateGroupInviteArgs> PrivateGroupInviteMessageReceived;
 
-        internal NetworkSession(Dimension dimension, Logger logger)
+        internal NetworkSession(Dimension dimension, ILogger logger)
         {
             Dimension = dimension;
             _logger = logger;

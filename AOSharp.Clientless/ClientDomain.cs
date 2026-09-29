@@ -28,12 +28,12 @@ namespace AOSharp.Clientless
             _logger = logger;
         }
 
-        internal static ClientDomain CreateDomain(string username, string password, string characterName, Dimension dimension, Logger logger, bool useChat = true)
+        internal static ClientDomain CreateDomain(string username, string password, string characterName, Dimension dimension, ILogger logger, bool useChat = true)
         {
             return CreateDomain<ClientDomain>(username, password, characterName, dimension, logger, useChat);
         }
 
-        internal static T CreateDomain<T>(string username, string password, string characterName, Dimension dimension, Logger logger, bool useChat = true) where T : ClientDomain
+        internal static T CreateDomain<T>(string username, string password, string characterName, Dimension dimension, ILogger logger, bool useChat = true) where T : ClientDomain
         {
             T clientDomain = (T)Activator.CreateInstance(
                 typeof(T),

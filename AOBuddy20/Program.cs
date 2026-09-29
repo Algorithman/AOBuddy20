@@ -3,7 +3,7 @@
 // Project: AOBuddy20
 // Filename: Program.cs
 // 
-// Last modified: 2026-09-29 20:40
+// Last modified: 2026-09-29 22:45
 // Created:       2026-09-29 15:09
 // 
 // Long live OmniCell and AOBuddy20
@@ -21,12 +21,13 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Serilog;
-using Serilog.Events;
+using ILogger = Serilog.ILogger;
 
 namespace AOBuddy20;
 
 internal class Program
 {
+    private static ILogger _logger;
     private static readonly List<ClientDomain> _domains = new List<ClientDomain>();
 
     private static string BaseDir => AppDomain.CurrentDomain.BaseDirectory;
@@ -34,19 +35,23 @@ internal class Program
     public static async Task Main(string[] args)
     {
         var loggerConfiguration = new LoggerConfiguration();
-
+        loggerConfiguration.MinimumLevel.Verbose();
         foreach (var type in Assembly.GetExecutingAssembly().GetTypes())
         {
             var attr = type.GetCustomAttribute<MinLogLevelAttribute>();
             if (attr != null)
+            {
                 loggerConfiguration.MinimumLevel.Override(type.FullName!, attr.Level);
+            }
         }
 
         Log.Logger = loggerConfiguration
-            .WriteTo.Console(LogEventLevel.Information)
-            .WriteTo.File("AOBuddy.log",LogEventLevel.Debug)
+            .WriteTo.Console()
+            .WriteTo.File("AOBuddy.log")
             .CreateLogger();
-        
+        _logger = Log.Logger;
+        Log.Logger.Information("Starting AOBuddy...");
+
         var services = new ServiceCollection();
 
         services.AddLogging(loggingBuilder =>
@@ -54,7 +59,7 @@ internal class Program
             loggingBuilder.ClearProviders();
             loggingBuilder.AddSerilog(dispose: true);
         });
-        
+
         services.AddSingleton<PacketRouter>();
         services.AddSingleton<ControlArbiter>();
         services.AddSingleton<MissionController>();
@@ -62,7 +67,6 @@ internal class Program
 
         var provider = services.BuildServiceProvider();
 
-        string configFile;
         // --config <file> (owner, 2026-09-28): one config per character, e.g. --config dadbod.json. Relative to Build\.
         // The same name is handed to plugins (AOBUDDY_CONFIG) so Plugins\<name>\dadbod.json is read if it exists.
         var configName = "config.json";
@@ -77,32 +81,27 @@ internal class Program
         Environment.SetEnvironmentVariable("AOBUDDY_CONFIG", configName);
         var configPath = Path.IsPathRooted(configName) ? configName : AppDomain.CurrentDomain.BaseDirectory + configName;
 
-        try
+        if (!File.Exists(configPath))
         {
-            configFile = File.ReadAllText(configPath);
-        }
-        catch
-        {
-            Console.WriteLine($"Config file not found at '{configPath}', read the instructions.");
+            Log.Fatal($"Config file not found at '{configPath}'.");
             Console.ReadLine();
             return;
         }
 
-        var config = JsonConvert.DeserializeObject<MainConfig>(configFile);
+        var config = JsonConvert.DeserializeObject<AccountInfo>(File.ReadAllText(configPath));
 
         if (config == null)
         {
-            Console.WriteLine($"'{configPath}' has no Accounts. Copy config.example.json over it and fill it in.");
+            Log.Fatal("Deserialization of config file failed. Please check your configuration file.");
             Console.ReadLine();
             return;
         }
-
 
         // The window is named after the character(s) it runs (owner, 2026-09-26: "name the console the bots name,
         // we may run a few at a time").
         try
         {
-            Console.Title = config.Account.Character + " - AOBuddy";
+            Console.Title = config.Character + " - AOBuddy";
         }
         catch
         {
@@ -110,7 +109,8 @@ internal class Program
 
         Client.SuppressItemDataLoad();
 
-        CreateBot(config.Account);
+        Log.Logger.Information("Creating client...");
+        CreateBot(config);
         // init packet router first
         provider.GetService<PacketRouter>()?.Init();
 
@@ -130,11 +130,9 @@ internal class Program
 
     private static void CreateBot(AccountInfo accInfo)
     {
-        var logger = new LoggerConfiguration().WriteTo.Console().MinimumLevel.Debug().CreateLogger();
-
         var dimension = ParseDimension(accInfo.Dimension);
-        logger.Information($"Logging {accInfo.Character} into dimension {dimension}.");
-        var instance = Client.CreateInstance(accInfo.Username, accInfo.Password, accInfo.Character, dimension, logger);
+        _logger.Information($"Logging {accInfo.Character} into dimension {dimension}.");
+        var instance = Client.CreateInstance(accInfo.Username, accInfo.Password, accInfo.Character, dimension, _logger);
 
         Client.SuppressItemDataLoad(false);
         instance.Start();

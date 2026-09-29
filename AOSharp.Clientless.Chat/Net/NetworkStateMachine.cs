@@ -2,6 +2,7 @@
 using Stateless;
 using System;
 using System.Net;
+using Serilog;
 
 namespace AOSharp.Clientless.Chat.Net
 {
@@ -32,11 +33,11 @@ namespace AOSharp.Clientless.Chat.Net
 
     public class NetworkStateMachine : StateMachine<State, Trigger>
     {
-        private Logger _logger;
+        private ILogger _logger;
         public TriggerWithParameters<IPEndPoint> ConnectTrigger;
         public TriggerWithParameters<IPEndPoint, Exception> ConnectErrorTrigger;
 
-        public NetworkStateMachine(Logger logger) : base(State.Idle)
+        public NetworkStateMachine(ILogger logger) : base(State.Idle)
         {
             _logger = logger;
             ConnectTrigger = SetTriggerParameters<IPEndPoint>(Trigger.Connect);
