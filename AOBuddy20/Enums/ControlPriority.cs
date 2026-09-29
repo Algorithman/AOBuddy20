@@ -14,10 +14,10 @@ namespace AOBuddy20.Enums;
 public enum ControlPriority
 {
     None = 0,
-    Travel = 1,
-    Resupply = 2,
-    Selling = 3,
-    Mission = 4,
-    Combat = 5, // interrupts everything below it
-    Emergency = 6, // e.g. player dying, disconnect
+    Travel = 100,
+    Resupply = 200,
+    Selling = 300,
+    Mission = 400,
+    Combat = 500, // interrupts everything below it
+    Emergency = 600, // e.g. player dying, disconnect
 }
