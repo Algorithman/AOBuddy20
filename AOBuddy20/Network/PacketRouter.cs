@@ -3,28 +3,41 @@
 // Project: AOBuddy20
 // Filename: PacketRouter.cs
 // 
-// Last modified: 2026-09-29 13:47
-// Created:       2026-09-28 17:09
+// Last modified: 2026-09-29 22:06
+// Created:       2026-09-29 15:09
 // 
 // Long live OmniCell and AOBuddy20
 // ---------------------------------------------------------------------------------------
 
 using AOBuddy20.Extensions;
+using AOBuddy20.Utils;
 using AOSharp.Clientless;
+using Microsoft.Extensions.Logging;
+using Serilog.Events;
 using SmokeLounge.AOtomation.Messaging.Messages;
 
 namespace AOBuddy20.Network;
 
+[MinLogLevel(LogEventLevel.Debug)]
 public sealed class PacketRouter
 {
     private readonly Dictionary<ChatMessageType, List<ChatPacketHandlerEntry>> _chatHandlers
         = new Dictionary<ChatMessageType, List<ChatPacketHandlerEntry>>();
+
+    private readonly ILogger<PacketRouter> _logger;
 
     private readonly Dictionary<N3MessageType, List<PacketHandlerEntry>> _n3Handlers
         = new Dictionary<N3MessageType, List<PacketHandlerEntry>>();
 
     private readonly Dictionary<SystemMessageType, List<SystemPacketHandlerEntry>> _systemHandlers
         = new Dictionary<SystemMessageType, List<SystemPacketHandlerEntry>>();
+
+    public PacketRouter(ILogger<PacketRouter> logger)
+    {
+        _logger = logger;
+        _logger.LogInformation("PacketRouter initialized.");
+    }
+
 
     public void Init()
     {
@@ -36,7 +49,7 @@ public sealed class PacketRouter
     {
         if (_chatHandlers.TryGetValue(e.Header.PacketType, out var list))
         {
-            foreach (var entry in list)
+            foreach (var entry in list.OrderBy(x => x.canEndSequence).ThenBy(x => x.receivePriority))
             {
                 var end = entry.Handler(e);
                 if (entry.canEndSequence && end)
@@ -55,7 +68,8 @@ public sealed class PacketRouter
 
     public void RegisterSystemHandler(Func<SystemMessage, bool> handler, SystemMessageType type, int receivePriority, bool endSequence = false)
     {
-        _systemHandlers.GetOrAdd(type, _ => new List<SystemPacketHandlerEntry>()).Add(new SystemPacketHandlerEntry(handler, endSequence, receivePriority));
+        _systemHandlers.GetOrAdd(type, _ => new List<SystemPacketHandlerEntry>())
+            .Add(new SystemPacketHandlerEntry(handler, endSequence, receivePriority));
     }
 
     public void Register(Func<AOMessage, bool> handler, N3MessageType type, int receivePriority, bool canEndSequence = false)
@@ -70,7 +84,7 @@ public sealed class PacketRouter
         {
             if (_n3Handlers.TryGetValue(n3Message.N3MessageType, out var list))
             {
-                foreach (var entry in list.OrderBy(x=>x.receivePriority))
+                foreach (var entry in list.OrderBy(x => x.canEndSequence).ThenBy(x => x.receivePriority))
                 {
                     var end = entry.Handler(e);
                     if (entry.canEndSequence && end)
@@ -85,7 +99,7 @@ public sealed class PacketRouter
         {
             if (_systemHandlers.TryGetValue(system.SystemMessageType, out var list))
             {
-                foreach (var entry in list.OrderBy(x=>x.receivePriority))
+                foreach (var entry in list.OrderBy(x => x.canEndSequence).ThenBy(x => x.receivePriority))
                 {
                     var end = entry.Handler(system);
                     if (entry.canEndSequence && end)

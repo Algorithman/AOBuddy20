@@ -11,6 +11,8 @@
 
 using System.Diagnostics;
 using AOSharp.Common.GameData;
+using Serilog;
+using Serilog.Events;
 
 namespace AOBuddy20.Utils;
 
@@ -29,6 +31,7 @@ namespace AOBuddy20.Utils;
     /// on 115. HP itself is not tracked here - the server pushes the absolute Health of the fighter and his target
     /// about every second (Stat 27) and the SDK already keeps it.
     /// </summary>
+    [MinLogLevel(LogEventLevel.Verbose)]
     public static class Blows
     {
         public readonly struct Blow
@@ -41,6 +44,8 @@ namespace AOBuddy20.Utils;
             public int Damage => Math.Max(0, Amount);
         }
 
+        private static readonly ILogger _logger = Log.ForContext("SourceContext", typeof(Blows).FullName);
+        
         public const double KeepSeconds = 60;
         private static readonly Stopwatch _clock = Stopwatch.StartNew();
         private static readonly List<Blow> _blows = new List<Blow>();
@@ -62,6 +67,7 @@ namespace AOBuddy20.Utils;
                 int drop = 0;
                 while (drop < _blows.Count && now - _blows[drop].Time > KeepSeconds) drop++;
                 if (drop > 0) _blows.RemoveRange(0, drop);
+                _logger.Verbose($"Blow landed from {attacker} to  {target} with {amount} damage");
             }
         }
 

@@ -9,15 +9,19 @@
 // Long live OmniCell and AOBuddy20
 // ---------------------------------------------------------------------------------------
 
+using System.Reflection;
 using AOBuddy20.Configuration;
 using AOBuddy20.Controlling;
 using AOBuddy20.Network;
 using AOBuddy20.PacketConsumers;
+using AOBuddy20.Utils;
 using AOSharp.Clientless;
 using AOSharp.Clientless.Common;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Serilog;
+using Serilog.Events;
 
 namespace AOBuddy20;
 
@@ -29,17 +33,34 @@ internal class Program
 
     public static async Task Main(string[] args)
     {
+        var loggerConfiguration = new LoggerConfiguration();
+
+        foreach (var type in Assembly.GetExecutingAssembly().GetTypes())
+        {
+            var attr = type.GetCustomAttribute<MinLogLevelAttribute>();
+            if (attr != null)
+                loggerConfiguration.MinimumLevel.Override(type.FullName, attr.Level);
+        }
+
+        Log.Logger = loggerConfiguration
+            .WriteTo.Console(LogEventLevel.Information)
+            .WriteTo.File("AOBuddy.log",LogEventLevel.Debug)
+            .CreateLogger();
+        
         var services = new ServiceCollection();
+
+        services.AddLogging(loggingBuilder =>
+        {
+            loggingBuilder.ClearProviders();
+            loggingBuilder.AddSerilog(dispose: true);
+        });
+        
         services.AddSingleton<PacketRouter>();
         services.AddSingleton<ControlArbiter>();
         services.AddSingleton<MissionController>();
         services.AddSingleton<Awareness>();
 
         var provider = services.BuildServiceProvider();
-        // init packet router first
-        provider.GetService<PacketRouter>()?.Init();
-
-        WirePackets(provider);
 
         string configFile;
         // --config <file> (owner, 2026-09-28): one config per character, e.g. --config dadbod.json. Relative to Build\.
@@ -90,6 +111,10 @@ internal class Program
         Client.SuppressItemDataLoad();
 
         CreateBot(config.Account);
+        // init packet router first
+        provider.GetService<PacketRouter>()?.Init();
+
+        WirePackets(provider);
 
         Console.ReadLine();
     }

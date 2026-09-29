@@ -11,6 +11,8 @@
 
 using AOSharp.Clientless;
 using AOSharp.Common.GameData;
+using Microsoft.Extensions.Logging;
+using Serilog.Events;
 using SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
 
 
@@ -28,8 +30,17 @@ namespace AOBuddy20.Utils;
     /// ms-since-last-move or the live server ignores the move. Position is driven by SetPose
     /// (never a teleport) so the server terrain-validates each small step.
     /// </summary>
+    [MinLogLevel(LogEventLevel.Debug)]
     public class Movement
     {
+        private readonly ILogger<Movement> _logger;
+
+        public Movement(ILogger<Movement> logger)
+        {
+            _logger = logger;
+            _logger.LogDebug("Movement initialized");
+        }
+        
         public static readonly Vector3 Up = new Vector3(0f, 1f, 0f);
 
         // A movement heading from a travel direction, safe when the direction is (near) vertical. LookRotation

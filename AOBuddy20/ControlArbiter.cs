@@ -11,6 +11,7 @@
 
 using AOBuddy20.Enums;
 using System.Linq;
+using Microsoft.Extensions.Logging;
 
 namespace AOBuddy20;
 
@@ -21,8 +22,11 @@ public sealed class ControlArbiter
 
     private Dictionary<ControlPriority, int> _priorityLevels = new Dictionary<ControlPriority, int>();
 
-    public ControlArbiter()
+    private readonly ILogger<ControlArbiter> _logger;
+    
+    public ControlArbiter(ILogger<ControlArbiter> logger)
     {
+        _logger = logger;
         // Priority levels init
         foreach (var value in Enum.GetValues(typeof(ControlPriority)))
         {
@@ -30,6 +34,7 @@ public sealed class ControlArbiter
         }
 
         _priorityLevels[ControlPriority.None]++;
+        _logger.LogDebug("ControlArbiter initialized.");
     }
         
     

@@ -12,8 +12,11 @@
 using AOBuddy20.Enums;
 using AOBuddy20.Interfaces;
 using AOBuddy20.Network;
+using AOBuddy20.Utils;
 using AOSharp.Clientless;
 using AOSharp.Common.GameData;
+using Microsoft.Extensions.Logging;
+using Serilog.Events;
 using SmokeLounge.AOtomation.Messaging.Messages;
 using SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
 
@@ -29,6 +32,7 @@ namespace AOBuddy20.PacketConsumers;
 ///               for 30 s, which the monitor showed and the bot never read).
 /// A change is logged ("AWARE: ..."), and /status carries the summary.
 /// </summary>
+[MinLogLevel(LogEventLevel.Debug)]
 public sealed class Awareness : IPacketConsumer
 {
     public sealed class Seen
@@ -39,9 +43,10 @@ public sealed class Awareness : IPacketConsumer
         public bool OnUs, Following;
     }
 
+    private readonly ILogger<Awareness> _logger;
+    
     private const float NearRange = 40f;
     private const double Window = 4.0;
-    private readonly Action<string> _log;
     private readonly Queue<(double t, Vector3 me)> _myTrail = new Queue<(double, Vector3)>();
     private readonly Dictionary<Identity, Queue<(double t, Vector3 p, float d)>> _trail = new Dictionary<Identity, Queue<(double, Vector3, float)>>();
     private readonly HashSet<Identity> _foes = new HashSet<Identity>(); // fought him or a pet in this zone
@@ -55,9 +60,10 @@ public sealed class Awareness : IPacketConsumer
     public int OnUsCount => Near.Count(s => s.OnUs);
     public int FollowingCount => Near.Count(s => s.Following);
 
-    public Awareness(Action<string> log)
+    public Awareness(ILogger<Awareness> logger)
     {
-        _log = log;
+        _logger = logger;
+        _logger.LogInformation("Awareness initialized");
     }
     
     // TODO all of that
@@ -253,11 +259,11 @@ public sealed class Awareness : IPacketConsumer
             if (ours && ft.HasValue)
             {
                 _ourTargets.Add(ft.Value);
-                _log($"ENGAGE: {Who(c.Identity)} ({Dist(c.Identity)}) -> '{Who(ft.Value)}' ({Dist(ft.Value)}).");
+                _logger.LogInformation($"ENGAGE: {Who(c.Identity)} ({Dist(c.Identity)}) -> '{Who(ft.Value)}' ({Dist(ft.Value)}).");
             }
             else if (!ours && ft.HasValue && guard.Contains((Identity)ft.Value))
             {
-                _log($"AGGRO: '{c.Name}' ({Dist(c.Identity)}) on {Who(ft.Value)}.");
+                _logger.LogInformation($"AGGRO: '{c.Name}' ({Dist(c.Identity)}) on {Who(ft.Value)}.");
                 // Outdoors and none of us had fought it: its kind attacks on sight (MobDanger, for the walk grid).
                 if (outdoorPf >= 0 && !_ourTargets.Contains((Identity)c.Identity) && _noted.Add(c.Identity))
                 {

@@ -11,11 +11,14 @@
 
 using AOBuddy20.Controlling;
 using AOBuddy20.Enums;
+using AOBuddy20.Utils;
 using AOSharp.Clientless;
+using Serilog.Events;
 using SmokeLounge.AOtomation.Messaging.Serialization;
 
 namespace AOBuddy20;
 
+[MinLogLevel(LogEventLevel.Debug)]
 public sealed class BotLoop : ClientlessPluginEntry
 {
     private readonly ControlArbiter _controlArbiter;
