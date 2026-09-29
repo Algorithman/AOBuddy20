@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- One-off: reads OmniCell's items.ocp with OmniCell's own reader and writes AOBuddy/GameData/ItemValues.bin. -->
+  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0</TargetFramework><Nullable>disable</Nullable></PropertyGroup>
+  <ItemGroup>
+    <Reference Include="F:/testcellao/omnicell/OmniCell/Built/Debug/*.dll" Private="true" />
+  </ItemGroup>
+</Project>
