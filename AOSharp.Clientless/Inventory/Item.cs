@@ -65,42 +65,33 @@ namespace AOSharp.Clientless
 
                 for (int i = 0; i < lowCriteria.Count; i++)
                 {
-                    try
+                    var param2Low = lowCriteria[i].Param2;
+
+                    var highCrit = highCriteria.FirstOrDefault(x => x.Param1 == lowCriteria[i].Param1);
+                    if (highCrit != null)
                     {
-                        var param2Low = lowCriteria[i].Param2;
+                        var param2High = highCrit.Param2;
 
-                        var highCrit = highCriteria.FirstOrDefault(x => x.Param1 == lowCriteria[i].Param1);
-                        if (highCrit!=null)
-                        {
-                            var param2High = highCrit.Param2;
-
-                            if (ql == lowTemplate.Ql)
-                                interpolatedCriteria = lowCriteria;
-                            else if (ql == highTemplate.Ql)
-                                interpolatedCriteria = highCriteria;
-                            else
-                            {
-                                interpolatedCriteria.Add(new RequirementCriterion
-                                {
-                                    Operator = lowCriteria[i].Operator,
-                                    Param1 = lowCriteria[i].Param1,
-                                    Param2 = (int)Math.Round(param2Low +
-                                                             ((float)ql - lowTemplate.Ql) *
-                                                             (param2High - param2Low) /
-                                                             (highTemplate.Ql - lowTemplate.Ql))
-                                });
-                            }
-                        }
+                        if (ql == lowTemplate.Ql)
+                            interpolatedCriteria = lowCriteria;
+                        else if (ql == highTemplate.Ql)
+                            interpolatedCriteria = highCriteria;
                         else
                         {
-                            interpolatedCriteria.Add(lowCriteria[i]);
+                            interpolatedCriteria.Add(new RequirementCriterion
+                            {
+                                Operator = lowCriteria[i].Operator,
+                                Param1 = lowCriteria[i].Param1,
+                                Param2 = (int)Math.Round(param2Low +
+                                                         ((float)ql - lowTemplate.Ql) *
+                                                         (param2High - param2Low) /
+                                                         (highTemplate.Ql - lowTemplate.Ql))
+                            });
                         }
                     }
-                    catch (Exception ex)
+                    else
                     {
-                        Logger.Error($"i: {i} - Length lowCriteria: {lowCriteria.Count} Length HighCriteria {highCriteria.Count} - {lowTemplate.Id}/{highTemplate.Id}");
-                        Logger.Error(ex.Message);
-                        Logger.Error(ex.StackTrace);
+                        interpolatedCriteria.Add(lowCriteria[i]);
                     }
                 }
 
@@ -123,12 +114,14 @@ namespace AOSharp.Clientless
                     else if (ql == highTemplate.Ql)
                         interpolatedStats = highMod;
                     else
-                        interpolatedStats.Add(stat.Key, (int)Math.Round(lowValue + ((float)ql - lowTemplate.Ql) * (highValue - lowValue) / (highTemplate.Ql - lowTemplate.Ql)));
+                        interpolatedStats.Add(stat.Key,
+                            (int)Math.Round(lowValue + ((float)ql - lowTemplate.Ql) * (highValue - lowValue) / (highTemplate.Ql - lowTemplate.Ql)));
 
                     Modifiers[modifier.Key] = interpolatedStats;
                 }
             }
         }
+
         public void Use(SimpleChar target = null)
         {
             if (target == null)
@@ -207,5 +200,5 @@ namespace AOSharp.Clientless
                 Target = Slot,
             });
         }
-   }
+    }
 }
