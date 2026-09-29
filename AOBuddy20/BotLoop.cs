@@ -61,12 +61,5 @@ public sealed class BotLoop : ClientlessPluginEntry
 
     public override void Init(string pluginDir)
     {
-        Client.PacketRaw += DeserializePacket;
-    }
-
-    private void DeserializePacket(byte[] data, bool fromServer)
-    {
-        var msg = new MessageSerializer();
-        msg.Deserialize(data);
     }
 }

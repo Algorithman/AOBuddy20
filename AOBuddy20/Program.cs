@@ -11,6 +11,8 @@
 
 using AOBuddy20.Configuration;
 using AOBuddy20.Controlling;
+using AOBuddy20.Network;
+using AOBuddy20.PacketConsumers;
 using AOSharp.Clientless;
 using AOSharp.Clientless.Common;
 using Microsoft.Extensions.DependencyInjection;
@@ -28,11 +30,15 @@ internal class Program
     public static async Task Main(string[] args)
     {
         var services = new ServiceCollection();
+        services.AddSingleton<PacketRouter>();
         services.AddSingleton<ControlArbiter>();
         services.AddSingleton<MissionController>();
-
+        services.AddSingleton<Awareness>();
 
         var provider = services.BuildServiceProvider();
+        // init packet router first
+        provider.GetService<PacketRouter>().Init();
+        
         WirePackets(provider);
 
         string configFile;
@@ -98,6 +104,9 @@ internal class Program
 
     private static void WirePackets(ServiceProvider provider)
     {
+        var router = provider.GetService<PacketRouter>();
+        provider.GetService<Awareness>().RegisterPackets(router);
+        
     }
 
     private static ClientDomain CreateBot(AccountInfo accInfo)

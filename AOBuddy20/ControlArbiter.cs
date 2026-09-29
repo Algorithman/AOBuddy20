@@ -46,15 +46,19 @@ public sealed class ControlArbiter
     {
         while (Volatile.Read(ref _activePriority) >= (int)priority)
         {
-            var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            _resume = tcs;
+            if (_resume == null)
+            {
+                var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                _resume = tcs;
+            }
+
             // re-check after registering (avoid missed signal)
             if (Volatile.Read(ref _activePriority) < (int)priority)
             {
                 return;
             }
 
-            await tcs.Task.WaitAsync(ct);
+            await _resume.Task.WaitAsync(ct);
         }
     }
 

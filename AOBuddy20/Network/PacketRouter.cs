@@ -58,9 +58,9 @@ public sealed class PacketRouter
         _systemHandlers.GetOrAdd(type, _ => new List<SystemPacketHandlerEntry>()).Add(new SystemPacketHandlerEntry(handler, endSequence));
     }
 
-    public void Register(Func<AOMessage, bool> handler, N3MessageType type, bool endSequence = false)
+    public void Register(Func<AOMessage, bool> handler, N3MessageType type, bool canEndSequence = false)
     {
-        _n3Handlers.GetOrAdd(type, _ => new List<PacketHandlerEntry>()).Add(new PacketHandlerEntry(handler, endSequence));
+        _n3Handlers.GetOrAdd(type, _ => new List<PacketHandlerEntry>()).Add(new PacketHandlerEntry(handler, canEndSequence));
     }
 
 

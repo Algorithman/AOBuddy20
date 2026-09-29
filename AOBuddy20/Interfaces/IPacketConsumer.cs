@@ -9,8 +9,11 @@
 // Long live OmniCell and AOBuddy20
 // ---------------------------------------------------------------------------------------
 
+using AOBuddy20.Network;
+
 namespace AOBuddy20.Interfaces;
 
 public interface IPacketConsumer
 {
+    void RegisterPackets(PacketRouter router);
 }
