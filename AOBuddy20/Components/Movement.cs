@@ -1,21 +1,8 @@
-﻿// ---------------------------------------------------------------------------------------
-// Solution: AOBuddy20
-// Project: AOBuddy20
-// Filename: Movement.cs
-// 
-// Last modified: 2026-09-30 00:19
-// Created:       2026-09-29 23:09
-// 
-// Long live OmniCell and AOBuddy
-// ---------------------------------------------------------------------------------------
-
-using AOSharp.Clientless;
+﻿using AOSharp.Clientless;
 using AOSharp.Common.GameData;
-using Microsoft.Extensions.Logging;
-using Serilog.Events;
 using SmokeLounge.AOtomation.Messaging.Messages.N3Messages;
 
-namespace AOBuddy20.Utils;
+namespace AOBuddy20.Components;
 
 /// <summary>
 ///     The ONE place the bot's body moves. Every mover (follow, travel, manual) calls Advance()
@@ -28,11 +15,9 @@ namespace AOBuddy20.Utils;
 ///     ms-since-last-move or the live server ignores the move. Position is driven by SetPose
 ///     (never a teleport) so the server terrain-validates each small step.
 /// </summary>
-[MinLogLevel(LogEventLevel.Debug)]
 public class Movement
 {
     public static readonly Vector3 Up = new Vector3(0f, 1f, 0f);
-    private readonly ILogger<Movement> _logger;
     private int _gait; // last gait (0 walk, 1 run, 2 swim), so a switch re-issues the start packet
 
     // LOCKSTEP LEASH: don't let the body's dictated (SetPose) position run more than _leashLead metres
@@ -54,12 +39,6 @@ public class Movement
     private double _sendAccum;
     private double _turnAccum;
     private int _turning; // 0 = not turning, +1 = TurnRight in progress, -1 = TurnLeft
-
-    public Movement(ILogger<Movement> logger)
-    {
-        _logger = logger;
-        _logger.LogInformation("Movement initialized");
-    }
 
     public bool Leashed { get; private set; }
 
@@ -244,7 +223,7 @@ public class Movement
     }
 
     /// <summary>Diagnostic tap for our own outbound movement packets (see MOVEDBG in Main).</summary>
-    public event Action<CharDCMoveMessage>? Sent;
+    public event Action<CharDCMoveMessage> Sent;
 
     // Movement types worth copying. Postures (sit, sleep, lounge, fly, frozen) are NOT: the bot has its
     // own rest logic and must never be locked into one of those by the owner's keyboard.

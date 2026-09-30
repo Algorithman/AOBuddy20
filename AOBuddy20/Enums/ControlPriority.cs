@@ -19,5 +19,7 @@ public enum ControlPriority
     Selling = 300,
     Mission = 400,
     Combat = 500, // interrupts everything below it
-    Emergency = 600, // e.g. player dying, disconnect
+    LowHealthNanoEmergency = 600,
+    Emergency = 700, // e.g. player dying, disconnect
+    
 }

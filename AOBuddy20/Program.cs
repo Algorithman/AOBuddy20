@@ -68,10 +68,7 @@ internal class Program
             loggingBuilder.AddSerilog(dispose: true);
         });
 
-        services.AddSingleton<PacketRouter>();
-        services.AddSingleton<ControlArbiter>();
-        services.AddSingleton<MissionController>();
-        services.AddSingleton<Awareness>();
+        AddServices(services);
 
         var provider = services.BuildServiceProvider();
 
@@ -167,6 +164,15 @@ internal class Program
         WirePackets(provider);
 
         Console.ReadLine();
+    }
+
+    private static void AddServices(ServiceCollection services)
+    {
+        services.AddSingleton<PacketRouter>();
+        services.AddSingleton<ControlArbiter>();
+        services.AddSingleton<MissionController>();
+        services.AddSingleton<Awareness>();
+        services.AddSingleton<MovementController>();
     }
 
     private static void WirePackets(ServiceProvider provider)
