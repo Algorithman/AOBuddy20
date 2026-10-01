@@ -208,7 +208,7 @@ public sealed class OwnerChat
 
         t["help"] = (reply, p) =>
         {
-            reply("Commands: follow | stay | pos | status | goto <x> [y] <z> | come | stop | sit | stand | navdata | help." +
+            reply("Commands: follow | stay | pos | status | goto x [y] z | come | stop | sit | stand | navdata | help." +
                   " follow stacks me on you and mirrors your movement; goto/come walk at priority Travel and hand me back to follow on arrival.");
         };
 

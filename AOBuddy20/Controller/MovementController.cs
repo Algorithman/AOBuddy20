@@ -525,8 +525,14 @@ public sealed class MovementController : IPacketConsumer
         if (snap.Playfield != _pf)
         {
             // A new playfield puts the body wherever the server placed it; gait, mode, route and
-            // follow state start over.
+            // follow state start over. The STOP GOES TO THE SERVER FIRST: a zone interrupts a run
+            // mid-stream (the follow's lost-push onto the zone line, say), and wiping the local
+            // state alone would leave the server holding ForwardStart with no ForwardStop - it
+            // keeps the body running in the new playfield (owner, 2026-10-01: "after zoning is
+            // done, the bot just runs on"). Movement.Stop sends the FullStop while Moving still
+            // says so; Reset then clears the rest.
             _pf = snap.Playfield;
+            _movement.Stop(me, SendIntervalMs);
             _movement.Reset();
             _follow.Reset();
             _route.Clear();
@@ -535,6 +541,7 @@ public sealed class MovementController : IPacketConsumer
             _routePf = -1;
             _stuckCells.Clear();
             _stuck.Reset();
+            _logger.LogInformation($"Movement: playfield {_pf}, run state cleared (server stopped).");
             lock (_poslock)
             {
                 _confirmedPosition = me.MovementComponent.Position;
