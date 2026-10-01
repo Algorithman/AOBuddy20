@@ -31,6 +31,11 @@ public interface IWalkGrid
 ///     Walkable cells of an OUTDOOR playfield, for overland routing: the ground heightfield (ground.bin) with
 ///     the zone's wall triangles (walls.bin, tools/AONavExtractor) stamped in. A cell is blocked when a wall
 ///     triangle passes through it at body height (0.3-1.9 m over the ground there), or it is off the map.
+///     STRUCTURE-TOP SUPPRESSION (owner, 2026-10-01): the heightfield carries the TOP surface - its value
+///     over a building or city wall is the roof/wall walk, and interpolation paints vertical faces as gentle
+///     grades. Where collision.bin knows a floor well below the heightfield value, the heightfield level is
+///     suppressed as a routing floor of that cell and the collision floors (the street) are what remains -
+///     ground routing stays on the ground; elevated walkways connect only where real triangles carry them.
 ///     SLOPES ARE DIRECTIONAL (owner, 2026-09-25): a slope too steep to climb is still walkable going down,
 ///     and there is NO fall damage outdoors — but a drop can only be taken where a recorded road says so, and
 ///     the learned-road/danger cost layers of AOBuddy10 (LearnedGround, MobDanger) are NOT ported yet: without
@@ -46,6 +51,14 @@ public sealed class OverlandGrid : IWalkGrid
     private const int FloorShift = 4, FloorMask = 15;
     private const float BodyLow = 0.3f, BodyHigh = 1.9f;
     private const float MaxRise = 1.2f; // metres of rise per metre of step: ~50 degrees — the climb limit (downhill is unlimited: no fall damage outdoors)
+
+    // STRUCTURE-TOP SUPPRESSION (Newland City, 2026-10-01: the bot routed along the city wall tops and
+    // out of bounds, and the wall faces clipped as phantom ramps). The outdoor heightfield carries the
+    // TOP surface - wall walks, roofs, plateaus - and bilinear interpolation turns vertical faces into
+    // gentle grades the climb limit accepts. Where collision.bin knows a floor WELL below the heightfield
+    // value, that heightfield level is a structure top, not a street: it stops being a routing floor of
+    // the cell, and the collision floors (the street) are what remains.
+    private const float TerrainStructureDrop = 2.5f;
     private const int MaxCells = 6_000_000; // cell size grows on the biggest maps to stay under this. 6 M (2026-09-25,
                                             // ICC): Andromeda's wompa tower needs 2 m cells — at 4 m the doorway is one
                                             // cell and its door-sill wall samples seal the tower shut.
@@ -65,6 +78,7 @@ public sealed class OverlandGrid : IWalkGrid
     private readonly float[] _ch;
     private readonly NavGround _ground;
     private readonly HashSet<long> _blockedFl = new HashSet<long>(); // (cell << FloorShift) | floor
+    private HashSet<int> _terrainTop; // cells whose heightfield level is a structure top: no terrain floor
     private readonly int _w, _h;
 
     // Built by StampClearance at the end of Build/Read (construction only - the grid is immutable
@@ -224,6 +238,15 @@ public sealed class OverlandGrid : IWalkGrid
         {
             bw.Write(b);
         }
+
+        bw.Write(_terrainTop?.Count ?? 0);
+        if (_terrainTop != null)
+        {
+            foreach (int c in _terrainTop)
+            {
+                bw.Write(c);
+            }
+        }
     }
 
     internal static OverlandGrid Read(BinaryReader br, NavGround g, int pf)
@@ -275,6 +298,16 @@ public sealed class OverlandGrid : IWalkGrid
         for (var b = 0; b < nb; b++)
         {
             grid._blockedFl.Add(br.ReadInt64());
+        }
+
+        int nt = br.ReadInt32();
+        if (nt > 0)
+        {
+            grid._terrainTop = new HashSet<int>(nt);
+            for (var t = 0; t < nt; t++)
+            {
+                grid._terrainTop.Add(br.ReadInt32());
+            }
         }
 
         grid.StampClearance();
@@ -363,6 +396,12 @@ public sealed class OverlandGrid : IWalkGrid
             {
                 _extra ??= new Dictionary<int, float[]>();
                 _extra[kv.Key] = merged.ToArray();
+                if (merged[0] < _ch[kv.Key] - TerrainStructureDrop)
+                {
+                    // The heightfield here is a wall walk / roof / plateau well above the known street:
+                    // not a routing floor. The street itself (merged[0]) is what the cell offers.
+                    (_terrainTop ??= new HashSet<int>()).Add(kv.Key);
+                }
             }
         }
     }
@@ -520,7 +559,8 @@ public sealed class OverlandGrid : IWalkGrid
     }
 
     // A floor with another one just above it (under a deck, inside a slab — FloorGrid's rule) is no
-    // place to stand. Considers the terrain floor as one of the stack.
+    // place to stand. Considers the terrain floor as one of the stack - except on structure-top cells,
+    // where the heightfield level is not a floor at all.
     private void StampHeadroom()
     {
         if (_extra == null)
@@ -530,43 +570,88 @@ public sealed class OverlandGrid : IWalkGrid
 
         foreach (var kv in _extra)
         {
-            var all = new float[1 + kv.Value.Length];
-            all[0] = _ch[kv.Key];
-            Array.Copy(kv.Value, 0, all, 1, kv.Value.Length);
-            Array.Sort(all);
+            float[] all;
+            if (TerrainFloor(kv.Key))
+            {
+                all = new float[1 + kv.Value.Length];
+                all[0] = _ch[kv.Key];
+                Array.Copy(kv.Value, 0, all, 1, kv.Value.Length);
+                Array.Sort(all);
+            }
+            else
+            {
+                all = (float[])kv.Value.Clone(); // already sorted ascending (StampFloors merged)
+            }
+
             for (int f = 0; f + 1 < all.Length; f++)
             {
                 if (all[f + 1] - all[f] < BodyHigh)
                 {
-                    _blockedFl.Add(((long)kv.Key << FloorShift) | FloorIndex(kv.Key, all[f]));
+                    var fi = FloorIndex(kv.Key, all[f]);
+                    if (fi >= 0)
+                    {
+                        _blockedFl.Add(((long)kv.Key << FloorShift) | fi);
+                    }
                 }
             }
         }
     }
 
-    // ---- floors (terrain = 0, structures above/below = 1..) ------------------------------------------------
+    // ---- floors (terrain = 0, structures above/below = 1..; terrain dropped on structure-top cells) ----
 
-    private int FloorCount(int cell) => (_extra != null && _extra.TryGetValue(cell, out var f)) ? 1 + f.Length : 1;
+    private bool TerrainFloor(int cell) => _terrainTop == null || !_terrainTop.Contains(cell);
 
-    private float FloorH(int cell, int i) => i == 0 ? _ch[cell] : _extra[cell][i - 1];
+    private int FloorCount(int cell)
+    {
+        if (_extra == null || !_extra.TryGetValue(cell, out var f))
+        {
+            return 1; // terrain only
+        }
+
+        return TerrainFloor(cell) ? 1 + f.Length : f.Length;
+    }
+
+    private float FloorH(int cell, int i)
+    {
+        var f = _extra != null && _extra.TryGetValue(cell, out var fl) ? fl : null;
+        if (f == null || TerrainFloor(cell))
+        {
+            return i == 0 ? _ch[cell] : f![i - 1];
+        }
+
+        return f[i]; // structure-top cell: the heightfield level is not a floor here
+    }
 
     private int FloorIndex(int cell, float h)
     {
-        if (Math.Abs(h - _ch[cell]) < 0.01f)
+        var f = _extra != null && _extra.TryGetValue(cell, out var fl) ? fl : null;
+        if (f == null || TerrainFloor(cell))
         {
+            if (Math.Abs(h - _ch[cell]) < 0.01f)
+            {
+                return 0;
+            }
+
+            for (int i = 0; i < f!.Length; i++)
+            {
+                if (Math.Abs(h - f[i]) < 0.01f)
+                {
+                    return i + 1;
+                }
+            }
+
             return 0;
         }
 
-        var f = _extra[cell];
         for (int i = 0; i < f.Length; i++)
         {
             if (Math.Abs(h - f[i]) < 0.01f)
             {
-                return i + 1;
+                return i;
             }
         }
 
-        return 0;
+        return -1;
     }
 
     private bool FloorOpen(int cell, int i) => !_blockedFl.Contains(((long)cell << FloorShift) | i);

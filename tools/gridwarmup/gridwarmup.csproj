@@ -5,10 +5,11 @@
     <RootNamespace>GridWarmup</RootNamespace>
     <ImplicitUsings>disable</ImplicitUsings>
     <Nullable>disable</Nullable>
-    <!-- Warms GridCache for the bot's plugin folder; run before the bot's first start (or after new
-         nav data is extracted) so no zone border ever pays the grid build. -->
+    <!-- Warms GridCache for the bot's Build folder; run before the bot's first start (or after new
+         nav data is extracted or the grid bake rules change) so no zone border ever pays the grid
+         build. -->
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\AOBuddy\AOBuddy.csproj" />
+    <ProjectReference Include="..\..\AOBuddy20\AOBuddy20.csproj" />
   </ItemGroup>
 </Project>

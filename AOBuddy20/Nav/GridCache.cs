@@ -29,7 +29,8 @@ namespace AOBuddy20.Nav;
 /// </summary>
 public static class GridCache
 {
-    public const int CodeVersion = 5; // 5: 16 floors per cell (ICC tower stacks) + finer cells
+    public const int CodeVersion = 6; // 6: structure-top suppression - the heightfield level stops being a
+                                      // routing floor where collision knows a street well below it (Newland City wall walks)
 
     private static readonly byte[] Magic = { (byte)'A', (byte)'O', (byte)'G', (byte)'C' };
 
