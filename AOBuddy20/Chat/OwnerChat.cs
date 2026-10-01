@@ -280,8 +280,9 @@ public sealed class OwnerChat
 
         t["stop"] = (reply, p) =>
         {
+            _movement.SetFollow(false); // stop means stop: follow must not grab the body back (owner, 2026-10-01)
             _movement.ClearAllGoals();
-            reply("Stopped - no goals. Standing down.");
+            reply("Stopped - follow off, no goals. Standing down.");
         };
 
         // Sit/stand go through the movement controller's posture track: the bot then knows it is
@@ -294,8 +295,9 @@ public sealed class OwnerChat
 
         t["sit"] = (reply, p) =>
         {
+            _movement.SetFollow(false); // a sit ends follow: standing up later must not resume it (owner, 2026-10-01)
             _movement.SitNow();
-            reply("Sitting down - goals cleared. 'come' or 'goto' stands me up.");
+            reply("Sitting down - follow off, goals cleared. 'come' or 'goto' stands me up.");
         };
 
         return t;
