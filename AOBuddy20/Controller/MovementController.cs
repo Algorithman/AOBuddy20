@@ -157,6 +157,35 @@ public sealed class MovementController : IPacketConsumer
         }
     }
 
+    /// <summary>Clears every goal - the body stops on its next tick, with nothing left to walk.</summary>
+    public void ClearAllGoals()
+    {
+        lock (_goallock)
+        {
+            if (goals.Count > 0)
+            {
+                _logger.LogDebug("All goals cleared.");
+            }
+
+            goals.Clear();
+        }
+    }
+
+    /// <summary>Compact one-line state for status replies. Safe from any thread.</summary>
+    public string DescribeState()
+    {
+        lock (_goallock)
+        {
+            var goalText = goals.Count == 0
+                ? "none"
+                : string.Join("; ", goals.OrderByDescending(g => g.Key)
+                    .Select(g => $"{(ControlPriority)g.Key} ({g.Key}) @ " +
+                                 $"({g.Value.Position.X:0.0} {g.Value.Position.Y:0.0} {g.Value.Position.Z:0.0}) pf {g.Value.PlayfieldId}" +
+                                 $"{(g.Value.Reached ? " REACHED" : "")}"));
+            return $"pf {_pf}, pos ({CurrentPosition.X:0.0} {CurrentPosition.Y:0.0} {CurrentPosition.Z:0.0}) | goals: {goalText}";
+        }
+    }
+
     public void RegisterPackets(PacketRouter router)
     {
         router.Register(DCMoveHandler, N3MessageType.CharDCMove, (int)ControlPriority.None);

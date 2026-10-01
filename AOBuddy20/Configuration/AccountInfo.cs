@@ -15,6 +15,7 @@ public class AccountInfo
 {
     public string Character = "";
     public string Dimension = ""; // "RubiKa" (default) or "RubiKa2019"
+    public string Owner = ""; // the character whose /tells are obeyed (empty: no one can command the bot)
     public string Password = "";
     public string Username = "";
 }

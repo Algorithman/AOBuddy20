@@ -11,6 +11,7 @@
 
 using System.Reflection;
 using System.Security;
+using AOBuddy20.Chat;
 using AOBuddy20.Configuration;
 using AOBuddy20.Controlling;
 using AOBuddy20.Network;
@@ -69,8 +70,6 @@ internal class Program
         });
 
         AddServices(services);
-
-        var provider = services.BuildServiceProvider();
 
         // --config <file> (owner, 2026-09-28): one config per character, e.g. --config dadbod.json. Relative to Build\.
         // The same name is handed to plugins (AOBUDDY_CONFIG) so Plugins\<name>\dadbod.json is read if it exists.
@@ -154,6 +153,12 @@ internal class Program
         {
         }
 
+        // The loaded config is a singleton too: OwnerChat (and future consumers) read the owner
+        // name from it.
+        services.AddSingleton(config);
+
+        var provider = services.BuildServiceProvider();
+
         Client.SuppressItemDataLoad();
 
         Log.Logger.Information("Creating client...");
@@ -169,9 +174,11 @@ internal class Program
 
         provider.GetRequiredService<MovementController>().Start();
         provider.GetRequiredService<BotLoop>().Start();
+        provider.GetRequiredService<OwnerChat>().Start();
 
         Console.ReadLine();
 
+        provider.GetRequiredService<OwnerChat>().Stop();
         provider.GetRequiredService<BotLoop>().Stop();
         provider.GetRequiredService<MovementController>().Stop();
         Client.Disconnect();
@@ -185,6 +192,7 @@ internal class Program
         services.AddSingleton<Awareness>();
         services.AddSingleton<MovementController>();
         services.AddSingleton<BotLoop>();
+        services.AddSingleton<OwnerChat>();
     }
 
     private static void WirePackets(ServiceProvider provider)
