@@ -29,8 +29,8 @@ namespace AOBuddy20.Nav;
 /// </summary>
 public static class GridCache
 {
-    public const int CodeVersion = 6; // 6: structure-top suppression - the heightfield level stops being a
-                                      // routing floor where collision knows a street well below it (Newland City wall walks)
+    public const int CodeVersion = 8; // 8: FloorGrid stamps the room-tile floors (rooms.json) - the indoor
+                                      // grid was void over the shop's own floor and routes crossed real walls
 
     private static readonly byte[] Magic = { (byte)'A', (byte)'O', (byte)'G', (byte)'C' };
 

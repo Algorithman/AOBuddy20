@@ -138,6 +138,7 @@ public sealed class FloorGrid : IWalkGrid
 
         var grid = new FloorGrid(pf, x0, z0, w, h);
         grid.StampFloors(nav.Collision);
+        grid.StampRoomFloors(nav.Dungeon);
         string wp = Path.Combine(AOBuddyNav.FolderFor(pluginDir, pf), "walls.bin");
         var walls = File.Exists(wp);
         if (walls)
@@ -152,6 +153,11 @@ public sealed class FloorGrid : IWalkGrid
 
     private void StampFloors(NavCollision col)
     {
+        // Dense surface sampling, NOT the cell-centre test: shop floors are tiled from sub-metre
+        // triangles on 0.5 m cells, and most cell centres fall in the seams between triangles - the
+        // floor map came out Swiss-cheese, routes threaded the holes and the walk crossed real
+        // walls (Neutral Supermarket 1187, 2026-10-02: three yanks inside the shop door). Sampling
+        // the surface at 0.25 m stamps every cell the triangle touches, seams included.
         var raw = new Dictionary<int, List<float>>();
         foreach (var ch in col.Chunks)
         {
@@ -159,40 +165,30 @@ public sealed class FloorGrid : IWalkGrid
             for (int o = 0; o + 8 < v.Length; o += 9)
             {
                 float ax = v[o], ay = v[o + 1], az = v[o + 2], bx = v[o + 3], by = v[o + 4], bz = v[o + 5], cx = v[o + 6], cy = v[o + 7], cz = v[o + 8];
-                float d = (bx - ax) * (cz - az) - (cx - ax) * (bz - az);
-                if (Math.Abs(d) < 1e-6f)
+                var longest = Math.Max(Len(bx - ax, by - ay, bz - az),
+                    Math.Max(Len(cx - ax, cy - ay, cz - az), Len(cx - bx, cy - by, cz - bz)));
+                int n = Math.Min(400, Math.Max(1, (int)Math.Ceiling(longest / 0.25f)));
+                for (int i = 0; i <= n; i++)
                 {
-                    continue;
-                }
-
-                int i0 = CellX(Math.Min(ax, Math.Min(bx, cx))), i1 = CellX(Math.Max(ax, Math.Max(bx, cx)));
-                int j0 = CellZ(Math.Min(az, Math.Min(bz, cz))), j1 = CellZ(Math.Max(az, Math.Max(bz, cz)));
-                for (int j = j0; j <= j1; j++)
-                {
-                    for (int i = i0; i <= i1; i++)
+                    for (int j = 0; j <= n - i; j++)
                     {
-                        // The cell's centre inside the triangle, with a little slack so thin walkways are not lost.
-                        float px = (i + _x0 + 0.5f) * Cell, pz = (j + _z0 + 0.5f) * Cell;
-                        float u = ((px - ax) * (cz - az) - (cx - ax) * (pz - az)) / d;
-                        float t = ((bx - ax) * (pz - az) - (px - ax) * (bz - az)) / d;
-                        const float slack = -0.05f;
-                        if (u < slack || t < slack || u + t > 1 - slack)
+                        float s = i / (float)n, t = j / (float)n;
+                        float px = ax + (bx - ax) * s + (cx - ax) * t;
+                        float py = ay + (by - ay) * s + (cy - ay) * t;
+                        float pz = az + (bz - az) * s + (cz - az) * t;
+                        int ci = CellX(px), cj = CellZ(pz);
+                        if (!In(ci, cj))
                         {
                             continue;
                         }
 
-                        if (!In(i, j))
-                        {
-                            continue;
-                        }
-
-                        int k = j * _w + i;
+                        int k = cj * _w + ci;
                         if (!raw.TryGetValue(k, out var l))
                         {
                             raw[k] = l = new List<float>();
                         }
 
-                        l.Add(ay + u * (by - ay) + t * (cy - ay));
+                        l.Add(py);
                     }
                 }
             }
@@ -220,6 +216,92 @@ public sealed class FloorGrid : IWalkGrid
             }
 
             _floors[kv.Key] = merged.ToArray();
+        }
+    }
+
+    // The room-tile floors (rooms.json): an interior's own floor lives in the room data, and
+    // collision.bin only carries the sparse extras around it (stairs, props, an upper gallery).
+    // Without the room tiles the indoor grid is mostly void and routes walk through real walls
+    // (Neutral Supermarket 1187, 2026-10-02: three yanks inside the shop door - the landing and
+    // the whole line to the vendor had no floor at the y the server had just put us on).
+    private void StampRoomFloors(NavDungeon dungeon)
+    {
+        if (dungeon?.Rooms == null)
+        {
+            return;
+        }
+
+        foreach (var rm in dungeon.Rooms)
+        {
+            if (rm?.Tile == null || rm.Rect == null || rm.Pos == null || rm.Height == null)
+            {
+                continue;
+            }
+
+            int x1 = rm.Rect[0], z1 = rm.Rect[1], x2 = rm.Rect[2], z2 = rm.Rect[3];
+            double mx = (x1 + x2 + 1) / 2.0, mz = (z1 + z2 + 1) / 2.0;
+            var turns = ((-rm.Rot) % 4 + 4) % 4;
+            for (int r = 0; r < rm.Tile.Length; r++)
+            {
+                for (int c = 0; c < rm.Tile[r].Length; c++)
+                {
+                    if (rm.Tile[r][c] == 0)
+                    {
+                        continue; // no tile: no floor
+                    }
+
+                    // tile (c, r) centre in world coordinates - the inverse of CellOf's rotation
+                    double dx = (x1 + c - mx) * dungeon.Cell;
+                    double dz = (z1 + r - mz) * dungeon.Cell;
+                    for (int i = 0; i < turns; i++)
+                    {
+                        (dx, dz) = (-dz, dx);
+                    }
+
+                    double wx = rm.Pos[0] + dx, wz = rm.Pos[2] + dz;
+                    float h = rm.Pos[1] + (rm.Height[r][c] - rm.HeightBase) * dungeon.HeightScale;
+
+                    // the tile is dungeon.Cell (2 m) square centred there: stamp its sub-cells
+                    int i0 = CellX((float)(wx - dungeon.Cell / 2)), i1 = CellX((float)(wx + dungeon.Cell / 2));
+                    int j0 = CellZ((float)(wz - dungeon.Cell / 2)), j1 = CellZ((float)(wz + dungeon.Cell / 2));
+                    for (int j = j0; j <= j1; j++)
+                    {
+                        for (int i = i0; i <= i1; i++)
+                        {
+                            if (!In(i, j))
+                            {
+                                continue;
+                            }
+
+                            int k = j * _w + i;
+                            if (!_floors.TryGetValue(k, out var fl))
+                            {
+                                _floors[k] = new[] { h };
+                                continue;
+                            }
+
+                            var folded = false;
+                            foreach (var f in fl)
+                            {
+                                if (Math.Abs(f - h) <= Merge)
+                                {
+                                    folded = true;
+                                    break;
+                                }
+                            }
+
+                            if (!folded && fl.Length < MaxFloors)
+                            {
+                                var merged = new float[fl.Length + 1];
+                                Array.Copy(fl, merged, fl.Length);
+                                merged[fl.Length] = h;
+                                Array.Sort(merged);
+                                _floors[k] = merged;
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 

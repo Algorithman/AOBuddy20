@@ -88,8 +88,20 @@ public sealed class MovementController : IPacketConsumer
     private const float ObjectReach = 2.5f;
 
     // A proxy playfield's exit door takes the crossing only from inside it: activation radius is
-    // under half a metre (owner, 2026-10-01) - walk ONTO the door, then use it.
+    // under half a metre (owner, 2026-10-01) - walk ONTO the door, then use it. Entry proxy doors
+    // (legs of kind Proxy) get the same treatment.
     private const float DoorReach = 0.4f;
+
+    // POST-ZONE HOLD (Newland City -> 1187 on a fresh gameserver, 2026-10-02 00:44: the walk
+    // started 50 ms after the zone-in and the server refused every step - four rubberbands back
+    // to the landing point in 3.3 s, the goal given up). The retail client never sees this lock
+    // because its zone load takes just as long. Hold the walk this long after every playfield
+    // switch; bookkeeping (travel legs, proxy origin) still runs.
+    private const double ZoneSettleSeconds = 3.0;
+
+    // And after a YANK the server has just corrected us - walking on immediately re-collects the
+    // same rejection. Hold briefly, then try the re-planned route.
+    private const double YankReholdSeconds = 2.0;
 
     // The stand-up campaign: re-send the toggle until the server's 0x57 echo confirms it, at most
     // this often and this many times - then walk anyway and let the server have the last word.
@@ -142,6 +154,7 @@ public sealed class MovementController : IPacketConsumer
     private bool _pendingYank; // that SetPos overrode a big drift: hold and re-plan after applying
     private int _yanks; // yanks on the current goal (reset when a new goal is set)
     private bool _driftHeld; // the drift guard is holding the body
+    private double _holdWalkUntil = -1; // post-zone / post-yank: no walking before this (wet clock)
 
     // The playfield's nav data and walk grid, built off every loop thread (NavGridCache). Nav supplies
     // the Y of every dictated step - without it the walk holds the login Y and floats (owner, 2026-10-01).
@@ -698,7 +711,7 @@ public sealed class MovementController : IPacketConsumer
         // leaves the body sitting with the track saying standing. While any goal wants the body,
         // keep re-sending until the 0x57 echo lands or the tries run out. No goal: a chosen sit is
         // never fought.
-        var nowS = _wetClock.Elapsed.TotalSeconds;
+        var now = _wetClock.Elapsed.TotalSeconds;
         bool anyGoal;
         lock (_goallock)
         {
@@ -712,7 +725,7 @@ public sealed class MovementController : IPacketConsumer
                 _standEchoPending = false;
                 _logger.LogInformation($"Movement: no posture echo after {MaxStandTries} stand-ups - walking anyway.");
             }
-            else if (nowS - _standSentAt >= StandRetrySeconds)
+            else if (now - _standSentAt >= StandRetrySeconds)
             {
                 SendStandUp(me, "no posture echo");
             }
@@ -739,6 +752,7 @@ public sealed class MovementController : IPacketConsumer
             }
 
             _pf = snap.Playfield;
+            _holdWalkUntil = now + ZoneSettleSeconds; // the post-zone movement lock (see the constant)
             _movement.Stop(me, SendIntervalMs);
             _movement.Reset();
             _follow.Reset();
@@ -764,6 +778,14 @@ public sealed class MovementController : IPacketConsumer
         }
 
         ApplyPendingCorrection(me);
+
+        // THE POST-ZONE / POST-YANK HOLD: no walking until the server's lock lets go (see the
+        // constants). Bookkeeping above still ran; the walk below starts fresh afterwards.
+        if (now < _holdWalkUntil)
+        {
+            _movement.Hold(me, SendIntervalMs);
+            return;
+        }
 
         // THE DRIFT GUARD: the server stopped following our steps (an area it forbids - it rejects
         // silently and rubberbands much later). Past a few metres of gap between the body's
@@ -1177,6 +1199,15 @@ public sealed class MovementController : IPacketConsumer
                 _logger.LogInformation($"TRAVEL: leg to {Zoning.Name(hop.ToPf)} - crossing the zone line at ({at.X:0.0} {at.Z:0.0}).");
                 break;
             }
+            case ExitKind.Proxy:
+                // A proxy door into an instanced playfield is a DOOR, with the same tight
+                // activation as the exit doors (under half a metre): walk ONTO it and use it on
+                // the stand. The old 2.5 m terminal reach used the door from outside its
+                // activation - stood before the shop door, used, no transition (owner, 2026-10-02).
+                t.LegGoal = hop.A;
+                SetDesiredGoal(hop.A, _pf, ControlPriority.Travel, DoorReach);
+                _logger.LogInformation($"TRAVEL: leg to {Zoning.Name(hop.ToPf)} - stepping into the proxy door at ({hop.A.X:0.0} {hop.A.Z:0.0}).");
+                break;
             case ExitKind.Line:
                 t.LegGoal = hop.A;
                 SetDesiredGoal(hop.A, _pf, ControlPriority.Travel, PadReach);
@@ -1573,11 +1604,13 @@ public sealed class MovementController : IPacketConsumer
             // A YANK while walking: the server overrode a big drift. Stop, and let the route
             // re-plan from where the server actually has us (_routePrio reset); the yank counts
             // against this goal (Tick gives it up after MaxYanks). Measured before the SetPose
-            // below, this is the drift the server just erased.
+            // below, this is the drift the server just erased. A short hold, too: walking on
+            // immediately re-collects the same rejection.
             var yankDist = Movement.Flat(me.MovementComponent.Position, pos);
             _yanks++;
             _routePrio = -1;
             _stuck.Reset();
+            _holdWalkUntil = _wetClock.Elapsed.TotalSeconds + YankReholdSeconds;
             _movement.Hold(me, SendIntervalMs);
             _logger.LogInformation($"Movement: the server yanked the walk {yankDist:0.0} m - holding and re-planning (yank {_yanks}/{MaxYanks}).");
         }
