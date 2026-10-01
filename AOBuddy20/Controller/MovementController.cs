@@ -87,6 +87,15 @@ public sealed class MovementController : IPacketConsumer
     private const float PadReach = 0.6f;
     private const float ObjectReach = 2.5f;
 
+    // A proxy playfield's exit door takes the crossing only from inside it: activation radius is
+    // under half a metre (owner, 2026-10-01) - walk ONTO the door, then use it.
+    private const float DoorReach = 0.4f;
+
+    // The stand-up campaign: re-send the toggle until the server's 0x57 echo confirms it, at most
+    // this often and this many times - then walk anyway and let the server have the last word.
+    private const int MaxStandTries = 3;
+    private const double StandRetrySeconds = 1.5;
+
     // Server's CurrentMovementMode (Stat 173) values — OmniCell MoveModes (AOBuddy10 Main.cs:48-50). A
     // character in a SEATED mode cannot move: the server rejects every move packet and snaps him back
     // to where he sat. You log out by sitting, so you can log back in seated.
@@ -147,10 +156,15 @@ public sealed class MovementController : IPacketConsumer
     private volatile bool _stoodUp;
 
     // The posture we believe the body is in, tracked from the only sources there are (owner,
-    // 2026-10-01: "only stand up if needed"): the login FullCharacter's stat 173, and the toggles the
-    // bot itself sends (SitNow/StandNow, and the stand-up a new goal requires). The server's 0x57 echo
-    // is logged as evidence but carries no sit/stand direction, so it cannot set this by itself.
+    // 2026-10-01: "only stand up if needed"): the login FullCharacter's stat 173, the toggles the
+    // bot itself sends (SitNow/StandNow, and the stand-up every movement goal requires), and the
+    // server's 0x57 echo - a toggle that never came back means the body is still sitting, so the
+    // stand-up is re-sent, bounded (owner, 2026-10-01: 'goto' left the bot sitting because the one
+    // stand-up went unheard and nothing ever checked again).
     private volatile bool _seated;
+    private volatile bool _standEchoPending; // a stand-up toggle is on the wire, no 0x57 echo yet
+    private double _standSentAt = -1;
+    private int _standTries;
 
     // Published by the update thread, consumed by the walk thread. One immutable snapshot per tick
     // so the walk never sees a torn combination (LocalPlayer is swapped on zone-in).
@@ -256,7 +270,8 @@ public sealed class MovementController : IPacketConsumer
             var me = DynelManager.LocalPlayer;
             if (me != null)
             {
-                StandUp(me, "new goal");
+                _standTries = 0; // a fresh order, a fresh campaign
+                SendStandUp(me, "new goal");
             }
         }
     }
@@ -273,6 +288,8 @@ public sealed class MovementController : IPacketConsumer
 
         me.MovementComponent.ChangeMovement(MovementAction.SwitchToSit);
         _seated = true;
+        _standEchoPending = false; // the sit is ours; no stand-up is in flight any more
+        _standTries = 0;
         _follow.BreakMirror("sitting");
         _logger.LogInformation("Movement: sitting (owner command); goals cleared.");
     }
@@ -286,16 +303,25 @@ public sealed class MovementController : IPacketConsumer
             return;
         }
 
-        StandUp(me, "owner command");
+        _standTries = 0;
+        SendStandUp(me, "owner command");
     }
 
-    // ONE stand-up toggle, sent only when the posture track says seated - never blind (a blind
-    // toggle sits a standing character), never re-sent while we believe him standing.
-    private void StandUp(LocalPlayer me, string why)
+    // The stand-up toggle (action 87) and the campaign around it. Sent only when the posture track
+    // says seated - never blind, a blind toggle SITS a standing character - but a toggle the server
+    // never echoes leaves the body sitting with the track saying standing (owner, 2026-10-01: a
+    // real-client logout always sits the character; the bot's login stand-up raced the character
+    // load and went unheard, and 'goto' then never stood him up). So every send continues a
+    // confirmation campaign: Tick re-sends, bounded, until the 0x57 echo lands or the tries run
+    // out. The campaign only runs while a goal wants the body - a chosen sit is never fought.
+    private void SendStandUp(LocalPlayer me, string why)
     {
         me.MovementComponent.ChangeMovement(MovementAction.LeaveSit); // the StandUp toggle (action 87)
         _seated = false;
-        _logger.LogInformation($"Movement: standing up ({why}).");
+        _standEchoPending = true;
+        _standSentAt = _wetClock.Elapsed.TotalSeconds;
+        _standTries++;
+        _logger.LogInformation($"Movement: standing up ({why}, try {_standTries}/{MaxStandTries}).");
     }
 
     public void ClearDesiredGoal(ControlPriority priority)
@@ -529,6 +555,7 @@ public sealed class MovementController : IPacketConsumer
         var me = DynelManager.LocalPlayer;
         if (me != null && identity == me.Identity)
         {
+            _standEchoPending = false; // the toggle we were waiting for landed
             _logger.LogInformation("Movement: server confirmed the posture change (stand-up echo).");
         }
     }
@@ -626,7 +653,7 @@ public sealed class MovementController : IPacketConsumer
                 if (snap.MovementMode is MoveModeSit or MoveModeSleep or MoveModeLounge)
                 {
                     _seated = true;
-                    StandUp(me, "login mode " + snap.MovementMode);
+                    SendStandUp(me, "login mode " + snap.MovementMode);
                     _movement.Hold(me, SendIntervalMs);
                     return; // give the server the beat to apply it before the first step
                 }
@@ -645,6 +672,31 @@ public sealed class MovementController : IPacketConsumer
         {
             _movement.Hold(me, SendIntervalMs);
             return;
+        }
+
+        // The stand-up campaign: a toggle the server never echoed (a login stand-up racing the
+        // character load - a real-client logout always sits the character - or a dropped packet)
+        // leaves the body sitting with the track saying standing. While any goal wants the body,
+        // keep re-sending until the 0x57 echo lands or the tries run out. No goal: a chosen sit is
+        // never fought.
+        var nowS = _wetClock.Elapsed.TotalSeconds;
+        bool anyGoal;
+        lock (_goallock)
+        {
+            anyGoal = goals.Count > 0;
+        }
+
+        if (_standEchoPending && anyGoal)
+        {
+            if (_standTries >= MaxStandTries)
+            {
+                _standEchoPending = false;
+                _logger.LogInformation($"Movement: no posture echo after {MaxStandTries} stand-ups - walking anyway.");
+            }
+            else if (nowS - _standSentAt >= StandRetrySeconds)
+            {
+                SendStandUp(me, "no posture echo");
+            }
         }
 
         if (snap.Playfield != _pf)
@@ -1042,6 +1094,17 @@ public sealed class MovementController : IPacketConsumer
         t.LegPf = _pf;
         t.LegReachedAt = -1;
         t.AwaitAt = -1;
+        if (hop.Back)
+        {
+            // A proxy playfield's exit door: the crossing is taken from inside the doorway only -
+            // activation radius under half a metre (owner, 2026-10-01) - so walk ONTO the door and
+            // use it on the stand (TravelTick), not through it.
+            t.LegGoal = hop.A;
+            SetDesiredGoal(hop.A, _pf, ControlPriority.Travel, DoorReach);
+            _logger.LogInformation($"TRAVEL: leg out of {Zoning.Name(_pf)} - stepping into the exit door at ({hop.A.X:0.0} {hop.A.Z:0.0}).");
+            return;
+        }
+
         switch (hop.Kind)
         {
             case ExitKind.ZoneLine:
@@ -1235,16 +1298,18 @@ public sealed class MovementController : IPacketConsumer
                     t.AwaitAt = now;
                     t.Tries++;
                     var kind = t.LegExit.Kind;
-                    if (kind == ExitKind.Teleport || kind == ExitKind.Proxy || kind == ExitKind.Line && t.Tries >= MaxLegTries)
+                    if (t.LegExit.Back || kind == ExitKind.Teleport || kind == ExitKind.Proxy
+                        || kind == ExitKind.Line && t.Tries >= MaxLegTries)
                     {
-                        SendUse(t.LegExit); // terminals are used; a pad only ever on its last stand
+                        SendUse(t.LegExit); // terminals and exit doors are used; a pad only ever on its last stand
                     }
 
                     return; // the window starts
                 }
 
-                var wait = t.LegExit.Kind == ExitKind.ZoneLine ? ZoneLineWait
-                    : t.LegExit.Kind == ExitKind.Line ? PadWait : ObjectWait;
+                var wait = t.LegExit.Back || t.LegExit.Kind == ExitKind.Teleport || t.LegExit.Kind == ExitKind.Proxy ? ObjectWait
+                    : t.LegExit.Kind == ExitKind.Line ? PadWait
+                    : ZoneLineWait;
                 if (now - t.AwaitAt < wait)
                 {
                     return; // the zone normally lands long before this
