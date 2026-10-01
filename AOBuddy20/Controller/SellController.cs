@@ -53,7 +53,7 @@ namespace AOBuddy20.Controlling;
 [MinLogLevel(LogEventLevel.Debug)]
 public sealed class SellController
 {
-    private enum Phase { Idle, Approach, Selling, Transit }
+    private enum Phase { Idle, BagCheck, Approach, Selling, Transit }
 
     private const int SellBatch = 5; // items per trade (AOBuddy10's proven batch)
     private const int MaxRounds = 12; // batches per run, then give up
@@ -68,6 +68,11 @@ public sealed class SellController
     // The travel to the shop playfield is watched per-leg by the MovementController's machinery;
     // this only bounds the WHOLE trip so a run can never sit in transit forever.
     private const double TransitTimeout = 600.0;
+
+    // CHECK FIRST (owner, 2026-10-02): open the bags, wait this long for the contents to arrive on
+    // the wire, and only travel when there is something to sell. The first run traveled to Fair
+    // Trade with the bags' contents not yet known and nothing to sell.
+    private const double BagCheckSeconds = 2.0;
 
     private readonly ILogger<SellController> _logger;
     private readonly MovementController _movement;
@@ -169,6 +174,7 @@ public sealed class SellController
 
         _runPf = (int)Playfield.ModelId;
         _staged.Clear();
+        _stagedFrom.Clear();
         _refusedSlots.Clear();
         _badVendors.Clear();
         _lastBatchSlots = null;
@@ -178,20 +184,16 @@ public sealed class SellController
         _moves = 0;
         _stage = 0;
         _lastActionAt = -99;
-        me.TryGetStat(Stat.Cash, out _cashAtStart);
 
-        // What is there to sell? (Bags may not have been opened yet - their contents are confirmed
-        // at the terminal; this is the honest preview.)
-        var sellable = SellableInBags();
-        var terminals = DynelManager.VendingMachines
-            .Count(v => Movement.Flat(me.Transform.Position, v.Transform.Position) < VendorRange);
-        reply($"Selling: {sellable.Count} item(s) out of the bags (NODROP and bags themselves stay; " +
-              $"main inventory untouched). {terminals} terminal(s) in range.");
-        _logger.LogInformation($"SELL: start — {sellable.Count} sellable item(s) in bags, " +
-                               $"{Inventory.Containers.Count} bag(s), {terminals} terminal(s) in range.");
+        // CHECK FIRST: open the bags whose contents aren't cached, give the contents a beat to
+        // arrive on the wire, and only travel when something is actually sellable (BagCheckTick
+        // below).
+        OpenUnknownBags(me);
 
+        reply($"Opening {Inventory.Containers.Count} bag(s) and checking what's sellable - " +
+              "NODROP items and the main inventory stay.");
         _controlArbiter.TakeControl(ControlPriority.Selling);
-        NextVendor(me);
+        SetPhase(Phase.BagCheck);
     }
 
     public void Stop(string why)
@@ -252,6 +254,9 @@ public sealed class SellController
         _phaseTime += dt;
         switch (_phase)
         {
+            case Phase.BagCheck:
+                BagCheckTick(me);
+                break;
             case Phase.Approach:
                 ApproachTick(me);
                 break;
@@ -264,6 +269,29 @@ public sealed class SellController
         }
 
         return true;
+    }
+
+    // The bags are open and the contents have had their beat: sell only if there is something to
+    // sell - never travel for an empty bag.
+    private void BagCheckTick(LocalPlayer me)
+    {
+        if (_phaseTime < BagCheckSeconds)
+        {
+            return;
+        }
+
+        var sellable = SellableInBags();
+        if (sellable.Count == 0)
+        {
+            Tell("The bags hold nothing sellable (NODROP items and the bags themselves stay). Not traveling.");
+            _logger.LogInformation("SELL: nothing sellable in the bags - not traveling.");
+            TearDown();
+            return;
+        }
+
+        me.TryGetStat(Stat.Cash, out _cashAtStart);
+        _logger.LogInformation($"SELL: {sellable.Count} sellable item(s) in the bags.");
+        NextVendor(me);
     }
 
     // En route to the shop playfield - the same trip resupply makes (ResupplyShopPf, default 1187
@@ -319,14 +347,9 @@ public sealed class SellController
 
             if (_phaseTime - _arrivedAt >= SettleSeconds)
             {
-                // At the terminal: open every bag so its contents are known (the stash's proven
-                // open: Use with Temp4=0), then start the sell cycle.
-                foreach (var b in Inventory.Items.Where(i =>
-                             i != null && i.Slot.Type == IdentityType.Inventory &&
-                             i.UniqueIdentity.Type == IdentityType.Container))
-                {
-                    GameCommands.OpenContainer(me, b.Slot);
-                }
+                // At the terminal: make sure every bag's contents are known (only uncached ones
+                // are opened), then start the sell cycle.
+                OpenUnknownBags(me);
 
                 SetPhase(Phase.Selling);
                 _stage = 0;
@@ -476,6 +499,26 @@ public sealed class SellController
     }
 
     // ---- bags and vendors ------------------------------------------------------
+
+    // Open only the bags whose contents the SDK doesn't have yet. Container.Items is the session
+    // cache: once delivered (opened, or a server content dump) it stays for the whole session and
+    // survives the login inventory rebuild; a relog starts empty. An empty bag reads as unknown
+    // and gets opened once - harmless.
+    private void OpenUnknownBags(LocalPlayer me)
+    {
+        foreach (var b in Inventory.Items.Where(i =>
+                     i != null && i.Slot.Type == IdentityType.Inventory &&
+                     i.UniqueIdentity.Type == IdentityType.Container))
+        {
+            var ct = Inventory.Containers.FirstOrDefault(c => c.Identity == b.UniqueIdentity);
+            if (ct != null && ct.Items.Count > 0)
+            {
+                continue; // contents already cached
+            }
+
+            GameCommands.OpenContainer(me, b.Slot);
+        }
+    }
 
     // The contents of every bag: everything except NODROP items (they stay - the owner said so) and
     // bags themselves (a bag inside a bag stays a bag). Refused slots never come back. Remembers the
