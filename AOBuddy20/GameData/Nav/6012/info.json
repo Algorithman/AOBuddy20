@@ -1,0 +1,41 @@
+{
+ "playfield": 6012,
+ "name": "Neretva Canyons",
+ "playfieldVersion": 10,
+ "files": [
+  "ground.bin",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "outdoor",
+ "ground": {
+  "samplesX": 385,
+  "samplesZ": 385,
+  "cell": 4,
+  "heightScale": 0.0007812500116415322,
+  "sourceHeightBits": 16,
+  "worldSize": [
+   1536,
+   1536
+  ],
+  "heightRange": [
+   0,
+   51.1992
+  ],
+  "heightVerifiable": false,
+  "waterPlanes": [
+   0
+  ]
+ },
+ "collision": {
+  "records": 891,
+  "trianglesTotal": 701189,
+  "trianglesWalkable": 258554,
+  "chunks": 897
+ },
+ "walls": {
+  "triangles": 326716,
+  "chunks": 887,
+  "minHeight": 1
+ }
+}

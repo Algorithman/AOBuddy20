@@ -1,0 +1,28 @@
+{
+ "playfield": 4360,
+ "name": "Clinique Plastique",
+ "playfieldVersion": 9,
+ "files": [
+  "rooms.json",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "dungeon",
+ "dungeon": {
+  "tilemap": 4820,
+  "rooms": 1,
+  "cell": 2,
+  "heightScale": 0.20000000298023224
+ },
+ "collision": {
+  "records": 1,
+  "trianglesTotal": 5128,
+  "trianglesWalkable": 1814,
+  "chunks": 1
+ },
+ "walls": {
+  "triangles": 1638,
+  "chunks": 1,
+  "minHeight": 1
+ }
+}

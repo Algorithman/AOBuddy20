@@ -1,0 +1,28 @@
+{
+ "playfield": 1501,
+ "name": "omnimine_hq_building_06",
+ "playfieldVersion": 8,
+ "files": [
+  "rooms.json",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "dungeon",
+ "dungeon": {
+  "tilemap": 1500,
+  "rooms": 2,
+  "cell": 2,
+  "heightScale": 0.20000000298023224
+ },
+ "collision": {
+  "records": 2,
+  "trianglesTotal": 3775,
+  "trianglesWalkable": 1230,
+  "chunks": 2
+ },
+ "walls": {
+  "triangles": 1098,
+  "chunks": 2,
+  "minHeight": 1
+ }
+}

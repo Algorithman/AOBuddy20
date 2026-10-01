@@ -1,0 +1,47 @@
+{
+ "playfield": 5001,
+ "name": "Playa del Desierto",
+ "playfieldVersion": 10,
+ "files": [
+  "ground.bin",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "outdoor",
+ "ground": {
+  "samplesX": 129,
+  "samplesZ": 129,
+  "cell": 4,
+  "heightScale": 0.0007812500116415322,
+  "sourceHeightBits": 16,
+  "worldSize": [
+   512,
+   512
+  ],
+  "heightRange": [
+   0,
+   39.8438
+  ],
+  "heightVerifiable": false,
+  "waterPlanes": [
+   9.61,
+   9.82,
+   8.23,
+   8.34
+  ],
+  "waterPolygons": [
+   9.82
+  ]
+ },
+ "collision": {
+  "records": 140,
+  "trianglesTotal": 48628,
+  "trianglesWalkable": 17036,
+  "chunks": 203
+ },
+ "walls": {
+  "triangles": 30653,
+  "chunks": 287,
+  "minHeight": 1
+ }
+}

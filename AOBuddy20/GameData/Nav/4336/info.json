@@ -1,0 +1,41 @@
+{
+ "playfield": 4336,
+ "name": "Alappaa",
+ "playfieldVersion": 10,
+ "files": [
+  "ground.bin",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "outdoor",
+ "ground": {
+  "samplesX": 225,
+  "samplesZ": 225,
+  "cell": 4,
+  "heightScale": 0.0007812500116415322,
+  "sourceHeightBits": 8,
+  "worldSize": [
+   896,
+   896
+  ],
+  "heightRange": [
+   10.8,
+   40.6
+  ],
+  "heightVerifiable": true,
+  "waterPlanes": [
+   0
+  ]
+ },
+ "collision": {
+  "records": 142,
+  "trianglesTotal": 35555,
+  "trianglesWalkable": 18667,
+  "chunks": 142
+ },
+ "walls": {
+  "triangles": 15262,
+  "chunks": 140,
+  "minHeight": 1
+ }
+}

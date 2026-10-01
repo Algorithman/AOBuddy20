@@ -1,0 +1,41 @@
+{
+ "playfield": 107,
+ "name": "AI graphics dependency",
+ "playfieldVersion": 10,
+ "files": [
+  "ground.bin",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "outdoor",
+ "ground": {
+  "samplesX": 57,
+  "samplesZ": 57,
+  "cell": 4,
+  "heightScale": 0.0007812500116415322,
+  "sourceHeightBits": 8,
+  "worldSize": [
+   224,
+   224
+  ],
+  "heightRange": [
+   12.8,
+   12.8
+  ],
+  "heightVerifiable": true,
+  "waterPlanes": [
+   0
+  ]
+ },
+ "collision": {
+  "records": 22,
+  "trianglesTotal": 31327,
+  "trianglesWalkable": 15318,
+  "chunks": 168
+ },
+ "walls": {
+  "triangles": 13891,
+  "chunks": 169,
+  "minHeight": 1
+ }
+}

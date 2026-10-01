@@ -1,0 +1,44 @@
+{
+ "playfield": 540,
+ "name": "Old Athen",
+ "playfieldVersion": 10,
+ "files": [
+  "ground.bin",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "outdoor",
+ "ground": {
+  "samplesX": 225,
+  "samplesZ": 225,
+  "cell": 4,
+  "heightScale": 0.0007812500116415322,
+  "sourceHeightBits": 8,
+  "worldSize": [
+   896,
+   896
+  ],
+  "heightRange": [
+   0,
+   48
+  ],
+  "heightVerifiable": true,
+  "waterPlanes": [
+   5
+  ],
+  "waterPolygons": [
+   5
+  ]
+ },
+ "collision": {
+  "records": 144,
+  "trianglesTotal": 29215,
+  "trianglesWalkable": 11528,
+  "chunks": 156
+ },
+ "walls": {
+  "triangles": 16480,
+  "chunks": 168,
+  "minHeight": 1
+ }
+}

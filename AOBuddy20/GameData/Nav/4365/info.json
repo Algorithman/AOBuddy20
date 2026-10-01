@@ -1,0 +1,41 @@
+{
+ "playfield": 4365,
+ "name": "Sector 13",
+ "playfieldVersion": 10,
+ "files": [
+  "ground.bin",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "outdoor",
+ "ground": {
+  "samplesX": 193,
+  "samplesZ": 193,
+  "cell": 4,
+  "heightScale": 0.001953125,
+  "sourceHeightBits": 16,
+  "worldSize": [
+   768,
+   768
+  ],
+  "heightRange": [
+   0,
+   95
+  ],
+  "heightVerifiable": false,
+  "waterPlanes": [
+   0
+  ]
+ },
+ "collision": {
+  "records": 217,
+  "trianglesTotal": 58552,
+  "trianglesWalkable": 22978,
+  "chunks": 217
+ },
+ "walls": {
+  "triangles": 33742,
+  "chunks": 217,
+  "minHeight": 1
+ }
+}

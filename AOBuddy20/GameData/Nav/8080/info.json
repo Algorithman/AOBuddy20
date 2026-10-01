@@ -1,0 +1,28 @@
+{
+ "playfield": 8080,
+ "name": "Crashed Kyr'Ozch Destroyer",
+ "playfieldVersion": 10,
+ "files": [
+  "rooms.json",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "dungeon",
+ "dungeon": {
+  "tilemap": 8081,
+  "rooms": 4,
+  "cell": 2,
+  "heightScale": 0.20000000298023224
+ },
+ "collision": {
+  "records": 4,
+  "trianglesTotal": 92546,
+  "trianglesWalkable": 34795,
+  "chunks": 19
+ },
+ "walls": {
+  "triangles": 16895,
+  "chunks": 85,
+  "minHeight": 1
+ }
+}

@@ -1,0 +1,28 @@
+{
+ "playfield": 1004,
+ "name": "barracks (wine) GOLD",
+ "playfieldVersion": 8,
+ "files": [
+  "rooms.json",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "dungeon",
+ "dungeon": {
+  "tilemap": 1000,
+  "rooms": 15,
+  "cell": 2,
+  "heightScale": 0.20000000298023224
+ },
+ "collision": {
+  "records": 15,
+  "trianglesTotal": 14846,
+  "trianglesWalkable": 5058,
+  "chunks": 15
+ },
+ "walls": {
+  "triangles": 5114,
+  "chunks": 15,
+  "minHeight": 1
+ }
+}

@@ -1,0 +1,28 @@
+{
+ "playfield": 1003,
+ "name": "Wine hq (wine) GOLD",
+ "playfieldVersion": 8,
+ "files": [
+  "rooms.json",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "dungeon",
+ "dungeon": {
+  "tilemap": 1000,
+  "rooms": 1,
+  "cell": 2,
+  "heightScale": 0.20000000298023224
+ },
+ "collision": {
+  "records": 1,
+  "trianglesTotal": 972,
+  "trianglesWalkable": 321,
+  "chunks": 1
+ },
+ "walls": {
+  "triangles": 315,
+  "chunks": 1,
+  "minHeight": 1
+ }
+}

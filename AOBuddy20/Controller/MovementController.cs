@@ -63,6 +63,16 @@ public sealed class MovementController : IPacketConsumer
     private const float WadeProbeMeters = 0.5f; // probe this far ahead for the water verdict
     private const float WadeDepth = 0.3f; // SwimY's wade depth for the probe
 
+    // ROUTING (AOBuddy10 OverlandController): grid-route snap and reaches, waypoint advance, and the
+    // stuck watch that blocks the few metres ahead and replans round what the data does not show.
+    private const float SnapMeters = 8f;
+    private const float GoalReach = 3f;
+    private const float WideGoalReach = 8f; // a goal in a wall: the nearest reachable ground within this
+    private const float WaypointRange = 0.5f;
+    private const float WaypointLastRange = 3f; // == GoalReach: the route's last point stands for the goal
+    private const double StuckSeconds = 4;
+    private const int MaxStuck = 4; // re-routes around a stuck spot per goal
+
     private readonly ILogger<MovementController> _logger;
 
     // The ONE place the body moves (Components/Movement.cs), ported from AOBuddy10.
@@ -88,6 +98,18 @@ public sealed class MovementController : IPacketConsumer
     private float _wetY;
     private double _wetYAt = -99;
     private float _pendingBias; // the bias the SetPos that queued _pendingCorrection carried
+
+    // The route to the active goal through the walk grid: walls, zone lines and doors only stop the
+    // body when the step is ROUTED round them - a beeline walks straight through (owner, 2026-10-01:
+    // 'come' ran him into a door to another playfield). Replanned when the goal changes.
+    private readonly Movement.StuckWatch _stuck = new();
+    private readonly HashSet<int> _stuckCells = new(); // cells we got stuck walking into, this goal
+    private List<Vector3> _route = new();
+    private int _routeIdx;
+    private int _routePrio = -1; // the priority the route was planned for
+    private Vector3 _routeGoal; // and the goal position it was planned to
+    private int _routePf = -1;
+    private int _stuckCount;
 
     // Published by the update thread, consumed by the walk thread. One immutable snapshot per tick
     // so the walk never sees a torn combination (LocalPlayer is swapped on zone-in).
@@ -333,9 +355,15 @@ public sealed class MovementController : IPacketConsumer
 
         if (snap.Playfield != _pf)
         {
-            // A new playfield puts the body wherever the server placed it; gait and mode start over.
+            // A new playfield puts the body wherever the server placed it; gait, mode and route start over.
             _pf = snap.Playfield;
             _movement.Reset();
+            _route.Clear();
+            _routeIdx = 0;
+            _routePrio = -1;
+            _routePf = -1;
+            _stuckCells.Clear();
+            _stuck.Reset();
             lock (_poslock)
             {
                 _confirmedPosition = me.MovementComponent.Position;
@@ -382,10 +410,34 @@ public sealed class MovementController : IPacketConsumer
         // Not there (yet, or anymore): the flag only ever says reached while we stand on it.
         goal.Value.Value.Reached = false;
 
-        // One capped step toward the goal, the proven outdoor walker (AOBuddy10 OverlandController):
-        // mouse-look facing, then Advance at the run-speed formula with the step's Y taken from the NAV
-        // DATA (the floor under the next position, the water surface over it), never from the goal.
-        var delta = goal.Value.Value.Position - pos;
+        // WHERE TO STEP: the goal itself, or the next point of a grid ROUTE to it. The grid's
+        // per-search blocked set keeps 2 m off every zone line and 3 m off every door/whompa/
+        // teleporter that is not the goal itself (AOBuddy10 OverlandController.BeginLeg) - without a
+        // route the walk beelines, and a beeline crosses whatever stands between (the 'come' door).
+        var target = goal.Value.Value.Position;
+        var grid = _nav.Grid;
+        if (grid != null)
+        {
+            if (_routePrio != goal.Value.Key || _routePf != _pf || Movement.Flat(_routeGoal, target) > 0.01f)
+            {
+                PlanRoute(pos, target, goal.Value.Key);
+            }
+
+            while (_routeIdx < _route.Count &&
+                   Movement.Flat(pos, _route[_routeIdx]) <= (_routeIdx == _route.Count - 1 ? WaypointLastRange : WaypointRange))
+            {
+                _routeIdx++;
+                _stuck.Reset();
+            }
+
+            if (_routeIdx < _route.Count)
+            {
+                target = _route[_routeIdx];
+            }
+        }
+
+        var tdist = Movement.Flat(pos, target);
+        var delta = target - pos;
         var flat = new Vector3(delta.X, 0f, delta.Z);
         if (flat.Magnitude < 0.05f)
         {
@@ -395,14 +447,41 @@ public sealed class MovementController : IPacketConsumer
 
         var dir = flat.Normalize();
 
+        // STUCK (AOBuddy10): no progress toward the step target for StuckSeconds - something the data
+        // does not show is in the way (a gap in the walls, a crate, a fence). Block the few metres
+        // ahead and route round them; after MaxStuck of those, say where we are and try again.
+        if (grid != null && _stuck.Tick(tdist, dt, 0.3f, StuckSeconds))
+        {
+            _stuckCount++;
+            _stuck.Reset();
+            if (_stuckCount > MaxStuck)
+            {
+                _logger.LogInformation($"Movement: stuck at ({pos.X:0.0} {pos.Z:0.0}), {dist:0.0} m short of the goal - something is in the way.");
+            }
+            else
+            {
+                grid.CellsAlong(new Vector3(pos.X + dir.X, 0f, pos.Z + dir.Z),
+                    new Vector3(pos.X + dir.X * 3f, 0f, pos.Z + dir.Z * 3f), 1f, _stuckCells);
+                _logger.LogInformation($"Movement: no progress for {StuckSeconds:0} s at ({pos.X:0.0} {pos.Z:0.0}), routing round it ({_stuckCount}/{MaxStuck}).");
+                _movement.Hold(me, SendIntervalMs);
+                PlanRoute(pos, goal.Value.Value.Position, goal.Value.Key);
+                return;
+            }
+        }
+
+        // One capped step toward the target, the proven outdoor walker (AOBuddy10
+        // OverlandController): mouse-look facing, then Advance at the run-speed formula with the
+        // step's Y taken from the NAV DATA (the floor under the next position, the water surface
+        // over it), never from the goal.
+
         // WATER - the captured client's contract: probe just ahead for the surface verdict.
-        var probe = Math.Min(dist, WadeProbeMeters);
+        var probe = Math.Min(tdist, WadeProbeMeters);
         var plane = _nav.Nav?.Ground != null
             ? _nav.Nav.Ground.SwimY(pos.X + dir.X * probe, pos.Z + dir.Z * probe, WadeDepth)
             : double.NaN;
         var inWater = !double.IsNaN(plane);
         var speed = inWater ? RunVelocity(snap) * SwimSpeedFactor : RunVelocity(snap);
-        var step = Movement.CappedStep(speed, dt, MaxStep, dist);
+        var step = Movement.CappedStep(speed, dt, MaxStep, tdist);
         var nx = pos.X + dir.X * step;
         var nz = pos.Z + dir.Z * step;
         var floorY = FloorY(nx, pos.Y, nz);
@@ -448,6 +527,54 @@ public sealed class MovementController : IPacketConsumer
 
         var want = Movement.SafeLook(dir, me.MovementComponent.Heading);
         _movement.Advance(me, new Vector3(nx, nextY, nz), want, run: true, dt, SendIntervalMs);
+    }
+
+    // Plan the grid route to a goal (AOBuddy10 OverlandController.BeginLeg): every zone line is a
+    // corridor of blocked cells (a same-playfield goal never wants one), and every contact exit
+    // (door, whompa, teleporter, proxy) is a 3 m disc - except the one the goal stands on, and one we
+    // are standing in (the first step must be able to leave it; owner, 2026-09-27: a Longest Road
+    // walk stepped onto the Broken Shores booth 4 m from the whompa landing). No grid, or no route
+    // even at wide reach: the walk beelines, and says so.
+    private void PlanRoute(Vector3 from, Vector3 goalPos, int priority)
+    {
+        _routePrio = priority;
+        _routeGoal = goalPos;
+        _routePf = _pf;
+        _routeIdx = 0;
+        _stuckCount = 0;
+        _stuck.Reset();
+        _route.Clear();
+
+        var grid = _nav.Grid;
+        if (grid == null)
+        {
+            return; // no walk grid for this playfield: straight lines
+        }
+
+        var extra = new HashSet<int>(_stuckCells);
+        foreach (var e in Zoning.ExitsFrom(_pf))
+        {
+            if (e.Kind == ExitKind.ZoneLine)
+            {
+                grid.CellsAlong(e.A, e.B, 2f, extra);
+            }
+            else if ((e.Kind == ExitKind.Line || e.Kind == ExitKind.Proxy || e.Kind == ExitKind.Teleport)
+                     && Movement.Flat(e.A, goalPos) > 1.5f && Movement.Flat(e.A, from) > 3.5f)
+            {
+                grid.CellsAlong(e.A, e.A, 3f, extra);
+            }
+        }
+
+        var route = grid.FindPath(from, goalPos, extra, SnapMeters, GoalReach, out var why)
+                    ?? grid.FindPath(from, goalPos, extra, SnapMeters, WideGoalReach, out _);
+        if (route == null)
+        {
+            _logger.LogInformation($"Movement: no grid route to the goal ({why}) - walking straight.");
+            return;
+        }
+
+        _route = route;
+        _logger.LogInformation($"Movement: {route.Count}-point route to the priority {priority} goal.");
     }
 
     // ── floor sampling (AOBuddy10 OverlandController's FloorY/StepFloor, verbatim rules) ──

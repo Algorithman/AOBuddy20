@@ -1,0 +1,28 @@
+{
+ "playfield": 1186,
+ "name": "Neutral Supermarket Basic",
+ "playfieldVersion": 10,
+ "files": [
+  "rooms.json",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "dungeon",
+ "dungeon": {
+  "tilemap": 1142,
+  "rooms": 7,
+  "cell": 2,
+  "heightScale": 0.20000000298023224
+ },
+ "collision": {
+  "records": 7,
+  "trianglesTotal": 10510,
+  "trianglesWalkable": 3584,
+  "chunks": 7
+ },
+ "walls": {
+  "triangles": 2454,
+  "chunks": 7,
+  "minHeight": 1
+ }
+}

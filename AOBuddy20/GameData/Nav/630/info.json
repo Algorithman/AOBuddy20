@@ -1,0 +1,42 @@
+{
+ "playfield": 630,
+ "name": "Pleasant Meadows",
+ "playfieldVersion": 10,
+ "files": [
+  "ground.bin",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "outdoor",
+ "ground": {
+  "samplesX": 1025,
+  "samplesZ": 897,
+  "cell": 4,
+  "heightScale": 0.0007812500116415322,
+  "sourceHeightBits": 8,
+  "worldSize": [
+   4096,
+   3584
+  ],
+  "heightRange": [
+   0,
+   51
+  ],
+  "heightVerifiable": true,
+  "waterPlanes": [
+   0,
+   2
+  ]
+ },
+ "collision": {
+  "records": 4711,
+  "trianglesTotal": 231663,
+  "trianglesWalkable": 99733,
+  "chunks": 4724
+ },
+ "walls": {
+  "triangles": 102035,
+  "chunks": 4472,
+  "minHeight": 1
+ }
+}

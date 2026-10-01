@@ -1,0 +1,28 @@
+{
+ "playfield": 127,
+ "name": "Condemned Subway (dng)",
+ "playfieldVersion": 10,
+ "files": [
+  "rooms.json",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "dungeon",
+ "dungeon": {
+  "tilemap": 126,
+  "rooms": 46,
+  "cell": 2,
+  "heightScale": 0.20000000298023224
+ },
+ "collision": {
+  "records": 46,
+  "trianglesTotal": 198132,
+  "trianglesWalkable": 69056,
+  "chunks": 62
+ },
+ "walls": {
+  "triangles": 69313,
+  "chunks": 60,
+  "minHeight": 1
+ }
+}

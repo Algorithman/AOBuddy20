@@ -1,0 +1,44 @@
+{
+ "playfield": 4312,
+ "name": "Nascense Swamp",
+ "playfieldVersion": 10,
+ "files": [
+  "ground.bin",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "outdoor",
+ "ground": {
+  "samplesX": 513,
+  "samplesZ": 513,
+  "cell": 4,
+  "heightScale": 0.0023437500931322575,
+  "sourceHeightBits": 8,
+  "worldSize": [
+   2048,
+   2048
+  ],
+  "heightRange": [
+   0,
+   135.6
+  ],
+  "heightVerifiable": true,
+  "waterPlanes": [
+   7.1
+  ],
+  "waterPolygons": [
+   7.1
+  ]
+ },
+ "collision": {
+  "records": 1451,
+  "trianglesTotal": 270398,
+  "trianglesWalkable": 137389,
+  "chunks": 1497
+ },
+ "walls": {
+  "triangles": 128674,
+  "chunks": 1460,
+  "minHeight": 1
+ }
+}

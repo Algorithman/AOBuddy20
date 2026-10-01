@@ -1,0 +1,28 @@
+{
+ "playfield": 4569,
+ "name": "Dimensional Shift - Superior",
+ "playfieldVersion": 9,
+ "files": [
+  "rooms.json",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "dungeon",
+ "dungeon": {
+  "tilemap": 4566,
+  "rooms": 1,
+  "cell": 2,
+  "heightScale": 0.20000000298023224
+ },
+ "collision": {
+  "records": 1,
+  "trianglesTotal": 7270,
+  "trianglesWalkable": 2424,
+  "chunks": 2
+ },
+ "walls": {
+  "triangles": 1643,
+  "chunks": 1,
+  "minHeight": 1
+ }
+}

@@ -1,0 +1,28 @@
+{
+ "playfield": 341,
+ "name": "ACD Grey Caves-Mines dng",
+ "playfieldVersion": 8,
+ "files": [
+  "rooms.json",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "dungeon",
+ "dungeon": {
+  "tilemap": 340,
+  "rooms": 103,
+  "cell": 2,
+  "heightScale": 0.20000000298023224
+ },
+ "collision": {
+  "records": 103,
+  "trianglesTotal": 195721,
+  "trianglesWalkable": 62778,
+  "chunks": 105
+ },
+ "walls": {
+  "triangles": 81878,
+  "chunks": 109,
+  "minHeight": 1
+ }
+}

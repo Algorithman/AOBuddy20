@@ -1,0 +1,28 @@
+{
+ "playfield": 1612,
+ "name": "Swamp_house02",
+ "playfieldVersion": 8,
+ "files": [
+  "rooms.json",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "dungeon",
+ "dungeon": {
+  "tilemap": 1610,
+  "rooms": 1,
+  "cell": 2,
+  "heightScale": 0.20000000298023224
+ },
+ "collision": {
+  "records": 1,
+  "trianglesTotal": 1192,
+  "trianglesWalkable": 481,
+  "chunks": 1
+ },
+ "walls": {
+  "triangles": 444,
+  "chunks": 1,
+  "minHeight": 1
+ }
+}

@@ -1,0 +1,44 @@
+{
+ "playfield": 4605,
+ "name": "Inferno",
+ "playfieldVersion": 10,
+ "files": [
+  "ground.bin",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "outdoor",
+ "ground": {
+  "samplesX": 1025,
+  "samplesZ": 1025,
+  "cell": 4,
+  "heightScale": 0.0023437500931322575,
+  "sourceHeightBits": 8,
+  "worldSize": [
+   4096,
+   4096
+  ],
+  "heightRange": [
+   0,
+   153
+  ],
+  "heightVerifiable": true,
+  "waterPlanes": [
+   0.5
+  ],
+  "waterPolygons": [
+   0.52
+  ]
+ },
+ "collision": {
+  "records": 5720,
+  "trianglesTotal": 1239667,
+  "trianglesWalkable": 709597,
+  "chunks": 7764
+ },
+ "walls": {
+  "triangles": 428462,
+  "chunks": 6478,
+  "minHeight": 1
+ }
+}

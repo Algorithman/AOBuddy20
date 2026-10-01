@@ -1,0 +1,28 @@
+{
+ "playfield": 9041,
+ "name": "Phasefront Display",
+ "playfieldVersion": 10,
+ "files": [
+  "rooms.json",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "dungeon",
+ "dungeon": {
+  "tilemap": 9040,
+  "rooms": 5,
+  "cell": 2,
+  "heightScale": 0.20000000298023224
+ },
+ "collision": {
+  "records": 5,
+  "trianglesTotal": 69058,
+  "trianglesWalkable": 20249,
+  "chunks": 14
+ },
+ "walls": {
+  "triangles": 14594,
+  "chunks": 11,
+  "minHeight": 1
+ }
+}

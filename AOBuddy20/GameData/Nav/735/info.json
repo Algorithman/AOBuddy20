@@ -1,0 +1,41 @@
+{
+ "playfield": 735,
+ "name": "Rome Blue",
+ "playfieldVersion": 10,
+ "files": [
+  "ground.bin",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "outdoor",
+ "ground": {
+  "samplesX": 257,
+  "samplesZ": 193,
+  "cell": 4,
+  "heightScale": 0.0007812500116415322,
+  "sourceHeightBits": 8,
+  "worldSize": [
+   1024,
+   768
+  ],
+  "heightRange": [
+   13.6,
+   49.6
+  ],
+  "heightVerifiable": true,
+  "waterPlanes": [
+   0
+  ]
+ },
+ "collision": {
+  "records": 203,
+  "trianglesTotal": 42033,
+  "trianglesWalkable": 15776,
+  "chunks": 249
+ },
+ "walls": {
+  "triangles": 20968,
+  "chunks": 261,
+  "minHeight": 1
+ }
+}

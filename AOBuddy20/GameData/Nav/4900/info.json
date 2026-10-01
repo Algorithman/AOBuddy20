@@ -1,0 +1,41 @@
+{
+ "playfield": 4900,
+ "name": "Pandemonium Tower Gigantomachy",
+ "playfieldVersion": 10,
+ "files": [
+  "ground.bin",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "outdoor",
+ "ground": {
+  "samplesX": 225,
+  "samplesZ": 225,
+  "cell": 4,
+  "heightScale": 0.0007812500116415322,
+  "sourceHeightBits": 8,
+  "worldSize": [
+   896,
+   896
+  ],
+  "heightRange": [
+   0,
+   5.6
+  ],
+  "heightVerifiable": true,
+  "waterPlanes": [
+   0
+  ]
+ },
+ "collision": {
+  "records": 4,
+  "trianglesTotal": 7538,
+  "trianglesWalkable": 3370,
+  "chunks": 4
+ },
+ "walls": {
+  "triangles": 3244,
+  "chunks": 4,
+  "minHeight": 1
+ }
+}

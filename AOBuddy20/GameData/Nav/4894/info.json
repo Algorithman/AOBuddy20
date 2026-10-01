@@ -1,0 +1,46 @@
+{
+ "playfield": 4894,
+ "name": "Coast of Harmony",
+ "playfieldVersion": 8,
+ "files": [
+  "ground.bin",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "outdoor",
+ "ground": {
+  "samplesX": 1537,
+  "samplesZ": 769,
+  "cell": 4,
+  "heightScale": 0.001953125,
+  "sourceHeightBits": 16,
+  "worldSize": [
+   6144,
+   3072
+  ],
+  "heightRange": [
+   0,
+   127.998
+  ],
+  "heightVerifiable": false,
+  "waterPlanes": [
+   8
+  ],
+  "waterPolygons": [
+   14.62,
+   14.61,
+   8
+  ]
+ },
+ "collision": {
+  "records": 3918,
+  "trianglesTotal": 640303,
+  "trianglesWalkable": 332241,
+  "chunks": 3916
+ },
+ "walls": {
+  "triangles": 200454,
+  "chunks": 3625,
+  "minHeight": 1
+ }
+}

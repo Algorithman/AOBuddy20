@@ -1,0 +1,28 @@
+{
+ "playfield": 1943,
+ "name": "Dng: High Level ToTW",
+ "playfieldVersion": 10,
+ "files": [
+  "rooms.json",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "dungeon",
+ "dungeon": {
+  "tilemap": 1942,
+  "rooms": 6,
+  "cell": 2,
+  "heightScale": 0.20000000298023224
+ },
+ "collision": {
+  "records": 6,
+  "trianglesTotal": 60705,
+  "trianglesWalkable": 19795,
+  "chunks": 13
+ },
+ "walls": {
+  "triangles": 14484,
+  "chunks": 10,
+  "minHeight": 1
+ }
+}

@@ -1,0 +1,28 @@
+{
+ "playfield": 4327,
+ "name": "Jobe Apartment Normal (dng)",
+ "playfieldVersion": 9,
+ "files": [
+  "rooms.json",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "dungeon",
+ "dungeon": {
+  "tilemap": 4326,
+  "rooms": 1,
+  "cell": 2,
+  "heightScale": 0.20000000298023224
+ },
+ "collision": {
+  "records": 1,
+  "trianglesTotal": 12930,
+  "trianglesWalkable": 4149,
+  "chunks": 3
+ },
+ "walls": {
+  "triangles": 1822,
+  "chunks": 1,
+  "minHeight": 1
+ }
+}

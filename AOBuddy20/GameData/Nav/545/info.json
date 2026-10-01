@@ -1,0 +1,54 @@
+{
+ "playfield": 545,
+ "name": "West Athens",
+ "playfieldVersion": 10,
+ "files": [
+  "ground.bin",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "outdoor",
+ "ground": {
+  "samplesX": 225,
+  "samplesZ": 225,
+  "cell": 4,
+  "heightScale": 0.0007812500116415322,
+  "sourceHeightBits": 8,
+  "worldSize": [
+   896,
+   896
+  ],
+  "heightRange": [
+   0,
+   41.2
+  ],
+  "heightVerifiable": true,
+  "waterPlanes": [
+   5.4,
+   2.9
+  ],
+  "waterPolygons": [
+   5.02,
+   4,
+   5.4,
+   5.4,
+   5.4,
+   5.4,
+   5.4,
+   5.4,
+   5.4,
+   5.4
+  ]
+ },
+ "collision": {
+  "records": 321,
+  "trianglesTotal": 43217,
+  "trianglesWalkable": 17475,
+  "chunks": 329
+ },
+ "walls": {
+  "triangles": 20290,
+  "chunks": 333,
+  "minHeight": 1
+ }
+}

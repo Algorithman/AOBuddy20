@@ -1,0 +1,41 @@
+{
+ "playfield": 6022,
+ "name": "Area X",
+ "playfieldVersion": 10,
+ "files": [
+  "ground.bin",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "outdoor",
+ "ground": {
+  "samplesX": 385,
+  "samplesZ": 385,
+  "cell": 4,
+  "heightScale": 0.0007812500116415322,
+  "sourceHeightBits": 16,
+  "worldSize": [
+   1536,
+   1536
+  ],
+  "heightRange": [
+   0,
+   51.1992
+  ],
+  "heightVerifiable": false,
+  "waterPlanes": [
+   0
+  ]
+ },
+ "collision": {
+  "records": 662,
+  "trianglesTotal": 366659,
+  "trianglesWalkable": 128513,
+  "chunks": 664
+ },
+ "walls": {
+  "triangles": 201446,
+  "chunks": 643,
+  "minHeight": 1
+ }
+}

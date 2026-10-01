@@ -1,0 +1,28 @@
+{
+ "playfield": 4331,
+ "name": "Pandemonium Judecca",
+ "playfieldVersion": 10,
+ "files": [
+  "rooms.json",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "dungeon",
+ "dungeon": {
+  "tilemap": 4332,
+  "rooms": 1,
+  "cell": 2,
+  "heightScale": 0.20000000298023224
+ },
+ "collision": {
+  "records": 1,
+  "trianglesTotal": 2681,
+  "trianglesWalkable": 1522,
+  "chunks": 1
+ },
+ "walls": {
+  "triangles": 1156,
+  "chunks": 19,
+  "minHeight": 1
+ }
+}

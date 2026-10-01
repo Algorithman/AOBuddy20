@@ -1,0 +1,28 @@
+{
+ "playfield": 6115,
+ "name": "Alien Wrecked (dng)",
+ "playfieldVersion": 10,
+ "files": [
+  "rooms.json",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "dungeon",
+ "dungeon": {
+  "tilemap": 6114,
+  "rooms": 9,
+  "cell": 2,
+  "heightScale": 0.20000000298023224
+ },
+ "collision": {
+  "records": 9,
+  "trianglesTotal": 49024,
+  "trianglesWalkable": 17467,
+  "chunks": 12
+ },
+ "walls": {
+  "triangles": 12725,
+  "chunks": 11,
+  "minHeight": 1
+ }
+}

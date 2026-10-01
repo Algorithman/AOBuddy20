@@ -1,0 +1,44 @@
+{
+ "playfield": 6061,
+ "name": "Engineers' Dugout",
+ "playfieldVersion": 10,
+ "files": [
+  "ground.bin",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "outdoor",
+ "ground": {
+  "samplesX": 113,
+  "samplesZ": 113,
+  "cell": 4,
+  "heightScale": 0.0007812500116415322,
+  "sourceHeightBits": 8,
+  "worldSize": [
+   448,
+   448
+  ],
+  "heightRange": [
+   0,
+   0
+  ],
+  "heightVerifiable": true,
+  "waterPlanes": [
+   0.8
+  ],
+  "waterPolygons": [
+   0.8
+  ]
+ },
+ "collision": {
+  "records": 20,
+  "trianglesTotal": 16856,
+  "trianglesWalkable": 8820,
+  "chunks": 20
+ },
+ "walls": {
+  "triangles": 5828,
+  "chunks": 20,
+  "minHeight": 1
+ }
+}

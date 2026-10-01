@@ -1,0 +1,28 @@
+{
+ "playfield": 1510,
+ "name": "Neutral Insurance building",
+ "playfieldVersion": 8,
+ "files": [
+  "rooms.json",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "dungeon",
+ "dungeon": {
+  "tilemap": 1500,
+  "rooms": 1,
+  "cell": 2,
+  "heightScale": 0.20000000298023224
+ },
+ "collision": {
+  "records": 1,
+  "trianglesTotal": 1592,
+  "trianglesWalkable": 508,
+  "chunks": 1
+ },
+ "walls": {
+  "triangles": 516,
+  "chunks": 1,
+  "minHeight": 1
+ }
+}

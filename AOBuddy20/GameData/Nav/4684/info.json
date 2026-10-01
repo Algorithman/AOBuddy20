@@ -1,0 +1,44 @@
+{
+ "playfield": 4684,
+ "name": "Garden of Redeemed Adonis",
+ "playfieldVersion": 10,
+ "files": [
+  "ground.bin",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "outdoor",
+ "ground": {
+  "samplesX": 225,
+  "samplesZ": 225,
+  "cell": 4,
+  "heightScale": 0.0023437500931322575,
+  "sourceHeightBits": 8,
+  "worldSize": [
+   896,
+   896
+  ],
+  "heightRange": [
+   0,
+   124.8
+  ],
+  "heightVerifiable": true,
+  "waterPlanes": [
+   1
+  ],
+  "waterPolygons": [
+   1
+  ]
+ },
+ "collision": {
+  "records": 157,
+  "trianglesTotal": 66931,
+  "trianglesWalkable": 33712,
+  "chunks": 223
+ },
+ "walls": {
+  "triangles": 29512,
+  "chunks": 202,
+  "minHeight": 1
+ }
+}

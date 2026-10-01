@@ -1,0 +1,28 @@
+{
+ "playfield": 1901,
+ "name": "Neutral Organisation Office",
+ "playfieldVersion": 8,
+ "files": [
+  "rooms.json",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "dungeon",
+ "dungeon": {
+  "tilemap": 1900,
+  "rooms": 4,
+  "cell": 2,
+  "heightScale": 0.20000000298023224
+ },
+ "collision": {
+  "records": 4,
+  "trianglesTotal": 2701,
+  "trianglesWalkable": 925,
+  "chunks": 4
+ },
+ "walls": {
+  "triangles": 992,
+  "chunks": 4,
+  "minHeight": 1
+ }
+}

@@ -1,0 +1,28 @@
+{
+ "playfield": 321,
+ "name": "AutocontentHITech(dung)",
+ "playfieldVersion": 8,
+ "files": [
+  "rooms.json",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "dungeon",
+ "dungeon": {
+  "tilemap": 308,
+  "rooms": 69,
+  "cell": 2,
+  "heightScale": 0.20000000298023224
+ },
+ "collision": {
+  "records": 69,
+  "trianglesTotal": 129056,
+  "trianglesWalkable": 40977,
+  "chunks": 75
+ },
+ "walls": {
+  "triangles": 41890,
+  "chunks": 75,
+  "minHeight": 1
+ }
+}

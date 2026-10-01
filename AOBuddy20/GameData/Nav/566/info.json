@@ -1,0 +1,44 @@
+{
+ "playfield": 566,
+ "name": "Newland City",
+ "playfieldVersion": 10,
+ "files": [
+  "ground.bin",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "outdoor",
+ "ground": {
+  "samplesX": 193,
+  "samplesZ": 193,
+  "cell": 4,
+  "heightScale": 0.0007812500116415322,
+  "sourceHeightBits": 8,
+  "worldSize": [
+   768,
+   768
+  ],
+  "heightRange": [
+   0,
+   51
+  ],
+  "heightVerifiable": true,
+  "waterPlanes": [
+   32.1
+  ],
+  "waterPolygons": [
+   32.1
+  ]
+ },
+ "collision": {
+  "records": 111,
+  "trianglesTotal": 19758,
+  "trianglesWalkable": 8538,
+  "chunks": 148
+ },
+ "walls": {
+  "triangles": 9539,
+  "chunks": 166,
+  "minHeight": 1
+ }
+}

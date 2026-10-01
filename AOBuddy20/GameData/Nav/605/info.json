@@ -1,0 +1,41 @@
+{
+ "playfield": 605,
+ "name": "Belial Forest",
+ "playfieldVersion": 10,
+ "files": [
+  "ground.bin",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "outdoor",
+ "ground": {
+  "samplesX": 1025,
+  "samplesZ": 897,
+  "cell": 4,
+  "heightScale": 0.0007812500116415322,
+  "sourceHeightBits": 8,
+  "worldSize": [
+   4096,
+   3584
+  ],
+  "heightRange": [
+   0,
+   51
+  ],
+  "heightVerifiable": true,
+  "waterPlanes": [
+   0
+  ]
+ },
+ "collision": {
+  "records": 6114,
+  "trianglesTotal": 516811,
+  "trianglesWalkable": 255268,
+  "chunks": 6182
+ },
+ "walls": {
+  "triangles": 222054,
+  "chunks": 5581,
+  "minHeight": 1
+ }
+}

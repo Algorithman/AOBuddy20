@@ -1,0 +1,28 @@
+{
+ "playfield": 4346,
+ "name": "Advanced Neutral org hq",
+ "playfieldVersion": 10,
+ "files": [
+  "rooms.json",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "dungeon",
+ "dungeon": {
+  "tilemap": 4820,
+  "rooms": 6,
+  "cell": 2,
+  "heightScale": 0.20000000298023224
+ },
+ "collision": {
+  "records": 6,
+  "trianglesTotal": 25723,
+  "trianglesWalkable": 9353,
+  "chunks": 8
+ },
+ "walls": {
+  "triangles": 11670,
+  "chunks": 9,
+  "minHeight": 1
+ }
+}

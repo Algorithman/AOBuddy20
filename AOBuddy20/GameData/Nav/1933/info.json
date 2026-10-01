@@ -1,0 +1,28 @@
+{
+ "playfield": 1933,
+ "name": "Dng: Steps of Madness",
+ "playfieldVersion": 10,
+ "files": [
+  "rooms.json",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "dungeon",
+ "dungeon": {
+  "tilemap": 1932,
+  "rooms": 17,
+  "cell": 2,
+  "heightScale": 0.20000000298023224
+ },
+ "collision": {
+  "records": 17,
+  "trianglesTotal": 71450,
+  "trianglesWalkable": 23403,
+  "chunks": 20
+ },
+ "walls": {
+  "triangles": 25840,
+  "chunks": 20,
+  "minHeight": 1
+ }
+}

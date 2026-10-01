@@ -1,0 +1,42 @@
+{
+ "playfield": 4881,
+ "name": "Lower Scheol",
+ "playfieldVersion": 10,
+ "files": [
+  "ground.bin",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "outdoor",
+ "ground": {
+  "samplesX": 897,
+  "samplesZ": 513,
+  "cell": 4,
+  "heightScale": 0.00390625,
+  "sourceHeightBits": 8,
+  "worldSize": [
+   3584,
+   2048
+  ],
+  "heightRange": [
+   0,
+   255
+  ],
+  "heightVerifiable": true,
+  "waterPlanes": [
+   17,
+   0
+  ]
+ },
+ "collision": {
+  "records": 1696,
+  "trianglesTotal": 404967,
+  "trianglesWalkable": 226913,
+  "chunks": 3362
+ },
+ "walls": {
+  "triangles": 167155,
+  "chunks": 2147,
+  "minHeight": 1
+ }
+}

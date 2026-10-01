@@ -1,0 +1,41 @@
+{
+ "playfield": 4468,
+ "name": "Unicorn Outpost to sector 7",
+ "playfieldVersion": 10,
+ "files": [
+  "ground.bin",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "outdoor",
+ "ground": {
+  "samplesX": 113,
+  "samplesZ": 113,
+  "cell": 4,
+  "heightScale": 0.001953125,
+  "sourceHeightBits": 16,
+  "worldSize": [
+   448,
+   448
+  ],
+  "heightRange": [
+   0.0859,
+   78.9355
+  ],
+  "heightVerifiable": false,
+  "waterPlanes": [
+   0
+  ]
+ },
+ "collision": {
+  "records": 56,
+  "trianglesTotal": 27477,
+  "trianglesWalkable": 10736,
+  "chunks": 148
+ },
+ "walls": {
+  "triangles": 11237,
+  "chunks": 134,
+  "minHeight": 1
+ }
+}

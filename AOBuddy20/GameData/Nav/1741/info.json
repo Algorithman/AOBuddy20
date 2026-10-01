@@ -1,0 +1,28 @@
+{
+ "playfield": 1741,
+ "name": "enigma_tree01",
+ "playfieldVersion": 8,
+ "files": [
+  "rooms.json",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "dungeon",
+ "dungeon": {
+  "tilemap": 1740,
+  "rooms": 1,
+  "cell": 2,
+  "heightScale": 0.20000000298023224
+ },
+ "collision": {
+  "records": 1,
+  "trianglesTotal": 726,
+  "trianglesWalkable": 243,
+  "chunks": 1
+ },
+ "walls": {
+  "triangles": 260,
+  "chunks": 1,
+  "minHeight": 1
+ }
+}

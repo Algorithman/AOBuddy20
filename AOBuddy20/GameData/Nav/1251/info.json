@@ -1,0 +1,28 @@
+{
+ "playfield": 1251,
+ "name": "Omni Small Guild",
+ "playfieldVersion": 8,
+ "files": [
+  "rooms.json",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "dungeon",
+ "dungeon": {
+  "tilemap": 1250,
+  "rooms": 12,
+  "cell": 2,
+  "heightScale": 0.20000000298023224
+ },
+ "collision": {
+  "records": 12,
+  "trianglesTotal": 14127,
+  "trianglesWalkable": 4759,
+  "chunks": 12
+ },
+ "walls": {
+  "triangles": 4942,
+  "chunks": 12,
+  "minHeight": 1
+ }
+}

@@ -1,0 +1,55 @@
+{
+ "playfield": 560,
+ "name": "Mort",
+ "playfieldVersion": 10,
+ "files": [
+  "ground.bin",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "outdoor",
+ "ground": {
+  "samplesX": 1025,
+  "samplesZ": 1025,
+  "cell": 4,
+  "heightScale": 0.0007812500116415322,
+  "sourceHeightBits": 8,
+  "worldSize": [
+   4096,
+   4096
+  ],
+  "heightRange": [
+   0.8,
+   51
+  ],
+  "heightVerifiable": true,
+  "waterPlanes": [
+   17.94
+  ],
+  "waterPolygons": [
+   11.5,
+   20.5,
+   21,
+   21,
+   21,
+   15.4,
+   16.7,
+   31.4,
+   30.2,
+   29.05,
+   7.51,
+   17.94
+  ]
+ },
+ "collision": {
+  "records": 2688,
+  "trianglesTotal": 74860,
+  "trianglesWalkable": 38266,
+  "chunks": 2687
+ },
+ "walls": {
+  "triangles": 29021,
+  "chunks": 2488,
+  "minHeight": 1
+ }
+}

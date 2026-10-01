@@ -1,0 +1,44 @@
+{
+ "playfield": 585,
+ "name": "Aegean",
+ "playfieldVersion": 10,
+ "files": [
+  "ground.bin",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "outdoor",
+ "ground": {
+  "samplesX": 769,
+  "samplesZ": 897,
+  "cell": 4,
+  "heightScale": 0.0011718750465661287,
+  "sourceHeightBits": 8,
+  "worldSize": [
+   3072,
+   3584
+  ],
+  "heightRange": [
+   0,
+   76.5
+  ],
+  "heightVerifiable": true,
+  "waterPlanes": [
+   14
+  ],
+  "waterPolygons": [
+   14
+  ]
+ },
+ "collision": {
+  "records": 3283,
+  "trianglesTotal": 182151,
+  "trianglesWalkable": 101101,
+  "chunks": 3284
+ },
+ "walls": {
+  "triangles": 59738,
+  "chunks": 2422,
+  "minHeight": 1
+ }
+}

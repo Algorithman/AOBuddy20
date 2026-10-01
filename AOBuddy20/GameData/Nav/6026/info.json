@@ -1,0 +1,28 @@
+{
+ "playfield": 6026,
+ "name": "Pegrama Medical Facility (dng)",
+ "playfieldVersion": 10,
+ "files": [
+  "rooms.json",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "dungeon",
+ "dungeon": {
+  "tilemap": 6025,
+  "rooms": 9,
+  "cell": 2,
+  "heightScale": 0.20000000298023224
+ },
+ "collision": {
+  "records": 9,
+  "trianglesTotal": 11173,
+  "trianglesWalkable": 3778,
+  "chunks": 9
+ },
+ "walls": {
+  "triangles": 3314,
+  "chunks": 9,
+  "minHeight": 1
+ }
+}

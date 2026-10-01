@@ -1,0 +1,44 @@
+{
+ "playfield": 4310,
+ "name": "Nascense Frontier",
+ "playfieldVersion": 10,
+ "files": [
+  "ground.bin",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "outdoor",
+ "ground": {
+  "samplesX": 513,
+  "samplesZ": 513,
+  "cell": 4,
+  "heightScale": 0.0023437500931322575,
+  "sourceHeightBits": 8,
+  "worldSize": [
+   2048,
+   2048
+  ],
+  "heightRange": [
+   0,
+   135.6
+  ],
+  "heightVerifiable": true,
+  "waterPlanes": [
+   6
+  ],
+  "waterPolygons": [
+   6
+  ]
+ },
+ "collision": {
+  "records": 1288,
+  "trianglesTotal": 291865,
+  "trianglesWalkable": 148929,
+  "chunks": 1627
+ },
+ "walls": {
+  "triangles": 135943,
+  "chunks": 1557,
+  "minHeight": 1
+ }
+}

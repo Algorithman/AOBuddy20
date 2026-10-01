@@ -1,0 +1,46 @@
+{
+ "playfield": 556,
+ "name": "Coast of Peace",
+ "playfieldVersion": 10,
+ "files": [
+  "ground.bin",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "outdoor",
+ "ground": {
+  "samplesX": 1537,
+  "samplesZ": 769,
+  "cell": 4,
+  "heightScale": 0.001953125,
+  "sourceHeightBits": 16,
+  "worldSize": [
+   6144,
+   3072
+  ],
+  "heightRange": [
+   0,
+   127.998
+  ],
+  "heightVerifiable": false,
+  "waterPlanes": [
+   8
+  ],
+  "waterPolygons": [
+   14.62,
+   14.61,
+   8
+  ]
+ },
+ "collision": {
+  "records": 4401,
+  "trianglesTotal": 624455,
+  "trianglesWalkable": 319409,
+  "chunks": 4501
+ },
+ "walls": {
+  "triangles": 195025,
+  "chunks": 4187,
+  "minHeight": 1
+ }
+}

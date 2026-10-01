@@ -1,0 +1,41 @@
+{
+ "playfield": 4011,
+ "name": "Garden_of_unredeemed",
+ "playfieldVersion": 8,
+ "files": [
+  "ground.bin",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "outdoor",
+ "ground": {
+  "samplesX": 225,
+  "samplesZ": 225,
+  "cell": 4,
+  "heightScale": 0.0007812500116415322,
+  "sourceHeightBits": 8,
+  "worldSize": [
+   896,
+   896
+  ],
+  "heightRange": [
+   0,
+   37
+  ],
+  "heightVerifiable": true,
+  "waterPlanes": [
+   0
+  ]
+ },
+ "collision": {
+  "records": 105,
+  "trianglesTotal": 24005,
+  "trianglesWalkable": 12104,
+  "chunks": 105
+ },
+ "walls": {
+  "triangles": 10119,
+  "chunks": 104,
+  "minHeight": 1
+ }
+}

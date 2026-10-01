@@ -1,0 +1,41 @@
+{
+ "playfield": 670,
+ "name": "Clondyke",
+ "playfieldVersion": 10,
+ "files": [
+  "ground.bin",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "outdoor",
+ "ground": {
+  "samplesX": 897,
+  "samplesZ": 1537,
+  "cell": 4,
+  "heightScale": 0.0007812500116415322,
+  "sourceHeightBits": 8,
+  "worldSize": [
+   3584,
+   6144
+  ],
+  "heightRange": [
+   0,
+   51
+  ],
+  "heightVerifiable": true,
+  "waterPlanes": [
+   0
+  ]
+ },
+ "collision": {
+  "records": 6196,
+  "trianglesTotal": 474189,
+  "trianglesWalkable": 210308,
+  "chunks": 6186
+ },
+ "walls": {
+  "triangles": 222652,
+  "chunks": 5997,
+  "minHeight": 1
+ }
+}

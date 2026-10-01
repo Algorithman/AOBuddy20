@@ -1,0 +1,28 @@
+{
+ "playfield": 2064,
+ "name": "neut_basic_implants_shop",
+ "playfieldVersion": 10,
+ "files": [
+  "rooms.json",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "dungeon",
+ "dungeon": {
+  "tilemap": 1130,
+  "rooms": 2,
+  "cell": 2,
+  "heightScale": 0.20000000298023224
+ },
+ "collision": {
+  "records": 2,
+  "trianglesTotal": 1682,
+  "trianglesWalkable": 544,
+  "chunks": 2
+ },
+ "walls": {
+  "triangles": 616,
+  "chunks": 2,
+  "minHeight": 1
+ }
+}

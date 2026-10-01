@@ -1,0 +1,41 @@
+{
+ "playfield": 4337,
+ "name": "Albtraum",
+ "playfieldVersion": 10,
+ "files": [
+  "ground.bin",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "outdoor",
+ "ground": {
+  "samplesX": 225,
+  "samplesZ": 225,
+  "cell": 4,
+  "heightScale": 0.0007812500116415322,
+  "sourceHeightBits": 8,
+  "worldSize": [
+   896,
+   896
+  ],
+  "heightRange": [
+   26.8,
+   44.4
+  ],
+  "heightVerifiable": true,
+  "waterPlanes": [
+   0
+  ]
+ },
+ "collision": {
+  "records": 202,
+  "trianglesTotal": 29993,
+  "trianglesWalkable": 15464,
+  "chunks": 202
+ },
+ "walls": {
+  "triangles": 13965,
+  "chunks": 197,
+  "minHeight": 1
+ }
+}

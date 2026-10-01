@@ -1,0 +1,44 @@
+{
+ "playfield": 6050,
+ "name": "Serenity Island Infested",
+ "playfieldVersion": 10,
+ "files": [
+  "ground.bin",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "outdoor",
+ "ground": {
+  "samplesX": 769,
+  "samplesZ": 769,
+  "cell": 4,
+  "heightScale": 0.0007812500116415322,
+  "sourceHeightBits": 8,
+  "worldSize": [
+   3072,
+   3072
+  ],
+  "heightRange": [
+   0,
+   51
+  ],
+  "heightVerifiable": true,
+  "waterPlanes": [
+   4.8
+  ],
+  "waterPolygons": [
+   4.8
+  ]
+ },
+ "collision": {
+  "records": 202,
+  "trianglesTotal": 20865,
+  "trianglesWalkable": 10460,
+  "chunks": 201
+ },
+ "walls": {
+  "triangles": 8140,
+  "chunks": 198,
+  "minHeight": 1
+ }
+}

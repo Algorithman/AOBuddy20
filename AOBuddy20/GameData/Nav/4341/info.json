@@ -1,0 +1,28 @@
+{
+ "playfield": 4341,
+ "name": "Basic Omni org hq",
+ "playfieldVersion": 10,
+ "files": [
+  "rooms.json",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "dungeon",
+ "dungeon": {
+  "tilemap": 4820,
+  "rooms": 5,
+  "cell": 2,
+  "heightScale": 0.20000000298023224
+ },
+ "collision": {
+  "records": 5,
+  "trianglesTotal": 21999,
+  "trianglesWalkable": 7872,
+  "chunks": 7
+ },
+ "walls": {
+  "triangles": 10204,
+  "chunks": 8,
+  "minHeight": 1
+ }
+}

@@ -1,0 +1,28 @@
+{
+ "playfield": 1931,
+ "name": "Dng: Temple of Three Winds",
+ "playfieldVersion": 10,
+ "files": [
+  "rooms.json",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "dungeon",
+ "dungeon": {
+  "tilemap": 1930,
+  "rooms": 30,
+  "cell": 2,
+  "heightScale": 0.20000000298023224
+ },
+ "collision": {
+  "records": 30,
+  "trianglesTotal": 160900,
+  "trianglesWalkable": 51630,
+  "chunks": 43
+ },
+ "walls": {
+  "triangles": 52792,
+  "chunks": 40,
+  "minHeight": 1
+ }
+}

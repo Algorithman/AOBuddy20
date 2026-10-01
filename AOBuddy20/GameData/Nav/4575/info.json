@@ -1,0 +1,28 @@
+{
+ "playfield": 4575,
+ "name": "IPS Interior - Basic",
+ "playfieldVersion": 9,
+ "files": [
+  "rooms.json",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "dungeon",
+ "dungeon": {
+  "tilemap": 4574,
+  "rooms": 1,
+  "cell": 2,
+  "heightScale": 0.20000000298023224
+ },
+ "collision": {
+  "records": 1,
+  "trianglesTotal": 12886,
+  "trianglesWalkable": 4186,
+  "chunks": 3
+ },
+ "walls": {
+  "triangles": 1748,
+  "chunks": 1,
+  "minHeight": 1
+ }
+}

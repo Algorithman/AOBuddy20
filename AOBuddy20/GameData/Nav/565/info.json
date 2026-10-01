@@ -1,0 +1,53 @@
+{
+ "playfield": 565,
+ "name": "Newland Desert",
+ "playfieldVersion": 10,
+ "files": [
+  "ground.bin",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "outdoor",
+ "ground": {
+  "samplesX": 1025,
+  "samplesZ": 897,
+  "cell": 4,
+  "heightScale": 0.0011718750465661287,
+  "sourceHeightBits": 8,
+  "worldSize": [
+   4096,
+   3584
+  ],
+  "heightRange": [
+   0,
+   76.5
+  ],
+  "heightVerifiable": true,
+  "waterPlanes": [
+   49.2
+  ],
+  "waterPolygons": [
+   36.7,
+   30.8,
+   14.68,
+   14.7,
+   16.1,
+   18.3,
+   11.9,
+   11.9,
+   12.42,
+   49.2
+  ]
+ },
+ "collision": {
+  "records": 2148,
+  "trianglesTotal": 96524,
+  "trianglesWalkable": 41122,
+  "chunks": 2148
+ },
+ "walls": {
+  "triangles": 50505,
+  "chunks": 2118,
+  "minHeight": 1
+ }
+}

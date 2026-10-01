@@ -1,0 +1,41 @@
+{
+ "playfield": 4368,
+ "name": "Unicorn Outpost - Lower level",
+ "playfieldVersion": 10,
+ "files": [
+  "ground.bin",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "outdoor",
+ "ground": {
+  "samplesX": 113,
+  "samplesZ": 113,
+  "cell": 4,
+  "heightScale": 0.001953125,
+  "sourceHeightBits": 16,
+  "worldSize": [
+   448,
+   448
+  ],
+  "heightRange": [
+   0,
+   70.2246
+  ],
+  "heightVerifiable": false,
+  "waterPlanes": [
+   0
+  ]
+ },
+ "collision": {
+  "records": 59,
+  "trianglesTotal": 14940,
+  "trianglesWalkable": 5111,
+  "chunks": 104
+ },
+ "walls": {
+  "triangles": 9250,
+  "chunks": 123,
+  "minHeight": 1
+ }
+}

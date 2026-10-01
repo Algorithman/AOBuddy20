@@ -1,0 +1,28 @@
+{
+ "playfield": 4350,
+ "name": "Notum Silo Inside",
+ "playfieldVersion": 10,
+ "files": [
+  "rooms.json",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "dungeon",
+ "dungeon": {
+  "tilemap": 4820,
+  "rooms": 1,
+  "cell": 2,
+  "heightScale": 0.20000000298023224
+ },
+ "collision": {
+  "records": 1,
+  "trianglesTotal": 6324,
+  "trianglesWalkable": 2206,
+  "chunks": 2
+ },
+ "walls": {
+  "triangles": 2054,
+  "chunks": 2,
+  "minHeight": 1
+ }
+}

@@ -1,0 +1,28 @@
+{
+ "playfield": 1243,
+ "name": "Neutral Big Clan Apartment",
+ "playfieldVersion": 8,
+ "files": [
+  "rooms.json",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "dungeon",
+ "dungeon": {
+  "tilemap": 1240,
+  "rooms": 7,
+  "cell": 2,
+  "heightScale": 0.20000000298023224
+ },
+ "collision": {
+  "records": 7,
+  "trianglesTotal": 14314,
+  "trianglesWalkable": 4658,
+  "chunks": 7
+ },
+ "walls": {
+  "triangles": 3847,
+  "chunks": 7,
+  "minHeight": 1
+ }
+}

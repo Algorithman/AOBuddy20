@@ -1,0 +1,28 @@
+{
+ "playfield": 4318,
+ "name": "Nascense Portal",
+ "playfieldVersion": 9,
+ "files": [
+  "rooms.json",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "dungeon",
+ "dungeon": {
+  "tilemap": 4317,
+  "rooms": 1,
+  "cell": 2,
+  "heightScale": 0.20000000298023224
+ },
+ "collision": {
+  "records": 1,
+  "trianglesTotal": 11193,
+  "trianglesWalkable": 3479,
+  "chunks": 2
+ },
+ "walls": {
+  "triangles": 2837,
+  "chunks": 2,
+  "minHeight": 1
+ }
+}

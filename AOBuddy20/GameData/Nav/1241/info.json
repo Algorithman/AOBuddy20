@@ -1,0 +1,28 @@
+{
+ "playfield": 1241,
+ "name": "Neutral Small Clan Apartment",
+ "playfieldVersion": 8,
+ "files": [
+  "rooms.json",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "dungeon",
+ "dungeon": {
+  "tilemap": 1240,
+  "rooms": 5,
+  "cell": 2,
+  "heightScale": 0.20000000298023224
+ },
+ "collision": {
+  "records": 5,
+  "trianglesTotal": 6126,
+  "trianglesWalkable": 2020,
+  "chunks": 5
+ },
+ "walls": {
+  "triangles": 1857,
+  "chunks": 5,
+  "minHeight": 1
+ }
+}

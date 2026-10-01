@@ -1,0 +1,28 @@
+{
+ "playfield": 4215,
+ "name": "Maze_Phlegethas1_inf_red",
+ "playfieldVersion": 9,
+ "files": [
+  "rooms.json",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "dungeon",
+ "dungeon": {
+  "tilemap": 4210,
+  "rooms": 24,
+  "cell": 2,
+  "heightScale": 0.20000000298023224
+ },
+ "collision": {
+  "records": 24,
+  "trianglesTotal": 376896,
+  "trianglesWalkable": 127312,
+  "chunks": 71
+ },
+ "walls": {
+  "triangles": 130357,
+  "chunks": 74,
+  "minHeight": 1
+ }
+}

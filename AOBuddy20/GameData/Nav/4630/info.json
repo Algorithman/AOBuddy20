@@ -1,0 +1,28 @@
+{
+ "playfield": 4630,
+ "name": "Unredeemed Temple (Inferno)",
+ "playfieldVersion": 10,
+ "files": [
+  "rooms.json",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "dungeon",
+ "dungeon": {
+  "tilemap": 4620,
+  "rooms": 9,
+  "cell": 2,
+  "heightScale": 0.20000000298023224
+ },
+ "collision": {
+  "records": 9,
+  "trianglesTotal": 87239,
+  "trianglesWalkable": 30272,
+  "chunks": 19
+ },
+ "walls": {
+  "triangles": 21569,
+  "chunks": 15,
+  "minHeight": 1
+ }
+}

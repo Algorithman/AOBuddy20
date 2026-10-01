@@ -1,0 +1,28 @@
+{
+ "playfield": 6123,
+ "name": "Alien ship 3 crashed (dng)",
+ "playfieldVersion": 10,
+ "files": [
+  "rooms.json",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "dungeon",
+ "dungeon": {
+  "tilemap": 6122,
+  "rooms": 24,
+  "cell": 2,
+  "heightScale": 0.20000000298023224
+ },
+ "collision": {
+  "records": 24,
+  "trianglesTotal": 149868,
+  "trianglesWalkable": 52579,
+  "chunks": 37
+ },
+ "walls": {
+  "triangles": 38015,
+  "chunks": 29,
+  "minHeight": 1
+ }
+}

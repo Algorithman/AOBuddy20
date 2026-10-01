@@ -1,0 +1,41 @@
+{
+ "playfield": 6101,
+ "name": "Three Craters West",
+ "playfieldVersion": 10,
+ "files": [
+  "ground.bin",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "outdoor",
+ "ground": {
+  "samplesX": 769,
+  "samplesZ": 1537,
+  "cell": 4,
+  "heightScale": 0.0007812500116415322,
+  "sourceHeightBits": 8,
+  "worldSize": [
+   3072,
+   6144
+  ],
+  "heightRange": [
+   0,
+   51
+  ],
+  "heightVerifiable": true,
+  "waterPlanes": [
+   0
+  ]
+ },
+ "collision": {
+  "records": 1446,
+  "trianglesTotal": 91130,
+  "trianglesWalkable": 40467,
+  "chunks": 1499
+ },
+ "walls": {
+  "triangles": 49422,
+  "chunks": 1486,
+  "minHeight": 1
+ }
+}

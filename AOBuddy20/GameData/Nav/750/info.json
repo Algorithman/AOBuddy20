@@ -1,0 +1,45 @@
+{
+ "playfield": 750,
+ "name": "The Reck",
+ "playfieldVersion": 10,
+ "files": [
+  "ground.bin",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "outdoor",
+ "ground": {
+  "samplesX": 769,
+  "samplesZ": 1025,
+  "cell": 4,
+  "heightScale": 0.0007812500116415322,
+  "sourceHeightBits": 8,
+  "worldSize": [
+   3072,
+   4096
+  ],
+  "heightRange": [
+   0,
+   51
+  ],
+  "heightVerifiable": true,
+  "waterPlanes": [
+   12
+  ],
+  "waterPolygons": [
+   12,
+   12
+  ]
+ },
+ "collision": {
+  "records": 1598,
+  "trianglesTotal": 265148,
+  "trianglesWalkable": 127849,
+  "chunks": 1623
+ },
+ "walls": {
+  "triangles": 108468,
+  "chunks": 1524,
+  "minHeight": 1
+ }
+}

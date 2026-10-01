@@ -1,0 +1,41 @@
+{
+ "playfield": 8002,
+ "name": "Race PF",
+ "playfieldVersion": 10,
+ "files": [
+  "ground.bin",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "outdoor",
+ "ground": {
+  "samplesX": 193,
+  "samplesZ": 385,
+  "cell": 4,
+  "heightScale": 0.0007812500116415322,
+  "sourceHeightBits": 8,
+  "worldSize": [
+   768,
+   1536
+  ],
+  "heightRange": [
+   0,
+   49
+  ],
+  "heightVerifiable": true,
+  "waterPlanes": [
+   0
+  ]
+ },
+ "collision": {
+  "records": 300,
+  "trianglesTotal": 54440,
+  "trianglesWalkable": 14469,
+  "chunks": 475
+ },
+ "walls": {
+  "triangles": 39785,
+  "chunks": 113,
+  "minHeight": 1
+ }
+}

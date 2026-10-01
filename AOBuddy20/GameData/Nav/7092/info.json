@@ -1,0 +1,28 @@
+{
+ "playfield": 7092,
+ "name": "Unicorn Dungeon",
+ "playfieldVersion": 10,
+ "files": [
+  "rooms.json",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "dungeon",
+ "dungeon": {
+  "tilemap": 7091,
+  "rooms": 3,
+  "cell": 2,
+  "heightScale": 0.20000000298023224
+ },
+ "collision": {
+  "records": 3,
+  "trianglesTotal": 11300,
+  "trianglesWalkable": 3804,
+  "chunks": 4
+ },
+ "walls": {
+  "triangles": 1760,
+  "chunks": 3,
+  "minHeight": 1
+ }
+}

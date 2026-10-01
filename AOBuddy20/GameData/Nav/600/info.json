@@ -1,0 +1,44 @@
+{
+ "playfield": 600,
+ "name": "Varmint Woods",
+ "playfieldVersion": 10,
+ "files": [
+  "ground.bin",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "outdoor",
+ "ground": {
+  "samplesX": 1537,
+  "samplesZ": 897,
+  "cell": 4,
+  "heightScale": 0.0011718750465661287,
+  "sourceHeightBits": 8,
+  "worldSize": [
+   6144,
+   3584
+  ],
+  "heightRange": [
+   0,
+   76.5
+  ],
+  "heightVerifiable": true,
+  "waterPlanes": [
+   32.1
+  ],
+  "waterPolygons": [
+   32.11
+  ]
+ },
+ "collision": {
+  "records": 7083,
+  "trianglesTotal": 321802,
+  "trianglesWalkable": 158656,
+  "chunks": 7078
+ },
+ "walls": {
+  "triangles": 156577,
+  "chunks": 6764,
+  "minHeight": 1
+ }
+}

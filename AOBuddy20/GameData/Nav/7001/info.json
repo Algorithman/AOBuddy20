@@ -1,0 +1,28 @@
+{
+ "playfield": 7001,
+ "name": "Palmiero's Office (dng)",
+ "playfieldVersion": 10,
+ "files": [
+  "rooms.json",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "dungeon",
+ "dungeon": {
+  "tilemap": 7000,
+  "rooms": 1,
+  "cell": 2,
+  "heightScale": 0.20000000298023224
+ },
+ "collision": {
+  "records": 1,
+  "trianglesTotal": 7334,
+  "trianglesWalkable": 2492,
+  "chunks": 2
+ },
+ "walls": {
+  "triangles": 1443,
+  "chunks": 1,
+  "minHeight": 1
+ }
+}

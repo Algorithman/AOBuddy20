@@ -1,0 +1,44 @@
+{
+ "playfield": 5002,
+ "name": "Montroyal",
+ "playfieldVersion": 10,
+ "files": [
+  "ground.bin",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "outdoor",
+ "ground": {
+  "samplesX": 257,
+  "samplesZ": 257,
+  "cell": 4,
+  "heightScale": 0.0031250000465661287,
+  "sourceHeightBits": 16,
+  "worldSize": [
+   1024,
+   1024
+  ],
+  "heightRange": [
+   0.7219,
+   166.2969
+  ],
+  "heightVerifiable": false,
+  "waterPlanes": [
+   159.6
+  ],
+  "waterPolygons": [
+   159.6
+  ]
+ },
+ "collision": {
+  "records": 353,
+  "trianglesTotal": 49178,
+  "trianglesWalkable": 18042,
+  "chunks": 427
+ },
+ "walls": {
+  "triangles": 28785,
+  "chunks": 463,
+  "minHeight": 1
+ }
+}

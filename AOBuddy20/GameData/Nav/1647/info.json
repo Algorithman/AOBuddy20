@@ -1,0 +1,28 @@
+{
+ "playfield": 1647,
+ "name": "lowtech_building7 VP dng",
+ "playfieldVersion": 8,
+ "files": [
+  "rooms.json",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "dungeon",
+ "dungeon": {
+  "tilemap": 1640,
+  "rooms": 1,
+  "cell": 2,
+  "heightScale": 0.20000000298023224
+ },
+ "collision": {
+  "records": 1,
+  "trianglesTotal": 742,
+  "trianglesWalkable": 252,
+  "chunks": 1
+ },
+ "walls": {
+  "triangles": 237,
+  "chunks": 1,
+  "minHeight": 1
+ }
+}

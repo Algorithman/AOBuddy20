@@ -1,0 +1,28 @@
+{
+ "playfield": 9050,
+ "name": "Desert Fortress",
+ "playfieldVersion": 10,
+ "files": [
+  "rooms.json",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "dungeon",
+ "dungeon": {
+  "tilemap": 9051,
+  "rooms": 12,
+  "cell": 2,
+  "heightScale": 0.20000000298023224
+ },
+ "collision": {
+  "records": 12,
+  "trianglesTotal": 42644,
+  "trianglesWalkable": 14243,
+  "chunks": 15
+ },
+ "walls": {
+  "triangles": 11498,
+  "chunks": 13,
+  "minHeight": 1
+ }
+}

@@ -1,0 +1,42 @@
+{
+ "playfield": 4006,
+ "name": "Penumbra",
+ "playfieldVersion": 9,
+ "files": [
+  "ground.bin",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "outdoor",
+ "ground": {
+  "samplesX": 1025,
+  "samplesZ": 769,
+  "cell": 4,
+  "heightScale": 0.0023437500931322575,
+  "sourceHeightBits": 8,
+  "worldSize": [
+   4096,
+   3072
+  ],
+  "heightRange": [
+   0,
+   153
+  ],
+  "heightVerifiable": true,
+  "waterPlanes": [
+   14.3,
+   0
+  ]
+ },
+ "collision": {
+  "records": 3500,
+  "trianglesTotal": 780590,
+  "trianglesWalkable": 369960,
+  "chunks": 3594
+ },
+ "walls": {
+  "triangles": 374827,
+  "chunks": 3604,
+  "minHeight": 1
+ }
+}

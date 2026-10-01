@@ -1,0 +1,45 @@
+{
+ "playfield": 4872,
+ "name": "Adonis City",
+ "playfieldVersion": 10,
+ "files": [
+  "ground.bin",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "outdoor",
+ "ground": {
+  "samplesX": 1025,
+  "samplesZ": 1025,
+  "cell": 4,
+  "heightScale": 0.0023437500931322575,
+  "sourceHeightBits": 8,
+  "worldSize": [
+   4096,
+   4096
+  ],
+  "heightRange": [
+   0,
+   153
+  ],
+  "heightVerifiable": true,
+  "waterPlanes": [
+   1
+  ],
+  "waterPolygons": [
+   106.01,
+   1
+  ]
+ },
+ "collision": {
+  "records": 3266,
+  "trianglesTotal": 1019324,
+  "trianglesWalkable": 508164,
+  "chunks": 3496
+ },
+ "walls": {
+  "triangles": 469803,
+  "chunks": 3405,
+  "minHeight": 1
+ }
+}

@@ -1,0 +1,28 @@
+{
+ "playfield": 1427,
+ "name": "Omni registration dng",
+ "playfieldVersion": 8,
+ "files": [
+  "rooms.json",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "dungeon",
+ "dungeon": {
+  "tilemap": 1425,
+  "rooms": 1,
+  "cell": 2,
+  "heightScale": 0.20000000298023224
+ },
+ "collision": {
+  "records": 1,
+  "trianglesTotal": 1060,
+  "trianglesWalkable": 340,
+  "chunks": 1
+ },
+ "walls": {
+  "triangles": 280,
+  "chunks": 1,
+  "minHeight": 1
+ }
+}

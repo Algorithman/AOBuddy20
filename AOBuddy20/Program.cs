@@ -14,6 +14,7 @@ using System.Security;
 using AOBuddy20.Chat;
 using AOBuddy20.Configuration;
 using AOBuddy20.Controlling;
+using AOBuddy20.Nav;
 using AOBuddy20.Network;
 using AOBuddy20.PacketConsumers;
 using AOBuddy20.Utils;
@@ -158,6 +159,10 @@ internal class Program
         services.AddSingleton(config);
 
         var provider = services.BuildServiceProvider();
+
+        // The zone graph before the session starts: the walk keeps off doors and zone lines that do
+        // not lead to its goal, and the loaded maps are immutable from here on.
+        Zoning.Load(AppDomain.CurrentDomain.BaseDirectory, s => Log.Logger.Information(s));
 
         Client.SuppressItemDataLoad();
 

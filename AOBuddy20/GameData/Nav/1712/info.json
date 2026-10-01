@@ -1,0 +1,28 @@
+{
+ "playfield": 1712,
+ "name": "Factory VP dng factory",
+ "playfieldVersion": 8,
+ "files": [
+  "rooms.json",
+  "collision.bin",
+  "walls.bin"
+ ],
+ "kind": "dungeon",
+ "dungeon": {
+  "tilemap": 1710,
+  "rooms": 1,
+  "cell": 2,
+  "heightScale": 0.20000000298023224
+ },
+ "collision": {
+  "records": 1,
+  "trianglesTotal": 1158,
+  "trianglesWalkable": 377,
+  "chunks": 1
+ },
+ "walls": {
+  "triangles": 327,
+  "chunks": 1,
+  "minHeight": 1
+ }
+}
