@@ -212,9 +212,9 @@ public sealed class OwnerChat
 
         t["help"] = (reply, p) =>
         {
-            reply("Commands: follow | stay | pos | status | goto x [y] z | come | travel <pf> | travel x z <pf> | resupply [stop|status|forget|machines] | stop | sit | stand | navdata | help." +
+            reply("Commands: follow | stay | pos | status | goto x [y] z | goto x z [pf] | come | travel pf | travel x z [pf] | resupply [stop|status|forget|machines] | stop | sit | stand | navdata | help." +
                   " follow stacks me on you and mirrors your movement; goto/come walk at priority Travel and hand me back to follow on arrival;" +
-                  " travel crosses playfields by zone lines, whompas and pads (id or name); resupply shops for stims and rechargers by my own skills.");
+                  " travel crosses playfields by zone lines, doors, whompas and pads (id or name); resupply shops for stims and rechargers by my own skills.");
         };
 
         // FOLLOW (AOBuddy10's stack/mirror tier): once on, the body's idle state is the owner - run
@@ -238,11 +238,26 @@ public sealed class OwnerChat
 
         // Walk to bare coordinates on this playfield. Y is optional: the walk takes its Y from the nav
         // data's floor, so a bare 'goto x z' keeps our height (y=0 would aim underground, 2026-10-01).
+        // The travel shape 'goto <x> <z> <playfield>' is recognized too - the last word names the
+        // playfield and the order crosses to it first. That shape was once parsed as x y z, aimed
+        // 400 m out of the playfield and the then-un guarded beeline ran the bot through the wall
+        // until the server yanked it back (Newland City 2026-10-01 21:25).
         t["goto"] = (reply, p) =>
         {
+            if (p.Length == 4 && TryParse(p[1], out var gx) && TryParse(p[2], out var gz))
+            {
+                var gpf = Zoning.FindPlayfield(p[3]);
+                if (gpf != 0)
+                {
+                    _movement.CancelTravel();
+                    reply(_movement.PlanTravel(gpf, new Vector3(gx, _movement.CurrentPosition.Y, gz)));
+                    return;
+                }
+            }
+
             if (p.Length < 3 || !TryParse(p[1], out var x) || !TryParse(p[p.Length - 1], out var z))
             {
-                reply("Usage: goto <x> [y] <z>");
+                reply("Usage: goto x [y] z | goto x z playfield");
                 return;
             }
 
@@ -251,7 +266,7 @@ public sealed class OwnerChat
             {
                 if (!TryParse(p[2], out y))
                 {
-                    reply("Usage: goto <x> [y] <z>");
+                    reply("Usage: goto x [y] z | goto x z playfield");
                     return;
                 }
             }
@@ -303,7 +318,7 @@ public sealed class OwnerChat
             }
             else
             {
-                reply("Usage: travel <playfield> | travel <x> <z> <playfield>");
+                reply("Usage: travel playfield | travel x z playfield");
                 return;
             }
 

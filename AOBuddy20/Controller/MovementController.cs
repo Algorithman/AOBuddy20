@@ -839,8 +839,7 @@ public sealed class MovementController : IPacketConsumer
 
         // WHERE TO STEP: the goal itself, or the next point of a grid ROUTE to it. The grid's
         // per-search blocked set keeps 2 m off every zone line and 3 m off every door/whompa/
-        // teleporter that is not the goal itself (AOBuddy10 OverlandController.BeginLeg) - without a
-        // route the walk beelines, and a beeline crosses whatever stands between (the 'come' door).
+        // teleporter that is not the goal itself (AOBuddy10 OverlandController.BeginLeg).
         var target = goal.Value.Position;
         var grid = _nav.Grid;
         if (grid != null)
@@ -848,6 +847,18 @@ public sealed class MovementController : IPacketConsumer
             if (_routePrio != goal.Key || _routePf != _pf || Movement.Flat(_routeGoal, target) > 0.01f)
             {
                 PlanRoute(pos, target, goal.Key);
+            }
+
+            if (_route.Count == 0)
+            {
+                // The grid covers the whole playfield and says the goal cannot be walked to. HOLD:
+                // the old beeline respected nothing and ran the bot through walls until the server
+                // yanked it back (Newland City, 2026-10-01 21:25 and 21:44 - both log lines ended
+                // in "walking straight"). Only a playfield WITHOUT grid data may walk straight
+                // lines; with data, unreachable means stand and say so (the goal stays set, and a
+                // changed goal or playfield re-plans).
+                _movement.Hold(me, SendIntervalMs);
+                return;
             }
 
             while (_routeIdx < _route.Count &&
@@ -1028,7 +1039,7 @@ public sealed class MovementController : IPacketConsumer
                     ?? grid.FindPath(from, goalPos, extra, SnapMeters, WideGoalReach, out _);
         if (route == null)
         {
-            _logger.LogInformation($"Movement: no grid route to the goal ({why}) - walking straight.");
+            _logger.LogInformation($"Movement: no grid route to the goal ({why}) - holding; a beeline would cross walls.");
             return;
         }
 
