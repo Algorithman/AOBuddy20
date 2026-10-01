@@ -157,13 +157,24 @@ internal class Program
         Client.SuppressItemDataLoad();
 
         Log.Logger.Information("Creating client...");
-        CreateBot(config);
-        // init packet router first
+        var instance = CreateBot(config);
+
+        // Wire the router before the session starts (review.md #12): registration has to be
+        // complete before the first packet flows.
         provider.GetService<PacketRouter>()?.Init();
 
         WirePackets(provider);
 
+        instance.Start();
+
+        provider.GetRequiredService<MovementController>().Start();
+        provider.GetRequiredService<BotLoop>().Start();
+
         Console.ReadLine();
+
+        provider.GetRequiredService<BotLoop>().Stop();
+        provider.GetRequiredService<MovementController>().Stop();
+        Client.Disconnect();
     }
 
     private static void AddServices(ServiceCollection services)
@@ -173,6 +184,7 @@ internal class Program
         services.AddSingleton<MissionController>();
         services.AddSingleton<Awareness>();
         services.AddSingleton<MovementController>();
+        services.AddSingleton<BotLoop>();
     }
 
     private static void WirePackets(ServiceProvider provider)
@@ -181,17 +193,19 @@ internal class Program
         if (router != null)
         {
             provider.GetService<Awareness>()?.RegisterPackets(router);
+            provider.GetService<MovementController>()?.RegisterPackets(router);
+            // MissionController: not wired yet - its handlers are still stubs (owner, 2026-10-01).
         }
     }
 
-    private static void CreateBot(AccountInfo accInfo)
+    private static ClientDomain CreateBot(AccountInfo accInfo)
     {
         var dimension = ParseDimension(accInfo.Dimension);
         _logger.Information($"Logging {accInfo.Character} into dimension {dimension}.");
         var instance = Client.CreateInstance(accInfo.Username, accInfo.Password, accInfo.Character, dimension, _logger);
 
         Client.SuppressItemDataLoad(false);
-        instance.Start();
+        return instance;
     }
 
 

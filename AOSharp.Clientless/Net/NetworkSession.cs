@@ -44,6 +44,14 @@ public class NetworkSession
     private Dictionary<SystemMessageType, Action<SystemMessage>> _internalSysMsgCallbacks;
     private ushort _messageId = 1;
 
+    // SEND FROM ANY THREAD (owner, 2026-10-01: "make it threadsafe. Important part is the packet id").
+    // AOBuddy20 runs its movement cycle on a dedicated thread, so Send is called from there while the
+    // update loop answers pings and playstate echoes. The message id was a plain read-increment-write
+    // (two senders could take the same id and the server drops misordered duplicates), and the
+    // serializer is shared mutable state. One lock around the whole send keeps the ids unique and
+    // each packet contiguous; it is held for microseconds.
+    private readonly object _sendLock = new object();
+
     private SessionCookie _sessionCookie;
     private NetworkStateMachine _stateMachine;
     private ZlibTcpClient _tcpClient;
@@ -149,21 +157,24 @@ public class NetworkSession
 
     public void Send(AOMessage aoMessage)
     {
-        aoMessage.Header.MessageId = _messageId;
-
-        using (var stream = new MemoryStream())
+        lock (_sendLock)
         {
-            _serializer.Serialize(stream, aoMessage);
-            var bytes = stream.ToArray();
-            Client.RaisePacketRaw(bytes, false);
-            _tcpClient.Send(bytes);
-        }
+            aoMessage.Header.MessageId = _messageId;
 
-        _messageId++;
+            using (var stream = new MemoryStream())
+            {
+                _serializer.Serialize(stream, aoMessage);
+                var bytes = stream.ToArray();
+                Client.RaisePacketRaw(bytes, false);
+                _tcpClient.Send(bytes);
+            }
 
-        if (_messageId == 0xFFFF)
-        {
-            _messageId = 1;
+            _messageId++;
+
+            if (_messageId == 0xFFFF)
+            {
+                _messageId = 1;
+            }
         }
     }
 
@@ -523,7 +534,10 @@ public class NetworkSession
     {
         _tcpClient.Close();
         _sessionCookie = null;
-        _messageId = 1;
+        lock (_sendLock)
+        {
+            _messageId = 1;
+        }
 
         if (Client.Config.AutoReconnect)
         {

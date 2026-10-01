@@ -51,7 +51,16 @@ public sealed class PacketRouter
         {
             foreach (var entry in list.OrderBy(x => x.canEndSequence).ThenBy(x => x.receivePriority))
             {
-                var end = entry.Handler(e);
+                var end = false;
+                try
+                {
+                    end = entry.Handler(e);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, $"Chat handler for {e.Header.PacketType} threw.");
+                }
+
                 if (entry.canEndSequence && end)
                 {
                     break; // ← handled=true, stop propagation
@@ -80,13 +89,26 @@ public sealed class PacketRouter
 
     public void Dispatch(object? sender, AOMessage e)
     {
+        // A consumer that throws must not take the SDK's own handling of the packet down with it:
+        // NetworkSession calls MessageReceived BEFORE its own callbacks, and its catch-all would skip
+        // them for this packet (movement, stats, dynels all freeze for one message). Guard every
+        // handler call; a throw counts as "not handled".
         if (e.Body is N3Message n3Message)
         {
             if (_n3Handlers.TryGetValue(n3Message.N3MessageType, out var list))
             {
                 foreach (var entry in list.OrderBy(x => x.canEndSequence).ThenBy(x => x.receivePriority))
                 {
-                    var end = entry.Handler(e);
+                    var end = false;
+                    try
+                    {
+                        end = entry.Handler(e);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, $"Packet handler for {n3Message.N3MessageType} threw.");
+                    }
+
                     if (entry.canEndSequence && end)
                     {
                         break; // ← handled=true, stop propagation
@@ -101,7 +123,16 @@ public sealed class PacketRouter
             {
                 foreach (var entry in list.OrderBy(x => x.canEndSequence).ThenBy(x => x.receivePriority))
                 {
-                    var end = entry.Handler(system);
+                    var end = false;
+                    try
+                    {
+                        end = entry.Handler(system);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, $"System handler for {system.SystemMessageType} threw.");
+                    }
+
                     if (entry.canEndSequence && end)
                     {
                         break; // ← handled=true, stop propagation
