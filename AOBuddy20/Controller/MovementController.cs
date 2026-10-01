@@ -90,6 +90,13 @@ public sealed class MovementController : IPacketConsumer
     private readonly object _goallock = new object();
     private readonly object _poslock = new object();
 
+    // TRAVEL (PlanTravel): the cross-playfield plan - the destination playfield, its optional
+    // coordinates, and the leg currently walked. Legs are re-planned from wherever we actually are
+    // after every zone, so a surprise zone cannot derail the plan. Guarded by _travelLock; the lock
+    // order is always _travelLock -> _goallock, never the reverse.
+    private TravelPlan? _travel;
+    private readonly object _travelLock = new object();
+
     private Vector3 _confirmedPosition; // where the server last had US
     private Quaternion _confirmedHeading;
     private Vector3? _pendingCorrection; // SetPos the walk thread will apply
@@ -205,10 +212,12 @@ public sealed class MovementController : IPacketConsumer
         }
     }
 
-    /// <summary>
     ///     Hand in where the body should go, at this controller's priority. Setting again replaces
     ///     the level's goal (and re-arms the reached flag). A goal for another playfield is not
     ///     walked from here - the component that set it owns getting us to that playfield first.
+    ///     Travel (<see cref="PlanTravel" />) is the one built-in cross-playfield order: a zone-line
+    ///     route from the Zoning graph, one walked leg per hop, re-planned from wherever we actually
+    ///     are after every zone.
     ///     arriveRadius: how close counts as arrived (default from AOBuddy10's walker).
     ///     A seated body is stood up first: a movement order is the one thing that may end a sit.
     /// </summary>
@@ -301,7 +310,8 @@ public sealed class MovementController : IPacketConsumer
         }
     }
 
-    /// <summary>Clears every goal - the body stops on its next tick, with nothing left to walk.</summary>
+    /// <summary>Clears every goal - the body stops on its next tick, with nothing left to walk.
+    /// A travel plan is part of what "all" means: stop and sit end a travel too.</summary>
     public void ClearAllGoals()
     {
         lock (_goallock)
@@ -313,21 +323,98 @@ public sealed class MovementController : IPacketConsumer
 
             goals.Clear();
         }
+
+        lock (_travelLock)
+        {
+            if (_travel != null)
+            {
+                _travel = null;
+                _logger.LogInformation("TRAVEL: plan cleared with the goals.");
+            }
+        }
+    }
+
+    /// <summary>
+    ///     Travel to another playfield, optionally to coordinates in it: the zone-line route comes
+    ///     from the Zoning graph (fewest hops), every hop is one walked leg across its line, and the
+    ///     final leg is the coordinates themselves. Returns a one-line summary for the owner's tell,
+    ///     including the refusal when the graph has no walking route (whompas and teleporters are
+    ///     objects to be used - AOBuddy20 cannot use objects yet, so they route nowhere). Safe from
+    ///     any thread.
+    /// </summary>
+    public string PlanTravel(int targetPf, Vector3? targetPos)
+    {
+        if (_pf < 0)
+        {
+            return "Not in a playfield yet - travel needs us on the ground first.";
+        }
+
+        if (!Zoning.Loaded)
+        {
+            return "No zoning data loaded - travel needs GameData/Zoning.json.";
+        }
+
+        lock (_travelLock)
+        {
+            if (targetPf == _pf)
+            {
+                _travel = null;
+                if (targetPos.HasValue)
+                {
+                    SetDesiredGoal(targetPos.Value, targetPf, ControlPriority.Travel);
+                    return $"Already in {Zoning.Name(targetPf)} - walking to ({targetPos.Value.X:0.0} {targetPos.Value.Z:0.0}).";
+                }
+
+                ClearDesiredGoal(ControlPriority.Travel); // any leg goal of a former plan is spent
+                return $"Already in {Zoning.Name(targetPf)}.";
+            }
+
+            var route = Zoning.FindRoute(_pf, targetPf);
+            if (route == null)
+            {
+                return $"No walking route from {Zoning.Name(_pf)} to {Zoning.Name(targetPf)} - " +
+                       "zone lines only so far (whompas/teleporters need object use, not built yet).";
+            }
+
+            _travel = new TravelPlan { TargetPf = targetPf, TargetPos = targetPos };
+            SetLeg(route[0]);
+            return $"Travel to {Zoning.Name(targetPf)}: {Zoning.Name(_pf)} -> " +
+                   string.Join(" -> ", route.Select(h => Zoning.Name(h.ToPf))) +
+                   (targetPos.HasValue ? $", then ({targetPos.Value.X:0.0} {targetPos.Value.Z:0.0})." : ".");
+        }
+    }
+
+    /// <summary>Drops the travel plan - a manual order (goto/come) takes the body from it.</summary>
+    public void CancelTravel()
+    {
+        lock (_travelLock)
+        {
+            if (_travel == null)
+            {
+                return;
+            }
+
+            _travel = null;
+            _logger.LogInformation("TRAVEL: cancelled (a manual order takes the body).");
+        }
     }
 
     /// <summary>Compact one-line state for status replies. Safe from any thread.</summary>
     public string DescribeState()
     {
+        string goalText;
         lock (_goallock)
         {
-            var goalText = goals.Count == 0
+            goalText = goals.Count == 0
                 ? "none"
                 : string.Join("; ", goals.OrderByDescending(g => g.Key)
                     .Select(g => $"{(ControlPriority)g.Key} ({g.Key}) @ " +
                                  $"({g.Value.Position.X:0.0} {g.Value.Position.Y:0.0} {g.Value.Position.Z:0.0}) pf {g.Value.PlayfieldId}" +
                                  $"{(g.Value.Reached ? " REACHED" : "")}"));
-            return $"pf {_pf}, pos ({CurrentPosition.X:0.0} {CurrentPosition.Y:0.0} {CurrentPosition.Z:0.0}) | nav: {NavState()} | goals: {goalText}";
         }
+
+        return $"pf {_pf}, pos ({CurrentPosition.X:0.0} {CurrentPosition.Y:0.0} {CurrentPosition.Z:0.0}) | " +
+               $"nav: {NavState()} | travel: {DescribeTravel()} | goals: {goalText}";
     }
 
     private string NavState()
@@ -551,6 +638,8 @@ public sealed class MovementController : IPacketConsumer
 
             _logger.LogInformation($"Movement: playfield {_pf}, position " +
                                    $"({_confirmedPosition.X:0.0} {_confirmedPosition.Y:0.0} {_confirmedPosition.Z:0.0}).");
+
+            TravelAfterZone(); // a travel plan takes its next leg here, or lands its final walk
         }
 
         ApplyPendingCorrection(me);
@@ -562,6 +651,8 @@ public sealed class MovementController : IPacketConsumer
             _movement.Hold(me, SendIntervalMs);
             return;
         }
+
+        TravelTick(); // the leg watchdog: a line that never zones us must not strand the plan
 
         var goal = SelectActiveGoal(_pf);
         if (goal != null)
@@ -604,11 +695,22 @@ public sealed class MovementController : IPacketConsumer
             }
 
             // A manual order (priority Travel) hands the body straight back: 'come' should not park
-            // the follow until 'stop'. Controllers' own goals are theirs to clear.
+            // the follow until 'stop'. Controllers' own goals are theirs to clear. A travel LEG is
+            // not a handback: its crossing point is reached only to stand there while the zone
+            // lands - mid-plan the body stays with the plan.
             if (_followOn && goal.Key == (int)ControlPriority.Travel)
             {
-                ClearDesiredGoal(ControlPriority.Travel);
-                _logger.LogInformation("Movement: manual goal done - handing the body back to follow.");
+                bool travelActive;
+                lock (_travelLock)
+                {
+                    travelActive = _travel != null;
+                }
+
+                if (!travelActive)
+                {
+                    ClearDesiredGoal(ControlPriority.Travel);
+                    _logger.LogInformation("Movement: manual goal done - handing the body back to follow.");
+                }
             }
 
             return;
@@ -775,11 +877,27 @@ public sealed class MovementController : IPacketConsumer
         }
 
         var extra = new HashSet<int>(_stuckCells);
+
+        // The travel leg's own line stays open: its goal IS the crossing point beyond it (a travel
+        // goal never matches by accident - a manual goal in the same spot cancelled the plan).
+        ZoneExit? passLine = null;
+        lock (_travelLock)
+        {
+            var t = _travel;
+            if (t?.LegExit != null && t.LegPf == _pf && Movement.Flat(t.LegGoal, goalPos) <= 0.01f)
+            {
+                passLine = t.LegExit;
+            }
+        }
+
         foreach (var e in Zoning.ExitsFrom(_pf))
         {
             if (e.Kind == ExitKind.ZoneLine)
             {
-                grid.CellsAlong(e.A, e.B, 2f, extra);
+                if (!ReferenceEquals(e, passLine))
+                {
+                    grid.CellsAlong(e.A, e.B, 2f, extra);
+                }
             }
             else if ((e.Kind == ExitKind.Line || e.Kind == ExitKind.Proxy || e.Kind == ExitKind.Teleport)
                      && Movement.Flat(e.A, goalPos) > 1.5f && Movement.Flat(e.A, from) > 3.5f)
@@ -798,6 +916,177 @@ public sealed class MovementController : IPacketConsumer
 
         _route = route;
         _logger.LogInformation($"Movement: {route.Count}-point route to the priority {priority} goal.");
+    }
+
+    // ── travel legs (the PlanTravel state machine, owner 2026-10-01) ──────────────────────
+
+    // The current leg: walk THROUGH the line - the goal lies 6 m beyond it (Zoning.CrossPoint), so
+    // the crossing itself, which is what the server zones on, happens while the walk still has
+    // metres in hand. Called under _travelLock.
+    private void SetLeg(ZoneExit hop)
+    {
+        var t = _travel!;
+        t.LegExit = hop;
+        t.LegPf = _pf;
+        t.LegFromSide = Math.Sign(Zoning.SideOf(hop, CurrentPosition));
+        t.LegGoal = Zoning.CrossPoint(hop, CurrentPosition);
+        t.LegReachedAt = -1;
+        SetDesiredGoal(t.LegGoal, _pf, ControlPriority.Travel);
+        _logger.LogInformation($"TRAVEL: leg to {Zoning.Name(hop.ToPf)} - crossing the line at " +
+                               $"({t.LegGoal.X:0.0} {t.LegGoal.Z:0.0}).");
+    }
+
+    // A zone during a travel plan: arrived (final coordinates or done), or on to the next leg -
+    // re-planned from wherever the server actually put us, so even a surprise zone (a beeline that
+    // crossed a line the data placed elsewhere) cannot derail the plan.
+    private void TravelAfterZone()
+    {
+        TravelPlan? t;
+        lock (_travelLock)
+        {
+            t = _travel;
+        }
+
+        if (t == null)
+        {
+            return;
+        }
+
+        if (_pf == t.TargetPf)
+        {
+            lock (_travelLock)
+            {
+                if (_travel != t)
+                {
+                    return; // replaced meanwhile (a fresh travel order)
+                }
+
+                _travel = null;
+            }
+
+            if (t.TargetPos.HasValue)
+            {
+                SetDesiredGoal(t.TargetPos.Value, _pf, ControlPriority.Travel); // replaces the leg goal
+                _logger.LogInformation($"TRAVEL: arrived in {Zoning.Name(_pf)} - walking to " +
+                                       $"({t.TargetPos.Value.X:0.0} {t.TargetPos.Value.Z:0.0}).");
+            }
+            else
+            {
+                ClearDesiredGoal(ControlPriority.Travel); // the old playfield's leg goal is spent
+                _logger.LogInformation($"TRAVEL: complete - {Zoning.Name(_pf)}.");
+            }
+
+            return;
+        }
+
+        var route = Zoning.FindRoute(_pf, t.TargetPf);
+        bool dead;
+        lock (_travelLock)
+        {
+            if (_travel != t)
+            {
+                return;
+            }
+
+            if (route == null)
+            {
+                _travel = null;
+                dead = true;
+            }
+            else
+            {
+                dead = false;
+                SetLeg(route[0]);
+            }
+        }
+
+        if (dead)
+        {
+            ClearDesiredGoal(ControlPriority.Travel);
+            _logger.LogWarning($"TRAVEL: no way on from {Zoning.Name(_pf)} to {Zoning.Name(t.TargetPf)} - travel abandoned.");
+        }
+    }
+
+    // The leg watchdog. The NORMAL beat is the zone-in above, which advances the plan while the
+    // server is still handing us the new playfield; this only fires when a leg's goal reads
+    // reached and NO zone followed within 8 s: either the walk stopped this side of the line
+    // (the data's far side has no walkable ground for the route to aim at) - then once more,
+    // straight through - or the line is simply wrong where it says it is, and the plan ends
+    // honestly instead of stranding the body at a line that leads nowhere.
+    private void TravelTick()
+    {
+        TravelPlan? t;
+        lock (_travelLock)
+        {
+            t = _travel;
+        }
+
+        if (t?.LegExit == null)
+        {
+            return;
+        }
+
+        lock (_goallock)
+        {
+            if (!goals.TryGetValue((int)ControlPriority.Travel, out var g) ||
+                g.PlayfieldId != t.LegPf || Movement.Flat(g.Position, t.LegGoal) > 0.01f || !g.Reached)
+            {
+                t.LegReachedAt = -1; // not (any more) standing on the leg goal: restart any window
+                return;
+            }
+
+            if (t.LegReachedAt < 0)
+            {
+                t.LegReachedAt = _wetClock.Elapsed.TotalSeconds;
+            }
+
+            if (_wetClock.Elapsed.TotalSeconds - t.LegReachedAt < 8)
+            {
+                return; // the zone normally lands long before this
+            }
+
+            if (!t.Retried && Math.Sign(Zoning.SideOf(t.LegExit, CurrentPosition)) == t.LegFromSide)
+            {
+                t.Retried = true; // still this side of the line: once more, through it
+                _logger.LogInformation("TRAVEL: stopped this side of the line - walking through again.");
+                SetLeg(t.LegExit);
+                return;
+            }
+        }
+
+        lock (_travelLock)
+        {
+            if (_travel == t)
+            {
+                _travel = null;
+            }
+        }
+
+        ClearDesiredGoal(ControlPriority.Travel);
+        _logger.LogWarning($"TRAVEL: the line to {Zoning.Name(t.LegExit.ToPf)} did not zone us - " +
+                           "travel abandoned (check that line in Zoning.json).");
+    }
+
+    // The travel line for 'status'.
+    private string DescribeTravel()
+    {
+        lock (_travelLock)
+        {
+            if (_travel == null)
+            {
+                return "none";
+            }
+
+            var to = $"to {Zoning.Name(_travel.TargetPf)}";
+            if (_travel.TargetPos.HasValue)
+            {
+                to += $" at ({_travel.TargetPos.Value.X:0.0} {_travel.TargetPos.Value.Z:0.0})";
+            }
+
+            return _travel.LegExit == null
+                ? to
+                : $"{to}, leg: zone line to {Zoning.Name(_travel.LegExit.ToPf)}";
+        }
     }
 
     // ── floor sampling (AOBuddy10 OverlandController's FloorY/StepFloor, verbatim rules) ──
@@ -1039,6 +1328,21 @@ public sealed class MovementController : IPacketConsumer
         public Vector3 OwnerPos;
         public Quaternion OwnerHeading;
         public bool OwnerMoveFresh; // his last movement packet is under 600 ms old
+    }
+
+    // A travel order's state (guarded by _travelLock): where the trip ends and the leg currently
+    // walked. Only the leg fields change while the plan runs; the route itself is re-derived from
+    // the Zoning graph after every zone, not stored.
+    private sealed class TravelPlan
+    {
+        public int TargetPf;
+        public Vector3? TargetPos; // null = just get to the playfield
+        public ZoneExit LegExit; // the line this leg crosses; null between legs
+        public Vector3 LegGoal; // the crossing point the leg walks to (beyond the line)
+        public int LegPf; // the playfield the leg walks in
+        public int LegFromSide; // which side of the line the leg started on
+        public double LegReachedAt = -1; // when the leg goal first read reached (watchdog window)
+        public bool Retried; // the one walk-through-again has been spent
     }
 
     internal sealed class GoalLocation

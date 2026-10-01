@@ -184,6 +184,85 @@ public static class Zoning
         return 0;
     }
 
+    /// <summary>
+    ///     The fewest-hops WALKING route from one playfield to another: breadth-first over the zone
+    ///     lines - the only exits a body on foot can take (doors, whompas, teleporters and proxies
+    ///     are objects to be used, and AOBuddy20 cannot use objects yet). Deterministic: ExitsFrom's
+    ///     order breaks equal-length ties. null when the target cannot be reached on foot.
+    /// </summary>
+    public static List<ZoneExit> FindRoute(int fromPf, int toPf)
+    {
+        if (fromPf == toPf)
+        {
+            return new List<ZoneExit>();
+        }
+
+        var cameFrom = new Dictionary<int, (ZoneExit Exit, int Via)>();
+        var seen = new HashSet<int> { fromPf };
+        var queue = new Queue<int>();
+        queue.Enqueue(fromPf);
+        while (queue.Count > 0)
+        {
+            var pf = queue.Dequeue();
+            foreach (var e in ExitsFrom(pf))
+            {
+                if (e.Kind != ExitKind.ZoneLine || !seen.Add(e.ToPf))
+                {
+                    continue;
+                }
+
+                cameFrom[e.ToPf] = (e, pf);
+                if (e.ToPf == toPf)
+                {
+                    var hops = new List<ZoneExit>();
+                    for (var at = toPf; at != fromPf; at = cameFrom[at].Via)
+                    {
+                        hops.Insert(0, cameFrom[at].Exit);
+                    }
+
+                    return hops;
+                }
+
+                queue.Enqueue(e.ToPf);
+            }
+        }
+
+        return null;
+    }
+
+    // The zone line's 2D normal and midpoint (flat geometry: the server zones on the X-Z crossing).
+    private static (float Nx, float Nz, float Mx, float Mz) LineNormal(ZoneExit e)
+    {
+        var nx = -(e.B.Z - e.A.Z);
+        var nz = e.B.X - e.A.X;
+        return (nx, nz, (e.A.X + e.B.X) * 0.5f, (e.A.Z + e.B.Z) * 0.5f);
+    }
+
+    /// <summary>Which side of the line `p` is on: the sign of its offset along the line's normal.</summary>
+    public static float SideOf(ZoneExit e, Vector3 p)
+    {
+        var (nx, nz, mx, mz) = LineNormal(e);
+        return (p.X - mx) * nx + (p.Z - mz) * nz;
+    }
+
+    /// <summary>
+    ///     Where a walking leg aims to CROSS the line: the segment's midpoint pushed 6 m beyond it,
+    ///     on the far side from `from`. The leg's goal has to lie PAST the line - a goal ON the line
+    ///     can read as reached from the near side without the server ever seeing a crossing.
+    /// </summary>
+    public static Vector3 CrossPoint(ZoneExit e, Vector3 from)
+    {
+        var (nx, nz, mx, mz) = LineNormal(e);
+        var len = Math.Sqrt((double)nx * nx + (double)nz * nz);
+        if (len < 0.01)
+        {
+            return new Vector3(mx, from.Y, mz); // degenerate line: the midpoint is all we have
+        }
+
+        var side = SideOf(e, from) >= 0 ? 1f : -1f;
+        return new Vector3(mx - nx / (float)len * side * 6f, from.Y, mz - nz / (float)len * side * 6f);
+    }
+
     private static Vector3 V(float[] a) => new(a[0], a[1], a[2]);
 
     private static Vector3 Mid(Vector3 a, Vector3 b) => new(a.X + (b.X - a.X) * 0.5f, a.Y + (b.Y - a.Y) * 0.5f, a.Z + (b.Z - a.Z) * 0.5f);

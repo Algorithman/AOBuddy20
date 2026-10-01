@@ -13,6 +13,7 @@ using System.Globalization;
 using AOBuddy20.Configuration;
 using AOBuddy20.Controlling;
 using AOBuddy20.Enums;
+using AOBuddy20.Nav;
 using AOBuddy20.Utils;
 using AOSharp.Clientless;
 using AOSharp.Clientless.Chat;
@@ -28,7 +29,7 @@ namespace AOBuddy20.Chat;
 ///     never obeyed. Commands are handled inline in PrivateMessageReceived - chat packets are
 ///     pumped by Client.Update on the update thread (the thread allowed to touch SDK state,
 ///     review.md #9), the same thread OnUpdate and the command handlers' state live on.
-///     Commands: help, pos, status, goto x [y] z, come, stop.
+///     Commands: help, pos, status, goto x [y] z, come, travel, stop.
 /// </summary>
 [MinLogLevel(LogEventLevel.Debug)]
 public sealed class OwnerChat
@@ -208,8 +209,9 @@ public sealed class OwnerChat
 
         t["help"] = (reply, p) =>
         {
-            reply("Commands: follow | stay | pos | status | goto x [y] z | come | stop | sit | stand | navdata | help." +
-                  " follow stacks me on you and mirrors your movement; goto/come walk at priority Travel and hand me back to follow on arrival.");
+            reply("Commands: follow | stay | pos | status | goto x [y] z | come | travel <pf> | travel x z <pf> | stop | sit | stand | navdata | help." +
+                  " follow stacks me on you and mirrors your movement; goto/come walk at priority Travel and hand me back to follow on arrival;" +
+                  " travel crosses playfields by their zone lines (id or name) and walks to the point.");
         };
 
         // FOLLOW (AOBuddy10's stack/mirror tier): once on, the body's idle state is the owner - run
@@ -256,6 +258,7 @@ public sealed class OwnerChat
             }
 
             var pf = (int)Playfield.ModelId;
+            _movement.CancelTravel(); // a manual order takes the body from any travel plan (owner, 2026-10-01)
             _movement.SetDesiredGoal(new Vector3(x, y, z), pf, ControlPriority.Travel);
             reply($"Walking to ({x:0.0} {y:0.0} {z:0.0}), playfield {pf}, priority Travel.");
         };
@@ -274,8 +277,41 @@ public sealed class OwnerChat
                 return;
             }
 
+            _movement.CancelTravel(); // a manual order takes the body from any travel plan (owner, 2026-10-01)
             _movement.SetDesiredGoal(owner.Transform.Position, (int)Playfield.ModelId, ControlPriority.Travel);
             reply("On my way.");
+        };
+
+        // TRAVEL (cross-playfield): the Zoning graph plans the zone-line route, every hop is walked
+        // across its line, then a plain walk to the coordinates. 'travel <playfield>' or
+        // 'travel <x> <z> <playfield>'; the playfield takes its id or any unambiguous part of its name.
+        t["travel"] = (reply, p) =>
+        {
+            string pfText;
+            Vector3? target = null;
+            if (p.Length == 2)
+            {
+                pfText = p[1];
+            }
+            else if (p.Length == 4 && TryParse(p[1], out var tx) && TryParse(p[2], out var tz))
+            {
+                pfText = p[3];
+                target = new Vector3(tx, _movement.CurrentPosition.Y, tz);
+            }
+            else
+            {
+                reply("Usage: travel <playfield> | travel <x> <z> <playfield>");
+                return;
+            }
+
+            var pf = Zoning.FindPlayfield(pfText);
+            if (pf == 0)
+            {
+                reply($"Unknown playfield '{pfText}'.");
+                return;
+            }
+
+            reply(_movement.PlanTravel(pf, target));
         };
 
         t["stop"] = (reply, p) =>
