@@ -73,6 +73,13 @@ public sealed class MovementController : IPacketConsumer
     private const double StuckSeconds = 4;
     private const int MaxStuck = 4; // re-routes around a stuck spot per goal
 
+    // Server's CurrentMovementMode (Stat 173) values — OmniCell MoveModes (AOBuddy10 Main.cs:48-50). A
+    // character in a SEATED mode cannot move: the server rejects every move packet and snaps him back
+    // to where he sat. You log out by sitting, so you can log back in seated.
+    private const int MoveModeSit = 8;
+    private const int MoveModeSleep = 11;
+    private const int MoveModeLounge = 12;
+
     private readonly ILogger<MovementController> _logger;
 
     // The ONE place the body moves (Components/Movement.cs), ported from AOBuddy10.
@@ -110,6 +117,10 @@ public sealed class MovementController : IPacketConsumer
     private Vector3 _routeGoal; // and the goal position it was planned to
     private int _routePf = -1;
     private int _stuckCount;
+
+    // Set once the ONE login stand-up decision is made (see Tick): the login mode decides, at most
+    // one toggle goes out, and never again - stat 173 never updates, so re-reading it re-toggles.
+    private volatile bool _stoodUp;
 
     // Published by the update thread, consumed by the walk thread. One immutable snapshot per tick
     // so the walk never sees a torn combination (LocalPlayer is swapped on zone-in).
@@ -277,6 +288,7 @@ public sealed class MovementController : IPacketConsumer
 
         _running = true;
         Client.OnUpdate += PublishSnapshot;
+        Client.PostureToggled += OnPostureToggled;
         _thread = new Thread(WalkLoop)
         {
             IsBackground = true,
@@ -295,8 +307,21 @@ public sealed class MovementController : IPacketConsumer
 
         _running = false;
         Client.OnUpdate -= PublishSnapshot;
+        Client.PostureToggled -= OnPostureToggled;
         _thread?.Join(TimeSpan.FromSeconds(2));
         _logger.LogInformation("Movement loop stopped.");
+    }
+
+    // The server's echo of the sit/stand toggle (action 0x57, Client.cs): the only reliable
+    // "the posture change took effect" signal there is. Evidence only - the stand-up decision
+    // itself is made once from the login mode and is never re-toggled.
+    private void OnPostureToggled(Identity identity)
+    {
+        var me = DynelManager.LocalPlayer;
+        if (me != null && identity == me.Identity)
+        {
+            _logger.LogInformation("Movement: server confirmed the posture change (stand-up echo).");
+        }
     }
 
     // Runs on the SDK update thread: the only place SDK state may be read (review.md #9).
@@ -311,11 +336,20 @@ public sealed class MovementController : IPacketConsumer
             runSpeed = rs;
         }
 
+        // The login movement mode: authoritative ONCE, at login. It never updates afterwards, so the
+        // walk reads it only until the stand-up decision is made.
+        var movementMode = -1;
+        if (me != null && me.TryGetStat(Stat.CurrentMovementMode, out var mm))
+        {
+            movementMode = mm;
+        }
+
         _snap = new Snapshot
         {
             Me = me,
             Playfield = (int)Playfield.ModelId,
             RunSpeed = runSpeed,
+            MovementMode = movementMode,
         };
     }
 
@@ -352,6 +386,34 @@ public sealed class MovementController : IPacketConsumer
         }
 
         var me = snap.Me;
+
+        // The ONE login stand-up decision (AOBuddy10 Main.cs, wire-proven): the stand-up wire action
+        // (CharacterAction 87 / 0x57) is a sit/stand TOGGLE, and stat 173 is only set from the login
+        // FullCharacter and NEVER updates afterwards. Read it once through the snapshot, send at most
+        // one stand-up if the login mode was seated, and never toggle again - firing it blind sat a
+        // standing character, and re-reading a stuck 8=Sit and re-sending made him sit/stand in a
+        // loop. Until the decision is made nothing walks: a seated body cannot move, the server
+        // rejects every step and snaps him back to where he sat.
+        if (!_stoodUp)
+        {
+            if (snap.MovementMode > 0)
+            {
+                _stoodUp = true;
+                if (snap.MovementMode is MoveModeSit or MoveModeSleep or MoveModeLounge)
+                {
+                    me.MovementComponent.ChangeMovement(MovementAction.LeaveSit); // one StandUp toggle
+                    _logger.LogInformation($"Movement: login mode {snap.MovementMode} (seated) - sent one stand-up.");
+                    _movement.Hold(me, SendIntervalMs);
+                    return; // give the server the beat to apply it before the first step
+                }
+
+                _logger.LogInformation($"Movement: login mode {snap.MovementMode} (standing) - no stand-up needed.");
+            }
+            else
+            {
+                return; // the login FullCharacter has not carried the mode yet: hold, never walk blind
+            }
+        }
 
         if (snap.Playfield != _pf)
         {
@@ -797,6 +859,7 @@ public sealed class MovementController : IPacketConsumer
         public LocalPlayer? Me;
         public int Playfield;
         public int RunSpeed; // -1 = unreadable this tick
+        public int MovementMode; // the login CurrentMovementMode (stat 173); -1 = not sent yet
     }
 
     internal sealed class GoalLocation

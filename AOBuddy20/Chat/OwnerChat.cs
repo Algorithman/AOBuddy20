@@ -208,7 +208,7 @@ public sealed class OwnerChat
 
         t["help"] = (reply, p) =>
         {
-            reply("Commands: pos | status | goto <x> [y] <z> | come | stop | navdata | help." +
+            reply("Commands: pos | status | goto <x> [y] <z> | come | stop | sit | stand | navdata | help." +
                   " goto/come walk at priority Travel; anything the bot does later preempts them.");
         };
 
@@ -267,6 +267,21 @@ public sealed class OwnerChat
         {
             _movement.ClearAllGoals();
             reply("Stopped - no goals. Standing down.");
+        };
+
+        // AOBuddy10's sit/stand: a BLIND toggle, but on the owner's explicit order that is his call
+        // (he can see the character; the bot itself only ever decides from the login mode, never
+        // blind - a blind toggle sits a standing character).
+        t["stand"] = (reply, p) =>
+        {
+            DynelManager.LocalPlayer?.MovementComponent.ChangeMovement(MovementAction.LeaveSit);
+            reply("Standing up.");
+        };
+
+        t["sit"] = (reply, p) =>
+        {
+            DynelManager.LocalPlayer?.MovementComponent.ChangeMovement(MovementAction.SwitchToSit);
+            reply("Sitting down.");
         };
 
         return t;
