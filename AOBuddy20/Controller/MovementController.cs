@@ -30,10 +30,18 @@ namespace AOBuddy20.Controlling;
 ///     server-confirmed CurrentPosition. The highest-priority goal for the current playfield wins -
 ///     its move replaces any unsent lower one (review.md #7) - and every CharDCMove that leaves the
 ///     bot goes out through here.
+///     Goal contract: one goal per priority level; setting again replaces it. Several goals for the
+///     current playfield coexist, and a controller walks a route by setting its next goal when
+///     <see cref="IsGoalReached" /> turns true. A goal is NOT consumed on arrival - it stays until
+///     its owner sets the next one or clears it, so the owner can advance its inner state (Readme
+///     point 5). ONLY the active (highest) goal may ever read as reached: while a higher one is
+///     set - walking or already reached - lower ones stay unsatisfied even if the body stands
+///     inside their radius, and one reached earlier re-arms the moment a higher goal takes over.
 ///     Threading: SDK state (LocalPlayer, stats, Playfield) is read only on the update thread, which
 ///     publishes a snapshot each tick (review.md #9: foreign threads consume snapshots). The walk
 ///     thread is the only writer of the body's MovementComponent; a server SetPos is queued here and
-///     applied by the walk thread, never from the packet thread.
+///     applied by the walk thread, never from the packet thread. Set/Clear/IsGoalReached may be
+///     called from any thread.
 /// </summary>
 [MinLogLevel(LogEventLevel.Debug)]
 public sealed class MovementController : IPacketConsumer
@@ -71,10 +79,6 @@ public sealed class MovementController : IPacketConsumer
     private bool _runRead;
     private int _lastRunSpeed;
 
-    // Arrival is announced once per goal position, not on every tick at the goal.
-    private int _announcedPriority = -1;
-    private Vector3 _announcedPosition;
-
     public MovementController(ILogger<MovementController> logger)
     {
         _logger = logger;
@@ -105,27 +109,51 @@ public sealed class MovementController : IPacketConsumer
     }
 
     /// <summary>
-    ///     Hand in where the body should go. A goal for another playfield is not walked from here -
-    ///     the component that set it owns getting us to that playfield first.
+    ///     Hand in where the body should go, at this controller's priority. Setting again replaces
+    ///     the level's goal (and re-arms the reached flag). A goal for another playfield is not
+    ///     walked from here - the component that set it owns getting us to that playfield first.
+    ///     arriveRadius: how close counts as arrived (default from AOBuddy10's walker).
     /// </summary>
-    public void SetDesiredGoal(Vector3 desiredGoal, int playfieldId, int priority)
+    public void SetDesiredGoal(Vector3 desiredGoal, int playfieldId, ControlPriority priority, float arriveRadius = ArriveRadius)
     {
         lock (_goallock)
         {
-            goals[priority] = new GoalLocation { Position = desiredGoal, PlayfieldId = playfieldId, };
-            _logger.LogDebug($"Goal set: priority {priority}, playfield {playfieldId}, " +
-                             $"({desiredGoal.X:0.0} {desiredGoal.Y:0.0} {desiredGoal.Z:0.0}).");
+            goals[(int)priority] = new GoalLocation
+            {
+                Position = desiredGoal,
+                PlayfieldId = playfieldId,
+                ArriveRadius = arriveRadius,
+            };
+            _logger.LogDebug($"Goal set: priority {priority} ({(int)priority}), playfield {playfieldId}, " +
+                             $"arrive {arriveRadius:0.0} m, ({desiredGoal.X:0.0} {desiredGoal.Y:0.0} {desiredGoal.Z:0.0}).");
         }
     }
 
-    public void ClearDesiredGoal(int priority)
+    public void ClearDesiredGoal(ControlPriority priority)
     {
         lock (_goallock)
         {
-            if (goals.Remove(priority))
+            if (goals.Remove((int)priority))
             {
                 _logger.LogDebug($"Goal cleared: priority {priority}.");
             }
+        }
+    }
+
+    /// <summary>
+    ///     Has the walk reached the goal this priority set? Readable from the originating controller,
+    ///     from any thread. False when no goal is set at this priority, when the goal is for another
+    ///     playfield, or while ANY higher-priority goal is set - walking or already reached: only the
+    ///     active goal can be satisfied, so a preempted goal re-arms the moment a higher one takes
+    ///     over the body, even if the body happens to stand inside its radius. It is satisfied again
+    ///     once the walk comes back down to it. If the body is pushed off the goal (a big SetPos), it
+    ///     re-arms and the walk returns.
+    /// </summary>
+    public bool IsGoalReached(ControlPriority priority)
+    {
+        lock (_goallock)
+        {
+            return goals.TryGetValue((int)priority, out var goal) && goal.Reached;
         }
     }
 
@@ -227,7 +255,6 @@ public sealed class MovementController : IPacketConsumer
             // A new playfield puts the body wherever the server placed it; gait and mode start over.
             _pf = snap.Playfield;
             _movement.Reset();
-            _announcedPriority = -1;
             lock (_poslock)
             {
                 _confirmedPosition = me.MovementComponent.Position;
@@ -241,7 +268,7 @@ public sealed class MovementController : IPacketConsumer
 
         ApplyPendingCorrection(me);
 
-        var goal = ActiveGoal(_pf);
+        var goal = SelectActiveGoal(_pf);
         if (goal == null)
         {
             _movement.Hold(me, SendIntervalMs); // nowhere to go: hold position (guarded, no packet spam)
@@ -250,19 +277,21 @@ public sealed class MovementController : IPacketConsumer
 
         var pos = me.MovementComponent.Position;
         var dist = Movement.Flat(pos, goal.Value.Value.Position);
-        if (dist <= ArriveRadius)
+        if (dist <= goal.Value.Value.ArriveRadius)
         {
             _movement.Hold(me, SendIntervalMs);
-            if (_announcedPriority != goal.Value.Key || Movement.Flat(_announcedPosition, goal.Value.Value.Position) > 0.01f)
+            if (!goal.Value.Value.Reached)
             {
-                _announcedPriority = goal.Value.Key;
-                _announcedPosition = goal.Value.Value.Position;
-                _logger.LogInformation($"Movement: arrived at the priority {goal.Value.Key} goal " +
-                                       $"({_announcedPosition.X:0.0} {_announcedPosition.Y:0.0} {_announcedPosition.Z:0.0}) after {dist:0.0} m.");
+                goal.Value.Value.Reached = true;
+                _logger.LogInformation($"Movement: reached the priority {goal.Value.Key} goal " +
+                                       $"({goal.Value.Value.Position.X:0.0} {goal.Value.Value.Position.Y:0.0} {goal.Value.Value.Position.Z:0.0}), {dist:0.0} m out.");
             }
 
             return;
         }
+
+        // Not there (yet, or anymore): the flag only ever says reached while we stand on it.
+        goal.Value.Value.Reached = false;
 
         // One capped step toward the goal, the proven walker pattern (AOBuddy10
         // FollowController.Step): mouse-look facing (instant, server-proven legal - Movement.Face),
@@ -321,7 +350,12 @@ public sealed class MovementController : IPacketConsumer
         return Math.Max(1.5f, Math.Min(15.5f, 4.82f + _lastRunSpeed * 0.003615f));
     }
 
-    private KeyValuePair<int, GoalLocation>? ActiveGoal(int playfield)
+    // The highest-priority goal for the playfield, with the ONLY one allowed to read as reached
+    // (owner, 2026-10-01): while a higher goal is set - walking or already reached - a lower one is
+    // not being serviced, even if the body happens to stand inside its radius, and one that was
+    // reached before a higher goal took the body over re-arms here. Selection and disarming sit
+    // under one lock so a goal set mid-tick cannot slip between the two.
+    private KeyValuePair<int, GoalLocation>? SelectActiveGoal(int playfield)
     {
         lock (_goallock)
         {
@@ -330,12 +364,20 @@ public sealed class MovementController : IPacketConsumer
             {
                 if (g.Value.PlayfieldId != playfield)
                 {
-                    continue;
+                    continue; // a goal for another playfield is not walkable from here
                 }
 
                 if (best == null || g.Key > best.Value.Key)
                 {
                     best = g;
+                }
+            }
+
+            foreach (var g in goals.Values)
+            {
+                if (best == null || !ReferenceEquals(g, best.Value.Value))
+                {
+                    g.Reached = false;
                 }
             }
 
@@ -418,9 +460,14 @@ public sealed class MovementController : IPacketConsumer
         public int RunSpeed; // -1 = unreadable this tick
     }
 
-    internal struct GoalLocation
+    internal sealed class GoalLocation
     {
         internal Vector3 Position { get; set; }
         internal int PlayfieldId { get; set; }
+        internal float ArriveRadius { get; set; }
+
+        // Written by the walk thread (arrival sets it, preemption and walking off re-arm it), read
+        // from any thread by the goal's owner through IsGoalReached.
+        internal volatile bool Reached;
     }
 }
