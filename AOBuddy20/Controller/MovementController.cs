@@ -11,6 +11,7 @@
 
 using System.Diagnostics;
 using AOBuddy20.Components;
+using AOBuddy20.Configuration;
 using AOBuddy20.Enums;
 using AOBuddy20.Interfaces;
 using AOBuddy20.Nav;
@@ -141,10 +142,40 @@ public sealed class MovementController : IPacketConsumer
     private bool _runRead;
     private int _lastRunSpeed;
 
-    public MovementController(ILogger<MovementController> logger)
+    public MovementController(ILogger<MovementController> logger, AccountInfo config)
     {
         _logger = logger;
+        _config = config;
+        _follow = new FollowController(logger, _movement, SendIntervalMs, MaxStep);
         _logger.LogInformation("Movement controller initialized.");
+    }
+
+    private readonly AccountInfo _config; // the owner name: follow's target
+    private readonly FollowController _follow;
+
+    // The body driver and the owner's wire fingerprint, published for the packet thread. He is known
+    // by dynel instance: his CharDCMove packets carry it.
+    private volatile bool _followOn;
+    private volatile int _ownerInstance;
+    private long _ownerLastMoveAt = long.MinValue;
+
+    /// <summary>Follow mode: when on and no goal wants the body, stack on the owner and mirror him.</summary>
+    public void SetFollow(bool on)
+    {
+        if (_followOn == on)
+        {
+            return;
+        }
+
+        _followOn = on;
+        if (!on)
+        {
+            _follow.BreakMirror("follow off");
+        }
+
+        _logger.LogInformation(on
+            ? $"FOLLOW: on - will stack on '{_config.Owner}' and mirror his movement."
+            : "FOLLOW: off (stay).");
     }
 
     // The bot's own folder (Build\): GameData\Nav and gridcache live beside the executable, as
@@ -217,6 +248,7 @@ public sealed class MovementController : IPacketConsumer
 
         me.MovementComponent.ChangeMovement(MovementAction.SwitchToSit);
         _seated = true;
+        _follow.BreakMirror("sitting");
         _logger.LogInformation("Movement: sitting (owner command); goals cleared.");
     }
 
@@ -396,12 +428,27 @@ public sealed class MovementController : IPacketConsumer
             movementMode = mm;
         }
 
+        // The owner, for follow: visible or not, his latest reported spot and facing ride the snapshot.
+        PlayerChar? owner = null;
+        if (me != null && !string.IsNullOrEmpty(_config.Owner))
+        {
+            owner = DynelManager.Players.FirstOrDefault(pl =>
+                string.Equals(pl.Name, _config.Owner, StringComparison.OrdinalIgnoreCase));
+        }
+
+        _ownerInstance = owner?.Identity.Instance ?? 0;
+        var moveFresh = owner != null && Environment.TickCount64 - Interlocked.Read(ref _ownerLastMoveAt) < 600;
+
         _snap = new Snapshot
         {
             Me = me,
             Playfield = (int)Playfield.ModelId,
             RunSpeed = runSpeed,
             MovementMode = movementMode,
+            OwnerVisible = owner != null,
+            OwnerPos = owner?.Transform.Position ?? default,
+            OwnerHeading = owner?.Transform.Heading ?? Quaternion.Identity,
+            OwnerMoveFresh = moveFresh,
         };
     }
 
@@ -477,9 +524,11 @@ public sealed class MovementController : IPacketConsumer
 
         if (snap.Playfield != _pf)
         {
-            // A new playfield puts the body wherever the server placed it; gait, mode and route start over.
+            // A new playfield puts the body wherever the server placed it; gait, mode, route and
+            // follow state start over.
             _pf = snap.Playfield;
             _movement.Reset();
+            _follow.Reset();
             _route.Clear();
             _routeIdx = 0;
             _routePrio = -1;
@@ -508,41 +557,70 @@ public sealed class MovementController : IPacketConsumer
         }
 
         var goal = SelectActiveGoal(_pf);
-        if (goal == null)
+        if (goal != null)
         {
-            _movement.Hold(me, SendIntervalMs); // nowhere to go: hold position (guarded, no packet spam)
+            if (_follow.MirrorLocked)
+            {
+                _follow.BreakMirror("a goal took the body");
+            }
+
+            GoalWalk(me, snap, goal.Value, dt);
             return;
         }
 
+        // No goal: follow drives the body (stack on the owner and mirror his movement packets);
+        // without it, hold.
+        if (_followOn)
+        {
+            _follow.Tick(me, snap.OwnerVisible, snap.OwnerPos, snap.OwnerHeading, snap.OwnerMoveFresh,
+                RunVelocity(snap), dt, (m, target, stepDt) => WalkStep(m, snap, target, stepDt));
+            return;
+        }
+
+        _movement.Hold(me, SendIntervalMs); // nowhere to go: hold position (guarded, no packet spam)
+    }
+
+    // The goal walk: arrival marking, the grid route round doors and zone lines, the stuck watch,
+    // and the nav-Y step toward the current step target.
+    private void GoalWalk(LocalPlayer me, Snapshot snap, KeyValuePair<int, GoalLocation> goal, double dt)
+    {
         var pos = me.MovementComponent.Position;
-        var dist = Movement.Flat(pos, goal.Value.Value.Position);
-        if (dist <= goal.Value.Value.ArriveRadius)
+        var dist = Movement.Flat(pos, goal.Value.Position);
+        if (dist <= goal.Value.ArriveRadius)
         {
             _movement.Hold(me, SendIntervalMs);
-            if (!goal.Value.Value.Reached)
+            if (!goal.Value.Reached)
             {
-                goal.Value.Value.Reached = true;
-                _logger.LogInformation($"Movement: reached the priority {goal.Value.Key} goal " +
-                                       $"({goal.Value.Value.Position.X:0.0} {goal.Value.Value.Position.Y:0.0} {goal.Value.Value.Position.Z:0.0}), {dist:0.0} m out.");
+                goal.Value.Reached = true;
+                _logger.LogInformation($"Movement: reached the priority {goal.Key} goal " +
+                                       $"({goal.Value.Position.X:0.0} {goal.Value.Position.Y:0.0} {goal.Value.Position.Z:0.0}), {dist:0.0} m out.");
+            }
+
+            // A manual order (priority Travel) hands the body straight back: 'come' should not park
+            // the follow until 'stop'. Controllers' own goals are theirs to clear.
+            if (_followOn && goal.Key == (int)ControlPriority.Travel)
+            {
+                ClearDesiredGoal(ControlPriority.Travel);
+                _logger.LogInformation("Movement: manual goal done - handing the body back to follow.");
             }
 
             return;
         }
 
         // Not there (yet, or anymore): the flag only ever says reached while we stand on it.
-        goal.Value.Value.Reached = false;
+        goal.Value.Reached = false;
 
         // WHERE TO STEP: the goal itself, or the next point of a grid ROUTE to it. The grid's
         // per-search blocked set keeps 2 m off every zone line and 3 m off every door/whompa/
         // teleporter that is not the goal itself (AOBuddy10 OverlandController.BeginLeg) - without a
         // route the walk beelines, and a beeline crosses whatever stands between (the 'come' door).
-        var target = goal.Value.Value.Position;
+        var target = goal.Value.Position;
         var grid = _nav.Grid;
         if (grid != null)
         {
-            if (_routePrio != goal.Value.Key || _routePf != _pf || Movement.Flat(_routeGoal, target) > 0.01f)
+            if (_routePrio != goal.Key || _routePf != _pf || Movement.Flat(_routeGoal, target) > 0.01f)
             {
-                PlanRoute(pos, target, goal.Value.Key);
+                PlanRoute(pos, target, goal.Key);
             }
 
             while (_routeIdx < _route.Count &&
@@ -586,24 +664,40 @@ public sealed class MovementController : IPacketConsumer
                     new Vector3(pos.X + dir.X * 3f, 0f, pos.Z + dir.Z * 3f), 1f, _stuckCells);
                 _logger.LogInformation($"Movement: no progress for {StuckSeconds:0} s at ({pos.X:0.0} {pos.Z:0.0}), routing round it ({_stuckCount}/{MaxStuck}).");
                 _movement.Hold(me, SendIntervalMs);
-                PlanRoute(pos, goal.Value.Value.Position, goal.Value.Key);
+                PlanRoute(pos, goal.Value.Position, goal.Key);
                 return;
             }
         }
 
-        // One capped step toward the target, the proven outdoor walker (AOBuddy10
-        // OverlandController): mouse-look facing, then Advance at the run-speed formula with the
-        // step's Y taken from the NAV DATA (the floor under the next position, the water surface
-        // over it), never from the goal.
+        WalkStep(me, snap, target, dt);
+    }
+
+    // One capped step toward a target, the proven outdoor walker (AOBuddy10 OverlandController):
+    // mouse-look facing, then Advance at the run-speed formula with the step's Y taken from the NAV
+    // DATA (the floor under the next position, the water surface over it), never from the target.
+    // Shared by the goal walk and follow's approach/chase, so both ride the terrain identically.
+    private void WalkStep(LocalPlayer me, Snapshot snap, Vector3 target, double dt)
+    {
+        var pos = me.MovementComponent.Position;
+        var dist = Movement.Flat(pos, target);
+        var delta = target - pos;
+        var flat = new Vector3(delta.X, 0f, delta.Z);
+        if (flat.Magnitude < 0.05f)
+        {
+            _movement.Hold(me, SendIntervalMs);
+            return;
+        }
+
+        var dir = flat.Normalize();
 
         // WATER - the captured client's contract: probe just ahead for the surface verdict.
-        var probe = Math.Min(tdist, WadeProbeMeters);
+        var probe = Math.Min(dist, WadeProbeMeters);
         var plane = _nav.Nav?.Ground != null
             ? _nav.Nav.Ground.SwimY(pos.X + dir.X * probe, pos.Z + dir.Z * probe, WadeDepth)
             : double.NaN;
         var inWater = !double.IsNaN(plane);
         var speed = inWater ? RunVelocity(snap) * SwimSpeedFactor : RunVelocity(snap);
-        var step = Movement.CappedStep(speed, dt, MaxStep, tdist);
+        var step = Movement.CappedStep(speed, dt, MaxStep, dist);
         var nx = pos.X + dir.X * step;
         var nz = pos.Z + dir.Z * step;
         var floorY = FloorY(nx, pos.Y, nz);
@@ -781,6 +875,10 @@ public sealed class MovementController : IPacketConsumer
             _wetYAt = _wetClock.Elapsed.TotalSeconds;
         }
 
+        // A correction moved us off his stream: the mirror cannot copy what the server overrode
+        // (AOBuddy10 OnServerCorrectedMe broke the mirror here too); the catch-up re-locks.
+        _follow.BreakMirror("server correction");
+
         Movement.SetPose(me, pos, me.MovementComponent.Heading);
         _movement.ResetKeepGait(); // a correction is not a gait change (Movement.cs, Newland 21:40)
     }
@@ -842,8 +940,10 @@ public sealed class MovementController : IPacketConsumer
     // ── packet handlers (update thread) ───────────────────────────────────────────────────
 
     // Our own CharDCMove echo is the server's confirmation of where it has us: that is
-    // CurrentPosition. Everyone else's moves are not ours to consume - the SDK's DynelManager
-    // keeps their transforms, and we return false so it always sees the packet.
+    // CurrentPosition. The OWNER's moves are follow's raw material: stamped as "he is moving" and,
+    // while the mirror is locked, queued for the walk thread to replay as ours (AOBuddy10 Main.cs:
+    // "his move is our move"). Everyone's packets return false - the SDK's DynelManager keeps the
+    // transforms fresh, and we are observers here.
     private bool DCMoveHandler(AOMessage arg)
     {
         if (arg.Body is CharDCMoveMessage m)
@@ -855,6 +955,14 @@ public sealed class MovementController : IPacketConsumer
                 {
                     _confirmedPosition = m.Position;
                     _confirmedHeading = m.Heading;
+                }
+            }
+            else if (_ownerInstance != 0 && m.Identity.Instance == _ownerInstance)
+            {
+                Interlocked.Exchange(ref _ownerLastMoveAt, Environment.TickCount64);
+                if (_follow.MirrorLocked && Movement.IsMirrorable(m.MoveType))
+                {
+                    _follow.MirrorQueue.Enqueue(m);
                 }
             }
         }
@@ -920,6 +1028,10 @@ public sealed class MovementController : IPacketConsumer
         public int Playfield;
         public int RunSpeed; // -1 = unreadable this tick
         public int MovementMode; // the login CurrentMovementMode (stat 173); -1 = not sent yet
+        public bool OwnerVisible;
+        public Vector3 OwnerPos;
+        public Quaternion OwnerHeading;
+        public bool OwnerMoveFresh; // his last movement packet is under 600 ms old
     }
 
     internal sealed class GoalLocation

@@ -208,8 +208,23 @@ public sealed class OwnerChat
 
         t["help"] = (reply, p) =>
         {
-            reply("Commands: pos | status | goto <x> [y] <z> | come | stop | sit | stand | navdata | help." +
-                  " goto/come walk at priority Travel; anything the bot does later preempts them.");
+            reply("Commands: follow | stay | pos | status | goto <x> [y] <z> | come | stop | sit | stand | navdata | help." +
+                  " follow stacks me on you and mirrors your movement; goto/come walk at priority Travel and hand me back to follow on arrival.");
+        };
+
+        // FOLLOW (AOBuddy10's stack/mirror tier): once on, the body's idle state is the owner - run
+        // to him, stack on his spot, and replay his movement packets as ours. Any goal preempts it;
+        // when the last goal clears, follow resumes on its own.
+        t["follow"] = (reply, p) =>
+        {
+            _movement.SetFollow(true);
+            reply("Following: I'll stack on you and mirror your movement.");
+        };
+
+        t["stay"] = (reply, p) =>
+        {
+            _movement.SetFollow(false);
+            reply("Staying put (follow off).");
         };
 
         t["pos"] = (reply, p) => { reply(_movement.DescribeState()); };
