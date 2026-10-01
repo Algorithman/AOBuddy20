@@ -170,6 +170,7 @@ def teleport_functions(ev):
 
 def parse_statels(d):
     teleports, entrances = [], []
+    objects = []
     n, p = struct.unpack_from("<i", d, 0)[0], 4
     for _ in range(n):
         ln = struct.unpack_from("<i", d, p)[0]
@@ -178,6 +179,7 @@ def parse_statels(d):
         itype, inst = struct.unpack_from("<ii", b, 0)
         x, y, z = struct.unpack_from("<3f", b, 24)
         tmpl, evlen = struct.unpack_from("<ii", b, 56)
+        objects.append((itype, inst, x, y, z, tmpl))
         if itype == ACG_ENTRANCE:
             entrances.append({"pos": r3(x, y, z), "id": [itype, inst], "template": tmpl})
         seen = set()
@@ -197,7 +199,54 @@ def parse_statels(d):
             seen.add(key)
             t.update({"pos": r3(x, y, z), "id": [itype, inst], "template": tmpl})
             teleports.append(t)
-    return teleports, entrances
+    return teleports, entrances, objects
+
+
+def back_exits(zoning, objects_by_pf):
+    """Proxy playfields carry their exit as a DOOR whose destination the client data does not hold -
+    the server wires it per instance (pf 1187 'Neutral Supermarket Advanced': the door is in the
+    statels at (205, 120), no destination anywhere in the record, no walls, no arrival lines). A
+    playfield entered by proxy and left static would be a dead end no router can leave, so emit its
+    OUTSIDE doors as back exits: the Door statels lying on the bounding box of all its objects (the
+    interior partition doors have objects on both sides of them; an outside door has none beyond
+    it). Each becomes a zoneLine across the doorway, wound so the outward side points away from the
+    room, with to 0 = 'back to the playfield we entered this instance from' - only the running bot
+    knows that (it remembers the playfield it zoned from and survives a reconnect with proxy.json).
+    Only playfields that would otherwise have no way out get this; playfields with walls or
+    teleports of their own keep their real exits untouched."""
+    proxy_targets = {t["to"] for zf in zoning.values() for t in zf["teleports"] if t["kind"] == "proxy"}
+    added = 0
+    for pf, zf in zoning.items():
+        if pf not in map(str, proxy_targets) or zf["zoneLines"] or zf["teleports"]:
+            continue
+        objs = objects_by_pf.get(int(pf), [])
+        if not objs:
+            continue
+        xs = [o[2] for o in objs]
+        zs = [o[4] for o in objs]
+        cx = sum(xs) / len(xs)
+        cz = sum(zs) / len(zs)
+        for itype, inst, x, y, z, tmpl in objs:
+            if itype != 51016:  # Door
+                continue
+            if min(x - min(xs), max(xs) - x, z - min(zs), max(zs) - z) > 1.5:
+                continue  # an interior door: objects sit beyond it on the far side too
+            # Doorway segment across the door, 3 m wide, wound so that (dz, -dx) - the wall
+            # winding's OUTWARD, the side a zone line is crossed towards - points away from the
+            # room's centre.
+            ox, oz = x - cx, z - cz
+            norm = (ox * ox + oz * oz) ** 0.5 or 1.0
+            ox, oz = ox / norm, oz / norm
+            dx, dz = -oz, ox  # segment direction; (dz, -dx) = (ox, oz) = outward
+            w = 1.5
+            zf["zoneLines"].append({
+                "to": 0, "idx": 0, "flags": 0,
+                "a": r3(x - dx * w, y, z - dz * w),
+                "b": r3(x + dx * w, y, z + dz * w),
+                "back": True, "id": [itype, inst], "template": tmpl,
+            })
+            added += 1
+    return added
 
 
 def main():
@@ -209,9 +258,14 @@ def main():
     walls = set(rdb.ids(T_WALL))
     statels = set(rdb.ids(T_STATEL))
     zoning = {}
+    objects_by_pf = {}
     for pf in rdb.ids(T_PLAYFIELD):
         name, arrivals = parse_playfield(rdb.get(T_PLAYFIELD, pf))
-        teleports, entrances = parse_statels(rdb.get(T_STATEL, pf)) if pf in statels else ([], [])
+        if pf in statels:
+            teleports, entrances, objects = parse_statels(rdb.get(T_STATEL, pf))
+        else:
+            teleports, entrances, objects = [], [], []
+        objects_by_pf[pf] = objects
         zoning[str(pf)] = {
             "name": name,
             "zoneLines": parse_zone_lines(rdb.get(T_WALL, pf)) if pf in walls else [],
@@ -219,11 +273,13 @@ def main():
             "missionEntrances": entrances,
             "arrivals": {str(k): v for k, v in sorted(arrivals.items())},
         }
+    backs = back_exits(zoning, objects_by_pf)
     with open(out, "w", encoding="utf-8") as f:
-        json.dump({"version": 2, "playfields": zoning}, f, separators=(",", ":"))
+        json.dump({"version": 3, "playfields": zoning}, f, separators=(",", ":"))
     count = lambda key: sum(len(v[key]) for v in zoning.values())
     gated = sum(1 for v in zoning.values() for t in v["teleports"] if "reqs" in t)
-    print(f"wrote {len(zoning)} playfields, {count('zoneLines')} zone lines, {count('teleports')} teleports "
+    print(f"wrote {len(zoning)} playfields, {count('zoneLines')} zone lines "
+          f"({backs} proxy back exits), {count('teleports')} teleports "
           f"({gated} with requirements), {count('missionEntrances')} mission entrances to {os.path.normpath(out)}")
 
 

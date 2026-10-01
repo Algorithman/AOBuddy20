@@ -37,10 +37,16 @@ public sealed class ZoneExit
     public int ObjType, ObjInstance, Template;
     public string Tell, Label; // Scotty only
 
+    // A proxy playfield's exit door (tools/rdb-zoning emits them, to 0 in the data): the client
+    // data holds the door but not its destination - the server wires it per instance. ToPf is
+    // resolved at route time to the playfield we entered this instance from (ProxyOrigin).
+    public bool Back;
+
     public override string ToString()
     {
         return Kind switch
         {
+            ExitKind.ZoneLine when Back => "exit door back out",
             ExitKind.ZoneLine => $"zone line to {Zoning.Name(ToPf)}",
             ExitKind.Line => $"pad to {Zoning.Name(ToPf)}",
             ExitKind.Scotty => $"/tell scty {Tell} ({Label}, {Zoning.Name(ToPf)})",
@@ -133,6 +139,12 @@ public sealed class ZoneRouteOptions
 ///     INTO its playfield, so (dz, -dx) points outward. Proxies carry no destination: guessed from the
 ///     destination's exits back, or left unknown - the travel legs re-plan from wherever we actually are
 ///     after every zone, so a wrong guess costs cost accuracy, never the trip.
+///     BACK EXITS (proxy playfields): a playfield entered through a proxy door (shop, house) carries
+///     its exit door in the data but NOT its destination - the server wires it per instance
+///     (tools/rdb-zoning emits those doors as zoneLines with to 0). The destination is where we came
+///     from, remembered per zone-in and across restarts (proxy.json): SetProxyOrigin keeps it,
+///     FindRoute resolves the back exits of that one playfield against it and leaves them unusable
+///     while it is unknown.
 ///     THREADING: Load once at startup, before the session starts and before any walk - the loaded maps
 ///     are immutable afterwards, so ExitsFrom/FindRoute/CrossLine are pure reads from any thread (the
 ///     _wet table is the one mutable side table, guarded by its lock; SetWet registers the playfield the
@@ -145,6 +157,25 @@ public static class Zoning
     private static Dictionary<int, List<ZoneExit>> _exits = new();
     private static List<ZoneExit> _scotty = new();
     private static List<ZoneExit> _all = new();
+
+    // The proxy playfield the bot is in (or last entered through a proxy), and the playfield it
+    // came from - the only truth a back exit's destination has, since the client data names none.
+    // Written on every zone-in and restored from proxy.json at login (a reconnect inside a proxy
+    // playfield must not lose the way out); swapped as a whole, read without locks.
+    private sealed class ProxyOrigin
+    {
+        public int Pf, FromPf;
+        public Vector3? FromPos; // where we came out in FromPf (the door/terminal we used), if known
+    }
+
+    private static volatile ProxyOrigin _proxyOrigin;
+
+    /// <summary>The bot zoned (or logged in) inside `pf`, having come from `fromPf` (-1 = unknown),
+    /// coming out by the object at `fromPos` when known. Safe from any thread.</summary>
+    public static void SetProxyOrigin(int pf, int fromPf, Vector3? fromPos)
+    {
+        _proxyOrigin = new ProxyOrigin { Pf = pf, FromPf = fromPf, FromPos = fromPos };
+    }
 
     public static bool Loaded => _names.Count > 0;
 
@@ -204,6 +235,19 @@ public static class Zoning
                 var list = new List<ZoneExit>();
                 foreach (var l in kv.Value.zoneLines ?? new List<ZlDto>())
                 {
+                    if (l.back)
+                    {
+                        // A proxy playfield's exit door (to 0): usable only once the runtime knows
+                        // where we entered the instance from; FindRoute resolves and filters it.
+                        list.Add(new ZoneExit
+                        {
+                            Kind = ExitKind.ZoneLine, FromPf = pf, ToPf = 0, Back = true,
+                            A = V(l.a), B = V(l.b), ObjType = l.id?[0] ?? 0, ObjInstance = l.id?[1] ?? 0,
+                            Template = l.template,
+                        });
+                        continue;
+                    }
+
                     if (!z.playfields.ContainsKey(l.to.ToString()))
                     {
                         continue;
@@ -364,8 +408,12 @@ public static class Zoning
         dist[start] = 0;
         pos[start] = from;
 
-        int PfOf(int node) => node == start ? fromPf : _all[node].ToPf;
-        bool Usable(int i) => usable[i] ?? (usable[i] = CanUse(_all[i], opt)).Value;
+        // A back exit's destination is the playfield we entered this proxy instance from - 0 (=
+        // unknown) while the runtime has no origin for this playfield, which makes it unusable.
+        int ToOf(ZoneExit e) => !e.Back ? e.ToPf
+            : _proxyOrigin != null && _proxyOrigin.Pf == e.FromPf ? _proxyOrigin.FromPf : 0;
+        int PfOf(int node) => node == start ? fromPf : ToOf(_all[node]);
+        bool Usable(int i) => usable[i] ?? (usable[i] = ToOf(_all[i]) > 0 && CanUse(_all[i], opt)).Value;
         double Walk(Vector3? a, Vector3 b) => a.HasValue ? Flat(a.Value, b) : opt.UnknownWalk; // Scotty points and goals have no height
         bool OtherLevel(int pf, Vector3? a, Vector3 b) =>
             a.HasValue && opt.SameLevelOnly != null && opt.SameLevelOnly(pf) && Math.Abs(a.Value.Y - b.Y) > opt.LevelGap;
@@ -529,7 +577,11 @@ public static class Zoning
 
         Vector3 at = Lerp(e.A, e.B, t);
         Vector3 beyond = len > 0.01f ? new Vector3(at.X + dz / len * 3f, at.Y, at.Z - dx / len * 3f) : at; // outward = -(-dz, dx)
-        Vector3? arrive = e.ArrivalA.HasValue ? Lerp(e.ArrivalA.Value, e.ArrivalB.Value, 1 - t) : e.Arrival;
+        // A back exit comes out by the door or terminal we once entered through - the proxy
+        // origin's remembered position, when it has one.
+        Vector3? arrive = e.ArrivalA.HasValue ? Lerp(e.ArrivalA.Value, e.ArrivalB.Value, 1 - t)
+            : e.Back ? _proxyOrigin?.FromPos
+            : e.Arrival;
         return (at, beyond, arrive);
     }
 
@@ -618,6 +670,8 @@ public static class Zoning
 
     // A proxy names no destination point. The exits in the destination that lead back to where we came
     // from are usually beside the door we come out of: use their centre when they sit within 30 m of it.
+    // A proxy playfield's own back exit door is exactly that spot once we have been there (the origin
+    // context names this very playfield as entered-from here); before that, nothing to guess from.
     private static Vector3? GuessArrival(Dictionary<int, List<ZoneExit>> exits, ZoneExit e)
     {
         if (!exits.TryGetValue(e.ToPf, out var there))
@@ -625,7 +679,11 @@ public static class Zoning
             return null;
         }
 
-        var back = there.Where(b => b.ToPf == e.FromPf && b.ToPf != b.FromPf).Select(b => Mid(b.A, b.B)).ToList();
+        var origin = _proxyOrigin;
+        var back = there
+            .Where(b => b.ToPf == e.FromPf && b.ToPf != b.FromPf
+                        || b.Back && origin != null && origin.Pf == e.ToPf && origin.FromPf == e.FromPf)
+            .Select(b => Mid(b.A, b.B)).ToList();
         if (back.Count == 0)
         {
             return null;
@@ -662,6 +720,9 @@ public static class Zoning
     {
         public int to, idx, flags;
         public float[] a, b;
+        public bool back; // proxy playfield's exit door: to 0, destination known only at runtime
+        public int[] id;
+        public int template;
     }
 
     private sealed class TpDto
