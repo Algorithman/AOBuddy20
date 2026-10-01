@@ -31,4 +31,14 @@ public static class GameCommands
         Client.Send(new GenericCmdMessage
         { Action = GenericCmdAction.Use, User = me.Identity, Target = target, Count = 1, Temp4 = 1 });
     }
+
+    /// <summary>
+    ///     GenericCmd Use in its OPEN form (Count=1, Temp4=0): a bag in the inventory, or a container
+    ///     holding items - opening it, not activating it (AOBuddy10 GameCommands, the stash's proven open).
+    /// </summary>
+    public static void OpenContainer(LocalPlayer me, Identity target)
+    {
+        Client.Send(new GenericCmdMessage
+        { Action = GenericCmdAction.Use, User = me.Identity, Target = target, Count = 1, Temp4 = 0 });
+    }
 }

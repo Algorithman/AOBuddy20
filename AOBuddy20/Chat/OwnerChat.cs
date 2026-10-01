@@ -39,6 +39,7 @@ public sealed class OwnerChat
     private readonly ILogger<OwnerChat> _logger;
     private readonly MovementController _movement;
     private readonly ResupplyController _resupply;
+    private readonly SellController _sell;
 
     private bool _greeted;
     private bool _running;
@@ -48,10 +49,11 @@ public sealed class OwnerChat
     // so a name-only check silently drops the owner's own commands (AOBuddy10 OwnerTracker).
     private uint _tellId;
 
-    public OwnerChat(MovementController movement, ResupplyController resupply, AccountInfo config, ILogger<OwnerChat> logger)
+    public OwnerChat(MovementController movement, ResupplyController resupply, SellController sell, AccountInfo config, ILogger<OwnerChat> logger)
     {
         _movement = movement;
         _resupply = resupply;
+        _sell = sell;
         _config = config;
         _logger = logger;
         _commands = BuildCommands();
@@ -115,6 +117,7 @@ public sealed class OwnerChat
 
         _logger.LogInformation($"CMD from {msg.SenderName}: '{msg.Message}'");
         _resupply.SetTellId(msg.SenderId); // async replies (buys, credit nags) answer this id
+        _sell.SetTellId(msg.SenderId); // so do the selling reports
         try
         {
             HandleCommand(msg.Message, text => Client.SendPrivateMessage(msg.SenderId, text));
@@ -212,9 +215,10 @@ public sealed class OwnerChat
 
         t["help"] = (reply, p) =>
         {
-            reply("Commands: follow | stay | pos | status | goto x [y] z | goto x z [pf] | come | travel pf | travel x z [pf] | resupply [stop|status|forget|machines] | stop | sit | stand | navdata | help." +
+            reply("Commands: follow | stay | pos | status | goto x [y] z | goto x z [pf] | come | travel pf | travel x z [pf] | resupply [stop|status|forget|machines] | sell [stop|status] | stop | sit | stand | navdata | help." +
                   " follow stacks me on you and mirrors your movement; goto/come walk at priority Travel and hand me back to follow on arrival;" +
-                  " travel crosses playfields by zone lines, doors, whompas and pads (id or name); resupply shops for stims and rechargers by my own skills.");
+                  " travel crosses playfields by zone lines, doors, whompas and pads (id or name); resupply shops for stims and rechargers by my own skills;" +
+                  " sell sells the bag contents to a shop terminal (NODROP and main inventory untouched).");
         };
 
         // FOLLOW (AOBuddy10's stack/mirror tier): once on, the body's idle state is the owner - run
@@ -343,6 +347,10 @@ public sealed class OwnerChat
         // RESUPPLY (AOBuddy10's command, moved verbatim): bare 'resupply' shops for stims and
         // rechargers; stop/status/forget/machines manage the run and its terminal memory.
         t["resupply"] = (reply, p) => { _resupply.Command(p, reply); };
+
+        // SELL: sell the bag contents to a shop terminal. NODROP items and the bags themselves stay;
+        // the main inventory is never sold - bag items are staged through it one batch at a time.
+        t["sell"] = (reply, p) => { _sell.Command(p, reply); };
 
         // Sit/stand go through the movement controller's posture track: the bot then knows it is
         // seated and stands up on the next movement order (the 'come' after a 'sit').

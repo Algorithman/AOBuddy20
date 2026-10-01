@@ -35,14 +35,16 @@ public sealed class BotLoop
     private readonly ILogger<BotLoop> _logger;
     private readonly MissionController _missionController;
     private readonly ResupplyController _resupply;
+    private readonly SellController _sell;
     private readonly NavController _navMemory;
     private bool _running;
 
-    public BotLoop(ControlArbiter controlArbiter, MissionController missionController, ResupplyController resupply, NavController navMemory, AccountInfo config, ILogger<BotLoop> logger)
+    public BotLoop(ControlArbiter controlArbiter, MissionController missionController, ResupplyController resupply, SellController sell, NavController navMemory, AccountInfo config, ILogger<BotLoop> logger)
     {
         _controlArbiter = controlArbiter;
         _missionController = missionController;
         _resupply = resupply;
+        _sell = sell;
         _navMemory = navMemory;
         _config = config;
         _logger = logger;
@@ -99,12 +101,17 @@ public sealed class BotLoop
                 // RESUPPLY (AOBuddy10 ResupplyController): the decision tick runs here on the update
                 // thread, the same one its packet handlers fire on. While a run is active it owns
                 // the body through a MovementController goal at ControlPriority.Resupply and holds
-                // the arbiter at that priority; idle, it only answers the owner's trade.
+                // the arbiter at that priority; idle, it only answers the owner's trade. SELLING
+                // (SellController) runs the same way one priority down.
                 if (_resupply.Tick(me, deltaTime))
                 {
                     CurrentTask = Tasks.Resupply;
                 }
-                else if (CurrentTask == Tasks.Resupply)
+                else if (_sell.Tick(me, deltaTime))
+                {
+                    CurrentTask = Tasks.SellGoods;
+                }
+                else if (CurrentTask is Tasks.Resupply or Tasks.SellGoods)
                 {
                     CurrentTask = Tasks.Nothing;
                 }

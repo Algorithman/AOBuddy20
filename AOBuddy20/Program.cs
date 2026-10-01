@@ -197,6 +197,7 @@ internal class Program
         services.AddSingleton<ControlArbiter>();
         services.AddSingleton<MissionController>();
         services.AddSingleton<ResupplyController>();
+        services.AddSingleton<SellController>();
         services.AddSingleton<Awareness>();
         services.AddSingleton<MovementController>();
         services.AddSingleton<BotLoop>();

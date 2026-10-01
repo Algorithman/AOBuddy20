@@ -14,13 +14,13 @@ using System.Text;
 namespace AOBuddy20.Utils;
 
 /// <summary>
-///     Item Value (stat 74) per item template, and each shop terminal template's Sell/BuyModifier
-///     (427/426), none of which the SDK's item pack carries. Extracted once from OmniCell's
-///     items.ocp into GameData/ItemValues.bin (AOBuddy10 tools/mp-itemvalues), version 2:
-///       "AOBV", 2, count, per template int id, int ql, int value
-///       count, per terminal template int id, int sellModifier, int buyModifier
-///     (The file's NODROP and implant tables are not read here - they belong to the selling and
-///     keep-list features, which are not ported yet.)
+///     Item Value (stat 74) per item template, each shop terminal template's Sell/BuyModifier
+///     (427/426), and the NODROP templates (item Flags bit 26 - never sellable), none of which the
+///     SDK's item pack carries. Extracted once from OmniCell's items.ocp (AOBuddy10 tools
+///     mp-itemvalues / eng-gear-extractor):
+///       GameData/ItemValues.bin  "AOBV", 2, count, per template int id, int ql, int value
+///                                count, per terminal template int id, int sellModifier, int buyModifier
+///       GameData/ItemNoDrop.bin  "AOND", 1, count, ids
 ///
 ///     Between its low and high template an item's Value follows the SQUARE of how far its QL is
 ///     along the range - unlike its requirements, which are linear.
@@ -36,6 +36,7 @@ public static class ItemValues
 {
     private static Dictionary<int, (int Ql, int Value)>? _values;
     private static Dictionary<int, (int Sell, int Buy)>? _shops;
+    private static HashSet<int>? _noDrop;
 
     /// <summary>Loaded once at startup, before the session starts (Program, next to Zoning.Load).</summary>
     public static bool Loaded => _values != null;
@@ -77,6 +78,42 @@ public static class ItemValues
         catch (Exception ex)
         {
             log($"ITEMVALUES: couldn't load {file}: {ex.Message}");
+        }
+
+        _noDrop = ReadIds(Path.Combine(baseDir, "GameData", "ItemNoDrop.bin"), "AOND", log, "NODROP");
+    }
+
+    /// <summary>NODROP templates (Flags bit 26): can never be dropped, traded or sold.</summary>
+    public static bool IsNoDrop(int lowId, int highId)
+    {
+        return _noDrop != null && (_noDrop.Contains(lowId) || _noDrop.Contains(highId));
+    }
+
+    private static HashSet<int>? ReadIds(string file, string magic, Action<string> log, string what)
+    {
+        try
+        {
+            using var r = new BinaryReader(File.OpenRead(file));
+            if (Encoding.ASCII.GetString(r.ReadBytes(4)) != magic || r.ReadInt32() != 1)
+            {
+                log($"ITEMVALUES: {file} is not a version 1 {what} table.");
+                return null;
+            }
+
+            var n = r.ReadInt32();
+            var set = new HashSet<int>(n);
+            for (var i = 0; i < n; i++)
+            {
+                set.Add(r.ReadInt32());
+            }
+
+            log($"ITEMVALUES: {set.Count} {what} templates loaded.");
+            return set;
+        }
+        catch (Exception ex)
+        {
+            log($"ITEMVALUES: couldn't load {file}: {ex.Message}");
+            return null;
         }
     }
 
