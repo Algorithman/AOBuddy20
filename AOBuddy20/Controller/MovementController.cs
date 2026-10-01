@@ -13,6 +13,7 @@ using System.Diagnostics;
 using AOBuddy20.Components;
 using AOBuddy20.Enums;
 using AOBuddy20.Interfaces;
+using AOBuddy20.Nav;
 using AOBuddy20.Network;
 using AOBuddy20.Utils;
 using AOSharp.Clientless;
@@ -53,6 +54,15 @@ public sealed class MovementController : IPacketConsumer
     private const float MaxStep = 1.5f;
     private const float ArriveRadius = 1.5f;
 
+    // WATER, the captured client's exact contract (AOBuddy10 OverlandController, capture 20260924-215811
+    // s116, this very shore): NO swim-mode packet is ever sent - Y is THE WATER SURFACE while the bottom
+    // is deeper than a wade, THE BOTTOM once it rises inside wading range, plain Update packets
+    // throughout. Wet speed = RunVelocity * SwimSpeedFactor (~5.5 u/s, Config.cs:357-358).
+    private const float SwimWadeMeters = 1.2f;
+    private const float SwimSpeedFactor = 0.5f;
+    private const float WadeProbeMeters = 0.5f; // probe this far ahead for the water verdict
+    private const float WadeDepth = 0.3f; // SwimY's wade depth for the probe
+
     private readonly ILogger<MovementController> _logger;
 
     // The ONE place the body moves (Components/Movement.cs), ported from AOBuddy10.
@@ -65,6 +75,19 @@ public sealed class MovementController : IPacketConsumer
     private Vector3 _confirmedPosition; // where the server last had US
     private Quaternion _confirmedHeading;
     private Vector3? _pendingCorrection; // SetPos the walk thread will apply
+
+    // The playfield's nav data and walk grid, built off every loop thread (NavGridCache). Nav supplies
+    // the Y of every dictated step - without it the walk holds the login Y and floats (owner, 2026-10-01).
+    private readonly NavGridCache _nav = new();
+    private readonly Stopwatch _wetClock = Stopwatch.StartNew();
+
+    // How far the server's floor sits above our data here (AOBuddy10: Rome Park walked y 16 over ground
+    // the data puts at 13.6; with corrections ignored the bot sank back each step, log 2026-09-24 01:30).
+    // _wetY: the server's own Y while in water, wet truth for 3 s (AOBuddy10 OverlandController).
+    private float _yBias;
+    private float _wetY;
+    private double _wetYAt = -99;
+    private float _pendingBias; // the bias the SetPos that queued _pendingCorrection carried
 
     // Published by the update thread, consumed by the walk thread. One immutable snapshot per tick
     // so the walk never sees a torn combination (LocalPlayer is swapped on zone-in).
@@ -84,6 +107,10 @@ public sealed class MovementController : IPacketConsumer
         _logger = logger;
         _logger.LogInformation("Movement controller initialized.");
     }
+
+    // The bot's own folder (Build\): GameData\Nav and gridcache live beside the executable, as
+    // AOBuddy10 kept them beside the plugin.
+    private static string BaseDir => AppDomain.CurrentDomain.BaseDirectory;
 
     /// <summary>Where the server last confirmed us. What other components read (Readme point 5).</summary>
     public Vector3 CurrentPosition
@@ -182,8 +209,33 @@ public sealed class MovementController : IPacketConsumer
                     .Select(g => $"{(ControlPriority)g.Key} ({g.Key}) @ " +
                                  $"({g.Value.Position.X:0.0} {g.Value.Position.Y:0.0} {g.Value.Position.Z:0.0}) pf {g.Value.PlayfieldId}" +
                                  $"{(g.Value.Reached ? " REACHED" : "")}"));
-            return $"pf {_pf}, pos ({CurrentPosition.X:0.0} {CurrentPosition.Y:0.0} {CurrentPosition.Z:0.0}) | goals: {goalText}";
+            return $"pf {_pf}, pos ({CurrentPosition.X:0.0} {CurrentPosition.Y:0.0} {CurrentPosition.Z:0.0}) | nav: {NavState()} | goals: {goalText}";
         }
+    }
+
+    private string NavState()
+    {
+        if (_nav.LoadedPf != _pf)
+        {
+            return _nav.LoadedPf >= 0 ? $"loading (have {_nav.LoadedPf})" : "loading";
+        }
+
+        var nav = _nav.Nav;
+        return nav == null ? "none (straight lines)" : $"{nav.Kind}, yBias {_yBias:+0.0;-0.0}";
+    }
+
+    /// <summary>Everything the nav data says about our current position (AOBuddy10's 'navdata' command,
+    /// which exists so the data can be checked against the live character before anything relies on it).</summary>
+    public string ExplainNav()
+    {
+        var nav = _nav.Nav;
+        var p = CurrentPosition;
+        if (nav == null || _nav.LoadedPf != _pf)
+        {
+            return $"nav: no data for pf {_pf} (loaded: {_nav.LoadedPf}).";
+        }
+
+        return nav.Explain(p.X, p.Y, p.Z);
     }
 
     public void RegisterPackets(PacketRouter router)
@@ -297,6 +349,14 @@ public sealed class MovementController : IPacketConsumer
 
         ApplyPendingCorrection(me);
 
+        // The playfield's nav data, built off every loop thread (Lush Fields took 6.3 s, log 2026-09-24):
+        // while it loads there is no honest Y, so hold rather than walk blind.
+        if (!_nav.Request(snap.Playfield, BaseDir, s => _logger.LogInformation(s), "MOVE"))
+        {
+            _movement.Hold(me, SendIntervalMs);
+            return;
+        }
+
         var goal = SelectActiveGoal(_pf);
         if (goal == null)
         {
@@ -322,10 +382,9 @@ public sealed class MovementController : IPacketConsumer
         // Not there (yet, or anymore): the flag only ever says reached while we stand on it.
         goal.Value.Value.Reached = false;
 
-        // One capped step toward the goal, the proven walker pattern (AOBuddy10
-        // FollowController.Step): mouse-look facing (instant, server-proven legal - Movement.Face),
-        // then Advance at the run-speed formula. Y is not walked: the goal's floor is found by
-        // the terrain, not by us (Movement.Flat).
+        // One capped step toward the goal, the proven outdoor walker (AOBuddy10 OverlandController):
+        // mouse-look facing, then Advance at the run-speed formula with the step's Y taken from the NAV
+        // DATA (the floor under the next position, the water surface over it), never from the goal.
         var delta = goal.Value.Value.Position - pos;
         var flat = new Vector3(delta.X, 0f, delta.Z);
         if (flat.Magnitude < 0.05f)
@@ -335,12 +394,126 @@ public sealed class MovementController : IPacketConsumer
         }
 
         var dir = flat.Normalize();
+
+        // WATER - the captured client's contract: probe just ahead for the surface verdict.
+        var probe = Math.Min(dist, WadeProbeMeters);
+        var plane = _nav.Nav?.Ground != null
+            ? _nav.Nav.Ground.SwimY(pos.X + dir.X * probe, pos.Z + dir.Z * probe, WadeDepth)
+            : double.NaN;
+        var inWater = !double.IsNaN(plane);
+        var speed = inWater ? RunVelocity(snap) * SwimSpeedFactor : RunVelocity(snap);
+        var step = Movement.CappedStep(speed, dt, MaxStep, dist);
+        var nx = pos.X + dir.X * step;
+        var nz = pos.Z + dir.Z * step;
+        var floorY = FloorY(nx, pos.Y, nz);
+
+        // UPHILL THE SERVER IS STRICTER THAN ON THE FLAT (capture 20260925-141138, Wailing Wastes: a
+        // 0.1/m rise refused every 1.5 m step at 15 u/s on the wire, while the captured client walks the
+        // same slope in 0.1-0.2 m moves every 10-30 ms). Climb in steps small enough to be under run
+        // speed per send interval.
+        if (!inWater && floorY > pos.Y)
+        {
+            step = Math.Min(step, Math.Max(0.3f, speed * SendIntervalMs / 1000f * 0.6f));
+            nx = pos.X + dir.X * step;
+            nz = pos.Z + dir.Z * step;
+            floorY = FloorY(nx, pos.Y, nz);
+        }
+
+        var now = _wetClock.Elapsed.TotalSeconds;
+        var floating = inWater && now - _wetYAt < 3 && _wetY > floorY + 0.4f && _wetY <= plane + 0.3f;
+        var nextY = floating ? _wetY // the server's own surface Y, while fresh
+            : inWater && floorY < (float)plane - SwimWadeMeters ? (float)plane // swim at the surface
+            : floorY; // wade the bottom / walk the shore
+
+        // NEVER BELOW THE TERRAIN (2026-09-25, the Wailing Wastes rubberband): the heightfield is solid
+        // ground outdoors - the step we claim can never be under it.
+        var terr = _nav.Nav?.Ground != null ? _nav.Nav.Ground.HeightAt(nx, nz) : double.NaN;
+        if (!double.IsNaN(terr) && terr > nextY)
+        {
+            nextY = (float)terr;
+        }
+
+        if (!inWater)
+        {
+            // ...AND STEP UP ONTO WHAT WE WALK INTO (the ICC steps, same day): under a staircase the
+            // nearest floor is the terrain BENEATH THE STAIRS, so the walk would claim the plaza's height
+            // while stepping into the rising treads. The surface we stand on at the next position is the
+            // HIGHEST floor at most a step above us (a riser or two - anything higher is a wall).
+            var sf = StepFloor(nx, pos.Y, nz);
+            if (!float.IsNaN(sf) && sf >= pos.Y - 4f && sf > nextY)
+            {
+                nextY = sf;
+            }
+        }
+
         var want = Movement.SafeLook(dir, me.MovementComponent.Heading);
-        var step = Movement.CappedStep(RunVelocity(snap), dt, MaxStep, dist);
-        _movement.Advance(me, pos + dir * step, want, run: true, dt, SendIntervalMs);
+        _movement.Advance(me, new Vector3(nx, nextY, nz), want, run: true, dt, SendIntervalMs);
     }
 
-    // SetPos the packet thread accepted: applied here, on the thread that owns the body.
+    // ── floor sampling (AOBuddy10 OverlandController's FloorY/StepFloor, verbatim rules) ──
+
+    private float FloorY(float x, float y, float z)
+    {
+        var h = RawFloorY(x, y - _yBias, z);
+        if (float.IsNaN(h))
+        {
+            return y;
+        }
+
+        h += _yBias;
+        return Math.Abs(h - y) > 4f ? y : h; // a jump of more than 4 m is a roof or a cave, not our floor
+    }
+
+    // Our data's floor under (x, z) nearest y; NaN when there is none.
+    private float RawFloorY(float x, float y, float z)
+    {
+        var nav = _nav.Nav;
+        if (nav == null)
+        {
+            return float.NaN;
+        }
+
+        double h = nav.FloorNear(x, y, z, out _);
+        return double.IsNaN(h) ? float.NaN : (float)h;
+    }
+
+    // The HIGHEST surface at the next position that is at most a step above y (stairs, kerbs, sills) —
+    // the surface we would walk ONTO. NaN when nothing qualifies.
+    private float StepFloor(float x, float y, float z)
+    {
+        float best = float.NaN;
+        void Consider(double h)
+        {
+            if (double.IsNaN(h) || h > y + 0.8f)
+            {
+                return;
+            }
+
+            if (float.IsNaN(best) || h > best)
+            {
+                best = (float)h;
+            }
+        }
+
+        var nav = _nav.Nav;
+        if (nav?.Ground != null)
+        {
+            Consider(nav.Ground.HeightAt(x, z));
+        }
+
+        if (nav?.Collision != null)
+        {
+            foreach (double h in nav.Collision.HeightsUnder(x, z))
+            {
+                Consider(h);
+            }
+        }
+
+        return best;
+    }
+
+    // SetPos the packet thread accepted: applied here, on the thread that owns the body. Its height
+    // against our floor data becomes the yBias carried forward, and its Y is wet truth for 3 s in water.
     private void ApplyPendingCorrection(LocalPlayer me)
     {
         Vector3 pos;
@@ -354,6 +527,9 @@ public sealed class MovementController : IPacketConsumer
             pos = _pendingCorrection.Value;
             _pendingCorrection = null;
             _confirmedPosition = pos;
+            _yBias = _pendingBias;
+            _wetY = pos.Y;
+            _wetYAt = _wetClock.Elapsed.TotalSeconds;
         }
 
         Movement.SetPose(me, pos, me.MovementComponent.Heading);
@@ -437,10 +613,13 @@ public sealed class MovementController : IPacketConsumer
         return false;
     }
 
-    // SetPos self-corrections, the settled rule (review.md): apply 10 m or more, ignore smaller
-    // ones while moving (the retail client ignores corrections under 10 m 86% of the time and
-    // takes those of 10 m or more 64%). While standing there is nothing in flight to fight, so a
-    // small one is taken too. Never applied here: queued for the walk thread, the body's only writer.
+    // SetPos self-corrections. WALKING ON NAV DATA, every correction is taken and its height against our
+    // floor data becomes the yBias carried forward (AOBuddy10 OverlandController: Rome Park walked y 16
+    // over data ground 13.6, and with corrections ignored the bot sank back each step and was pulled
+    // every 3 s). WITHOUT nav data the settled rule stands (review.md): apply 10 m or more, ignore
+    // smaller ones while moving (the retail client ignores corrections under 10 m 86% of the time and
+    // takes those of 10 m or more 64%); standing, everything applies. Application itself always happens
+    // on the walk thread (the body's only writer), queued here.
     private bool SetPosHandler(AOMessage arg)
     {
         if (arg.Body is not SetPosMessage m)
@@ -454,28 +633,32 @@ public sealed class MovementController : IPacketConsumer
             return false;
         }
 
-        var off = Movement.Flat(me.MovementComponent.Position, m.Position);
-        if (off >= 10f)
+        // The correction's height against our floor data: how far the server's floor sits above ours here.
+        // Over water the floor says nothing about the bias (AOBuddy10), and neither does a wild jump.
+        var raw = RawFloorY(m.Position.X, m.Position.Y, m.Position.Z);
+        var bias = float.IsNaN(raw) ? 0f : m.Position.Y - raw;
+        if (Math.Abs(bias) > 4f || _movement.Swimming)
         {
-            lock (_poslock)
-            {
-                _pendingCorrection = m.Position;
-            }
-
-            _logger.LogInformation($"Movement: SetPos correction of {off:0.0} m accepted.");
+            bias = 0f;
         }
-        else if (!_movement.Moving)
+
+        var onNav = _nav.LoadedPf == _pf;
+        var off = Movement.Flat(me.MovementComponent.Position, m.Position);
+        if (onNav || off >= 10f || !_movement.Moving)
         {
             lock (_poslock)
             {
                 _pendingCorrection = m.Position;
+                _pendingBias = bias;
             }
 
-            _logger.LogDebug($"Movement: standing SetPos of {off:0.0} m accepted.");
+            _logger.LogInformation($"Movement: SetPos APPLIED ({(onNav ? "nav walk" : off >= 10f ? "resync" : "standing")}): " +
+                                   $"server ({m.Position.X:0.0} {m.Position.Y:0.0} {m.Position.Z:0.0}), {off:0.0} m off, " +
+                                   $"floor {bias:+0.0;-0.0} m vs data.");
         }
         else
         {
-            _logger.LogDebug($"Movement: SetPos of {off:0.0} m ignored while moving.");
+            _logger.LogDebug($"Movement: SetPos of {off:0.0} m ignored while moving (no nav data).");
         }
 
         return false;

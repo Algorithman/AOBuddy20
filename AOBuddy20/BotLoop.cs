@@ -9,8 +9,10 @@
 // Long live OmniCell and AOBuddy
 // ---------------------------------------------------------------------------------------
 
+using AOBuddy20.Configuration;
 using AOBuddy20.Controlling;
 using AOBuddy20.Enums;
+using AOBuddy20.Nav;
 using AOBuddy20.Utils;
 using AOSharp.Clientless;
 using Microsoft.Extensions.Logging;
@@ -28,15 +30,19 @@ namespace AOBuddy20;
 [MinLogLevel(LogEventLevel.Debug)]
 public sealed class BotLoop
 {
+    private readonly AccountInfo _config;
     private readonly ControlArbiter _controlArbiter;
     private readonly ILogger<BotLoop> _logger;
     private readonly MissionController _missionController;
+    private readonly NavController _navMemory;
     private bool _running;
 
-    public BotLoop(ControlArbiter controlArbiter, MissionController missionController, ILogger<BotLoop> logger)
+    public BotLoop(ControlArbiter controlArbiter, MissionController missionController, NavController navMemory, AccountInfo config, ILogger<BotLoop> logger)
     {
         _controlArbiter = controlArbiter;
         _missionController = missionController;
+        _navMemory = navMemory;
+        _config = config;
         _logger = logger;
     }
 
@@ -74,6 +80,21 @@ public sealed class BotLoop
     {
         try
         {
+            // NAV memory (AOBuddy10 NavController): record the owner's footsteps and catalogue the
+            // playfield's objects and mob spawns, so ground already walked is never guessed again.
+            // Zone transitions are not recorded yet - they need the POSITION-JUMP (teleport)
+            // detection, which is not ported (realCrossing: false).
+            var me = DynelManager.LocalPlayer;
+            if (me != null)
+            {
+                _navMemory.SetPlayfield((int)Playfield.ModelId, Playfield.Name, null, realCrossing: false);
+                var owner = DynelManager.Players.FirstOrDefault(pl =>
+                    string.Equals(pl.Name, _config.Owner, StringComparison.OrdinalIgnoreCase));
+                _navMemory.RecordOwner(owner?.Transform.Position ?? default,
+                    owner != null); // not visible: close the run, a break never becomes a segment
+                _navMemory.Tick(deltaTime);
+            }
+
             switch (CurrentTask)
             {
                 /*

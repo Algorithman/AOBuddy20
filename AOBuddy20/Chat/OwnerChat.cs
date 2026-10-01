@@ -208,7 +208,7 @@ public sealed class OwnerChat
 
         t["help"] = (reply, p) =>
         {
-            reply("Commands: pos | status | goto <x> [y] <z> | come | stop | help." +
+            reply("Commands: pos | status | goto <x> [y] <z> | come | stop | navdata | help." +
                   " goto/come walk at priority Travel; anything the bot does later preempts them.");
         };
 
@@ -216,8 +216,8 @@ public sealed class OwnerChat
 
         t["status"] = (reply, p) => { reply(_movement.DescribeState()); };
 
-        // Walk to bare coordinates on this playfield. Y is optional: the walk steers on the X/Z
-        // plane and the ground decides Y (Movement.Flat), so 'goto x z' is enough outdoors.
+        // Walk to bare coordinates on this playfield. Y is optional: the walk takes its Y from the nav
+        // data's floor, so a bare 'goto x z' keeps our height (y=0 would aim underground, 2026-10-01).
         t["goto"] = (reply, p) =>
         {
             if (p.Length < 3 || !TryParse(p[1], out var x) || !TryParse(p[p.Length - 1], out var z))
@@ -226,17 +226,28 @@ public sealed class OwnerChat
                 return;
             }
 
-            var y = 0f;
-            if (p.Length >= 4 && !TryParse(p[2], out y))
+            float y;
+            if (p.Length >= 4)
             {
-                reply("Usage: goto <x> [y] <z>");
-                return;
+                if (!TryParse(p[2], out y))
+                {
+                    reply("Usage: goto <x> [y] <z>");
+                    return;
+                }
+            }
+            else
+            {
+                y = _movement.CurrentPosition.Y;
             }
 
             var pf = (int)Playfield.ModelId;
             _movement.SetDesiredGoal(new Vector3(x, y, z), pf, ControlPriority.Travel);
             reply($"Walking to ({x:0.0} {y:0.0} {z:0.0}), playfield {pf}, priority Travel.");
         };
+
+        // The nav data's own verdict about where we stand (AOBuddy10's 'navdata'), to check the data
+        // against the live character before anything relies on it.
+        t["navdata"] = (reply, p) => { reply(_movement.ExplainNav()); };
 
         t["come"] = (reply, p) =>
         {

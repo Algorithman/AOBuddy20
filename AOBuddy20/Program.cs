@@ -193,6 +193,7 @@ internal class Program
         services.AddSingleton<MovementController>();
         services.AddSingleton<BotLoop>();
         services.AddSingleton<OwnerChat>();
+        services.AddSingleton(_ => new Nav.NavController(AppDomain.CurrentDomain.BaseDirectory, s => Log.Logger.Information(s)));
     }
 
     private static void WirePackets(ServiceProvider provider)
