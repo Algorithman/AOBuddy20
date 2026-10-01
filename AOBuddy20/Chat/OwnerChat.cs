@@ -269,19 +269,18 @@ public sealed class OwnerChat
             reply("Stopped - no goals. Standing down.");
         };
 
-        // AOBuddy10's sit/stand: a BLIND toggle, but on the owner's explicit order that is his call
-        // (he can see the character; the bot itself only ever decides from the login mode, never
-        // blind - a blind toggle sits a standing character).
+        // Sit/stand go through the movement controller's posture track: the bot then knows it is
+        // seated and stands up on the next movement order (the 'come' after a 'sit').
         t["stand"] = (reply, p) =>
         {
-            DynelManager.LocalPlayer?.MovementComponent.ChangeMovement(MovementAction.LeaveSit);
+            _movement.StandNow();
             reply("Standing up.");
         };
 
         t["sit"] = (reply, p) =>
         {
-            DynelManager.LocalPlayer?.MovementComponent.ChangeMovement(MovementAction.SwitchToSit);
-            reply("Sitting down.");
+            _movement.SitNow();
+            reply("Sitting down - goals cleared. 'come' or 'goto' stands me up.");
         };
 
         return t;

@@ -122,6 +122,12 @@ public sealed class MovementController : IPacketConsumer
     // one toggle goes out, and never again - stat 173 never updates, so re-reading it re-toggles.
     private volatile bool _stoodUp;
 
+    // The posture we believe the body is in, tracked from the only sources there are (owner,
+    // 2026-10-01: "only stand up if needed"): the login FullCharacter's stat 173, and the toggles the
+    // bot itself sends (SitNow/StandNow, and the stand-up a new goal requires). The server's 0x57 echo
+    // is logged as evidence but carries no sit/stand direction, so it cannot set this by itself.
+    private volatile bool _seated;
+
     // Published by the update thread, consumed by the walk thread. One immutable snapshot per tick
     // so the walk never sees a torn combination (LocalPlayer is swapped on zone-in).
     private volatile Snapshot _snap = new Snapshot();
@@ -173,6 +179,7 @@ public sealed class MovementController : IPacketConsumer
     ///     the level's goal (and re-arms the reached flag). A goal for another playfield is not
     ///     walked from here - the component that set it owns getting us to that playfield first.
     ///     arriveRadius: how close counts as arrived (default from AOBuddy10's walker).
+    ///     A seated body is stood up first: a movement order is the one thing that may end a sit.
     /// </summary>
     public void SetDesiredGoal(Vector3 desiredGoal, int playfieldId, ControlPriority priority, float arriveRadius = ArriveRadius)
     {
@@ -187,6 +194,51 @@ public sealed class MovementController : IPacketConsumer
             _logger.LogDebug($"Goal set: priority {priority} ({(int)priority}), playfield {playfieldId}, " +
                              $"arrive {arriveRadius:0.0} m, ({desiredGoal.X:0.0} {desiredGoal.Y:0.0} {desiredGoal.Z:0.0}).");
         }
+
+        if (_seated)
+        {
+            var me = DynelManager.LocalPlayer;
+            if (me != null)
+            {
+                StandUp(me, "new goal");
+            }
+        }
+    }
+
+    /// <summary>The owner's sit command: stop (goals go) and sit. The posture track follows the order.</summary>
+    public void SitNow()
+    {
+        ClearAllGoals();
+        var me = DynelManager.LocalPlayer;
+        if (me == null)
+        {
+            return;
+        }
+
+        me.MovementComponent.ChangeMovement(MovementAction.SwitchToSit);
+        _seated = true;
+        _logger.LogInformation("Movement: sitting (owner command); goals cleared.");
+    }
+
+    /// <summary>The owner's stand command - the explicit way out of a sit whose echo went missing.</summary>
+    public void StandNow()
+    {
+        var me = DynelManager.LocalPlayer;
+        if (me == null)
+        {
+            return;
+        }
+
+        StandUp(me, "owner command");
+    }
+
+    // ONE stand-up toggle, sent only when the posture track says seated - never blind (a blind
+    // toggle sits a standing character), never re-sent while we believe him standing.
+    private void StandUp(LocalPlayer me, string why)
+    {
+        me.MovementComponent.ChangeMovement(MovementAction.LeaveSit); // the StandUp toggle (action 87)
+        _seated = false;
+        _logger.LogInformation($"Movement: standing up ({why}).");
     }
 
     public void ClearDesiredGoal(ControlPriority priority)
@@ -401,8 +453,8 @@ public sealed class MovementController : IPacketConsumer
                 _stoodUp = true;
                 if (snap.MovementMode is MoveModeSit or MoveModeSleep or MoveModeLounge)
                 {
-                    me.MovementComponent.ChangeMovement(MovementAction.LeaveSit); // one StandUp toggle
-                    _logger.LogInformation($"Movement: login mode {snap.MovementMode} (seated) - sent one stand-up.");
+                    _seated = true;
+                    StandUp(me, "login mode " + snap.MovementMode);
                     _movement.Hold(me, SendIntervalMs);
                     return; // give the server the beat to apply it before the first step
                 }
@@ -413,6 +465,14 @@ public sealed class MovementController : IPacketConsumer
             {
                 return; // the login FullCharacter has not carried the mode yet: hold, never walk blind
             }
+        }
+
+        // Seated bodies do not walk: the server rejects every step. Whatever sat us (the owner's sit
+        // command) also cleared the goals; a NEW goal stands us up first (SetDesiredGoal).
+        if (_seated)
+        {
+            _movement.Hold(me, SendIntervalMs);
+            return;
         }
 
         if (snap.Playfield != _pf)
