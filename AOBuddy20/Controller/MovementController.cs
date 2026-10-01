@@ -400,7 +400,13 @@ public sealed class MovementController : IPacketConsumer
         }
     }
 
-    /// <summary>Drops the travel plan - a manual order (goto/come) takes the body from it.</summary>
+    /// <summary>
+    ///     Drops the travel plan - a manual order (goto/come) takes the body from it. The plan's
+    ///     own leg goal goes with it: a cancelled trip must not leave the walk heading for the old
+    ///     crossing point. A manual order that already replaced the leg goal is untouched - the
+    ///     goto/come flow cancels BEFORE setting its own goal, and a plan that is already gone
+    ///     (manual order cancelled it) makes this a no-op.
+    /// </summary>
     public void CancelTravel()
     {
         lock (_travelLock)
@@ -411,7 +417,23 @@ public sealed class MovementController : IPacketConsumer
             }
 
             _travel = null;
+            ClearDesiredGoal(ControlPriority.Travel); // the leg goal was the plan's own (travelLock -> goalLock, as everywhere)
             _logger.LogInformation("TRAVEL: cancelled (a manual order takes the body).");
+        }
+    }
+
+    /// <summary>
+    ///     The target playfield of the active travel plan, or 0 when none is running - how another
+    ///     controller tells "the plan died / was cancelled" from "still en route". Safe from any thread.
+    /// </summary>
+    public int TravelTargetPf
+    {
+        get
+        {
+            lock (_travelLock)
+            {
+                return _travel?.TargetPf ?? 0;
+            }
         }
     }
 

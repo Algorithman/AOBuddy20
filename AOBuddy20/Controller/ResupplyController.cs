@@ -12,6 +12,7 @@
 using AOBuddy20.Configuration;
 using AOBuddy20.Enums;
 using AOBuddy20.Interfaces;
+using AOBuddy20.Nav;
 using AOBuddy20.Network;
 using AOBuddy20.Utils;
 using AOSharp.Clientless;
@@ -28,13 +29,18 @@ namespace AOBuddy20.Controlling;
 ///     RESUPPLY (ported from AOBuddy10): stand in a shop (Fair Trade, Omni/Clan store), walk to the
 ///     terminal that sells stims and rechargers, buy the best ones the character can actually use
 ///     (First Aid / Treatment decide, not price), and ask the owner for credits when it can't pay.
+///     Nothing in reach in this zone: the run's ONE travel takes it to the shop playfield
+///     (ResupplyShopPf, default 1187 "Neutral Supermarket Advanced", entered over proxy terminals)
+///     on the MovementController's travel machinery - outbound only; the way back belongs to
+///     whatever controller owns the body next.
 ///
 ///     Control scheme: while a run is active the controller takes the ControlArbiter at
-///     <see cref="ControlPriority.Resupply" /> and walks to terminals through a
-///     MovementController goal at the same priority - so lower systems yield and the body stays
-///     with the shopping, while anything higher (combat, mission) still preempts it by the usual
-///     rules. The decision tick itself runs on the update thread (BotLoop): the same thread the
-///     packet handlers below fire on, so the state machine needs no locks.
+///     <see cref="ControlPriority.Resupply" /> (above Mission - a run must not starve mid-mission -
+///     below Combat) and walks to terminals through a MovementController goal at the same priority
+///     - so lower systems yield and the body stays with the shopping, while anything higher
+///     (combat) still preempts it by the usual rules. The decision tick itself runs on the update
+///     thread (BotLoop): the same thread the packet handlers below fire on, so the state machine
+///     needs no locks.
 ///
 ///     The shop protocol, as the live server speaks it (AO Item Assistant's logs of real sessions,
 ///     and OmniCell's vendor handler for the slot numbering):
@@ -59,7 +65,7 @@ namespace AOBuddy20.Controlling;
 [MinLogLevel(LogEventLevel.Debug)]
 public sealed class ResupplyController : IPacketConsumer
 {
-    private enum Phase { Idle, Approach, Opening, Adding, Settling, WaitMoney }
+    private enum Phase { Idle, Approach, Opening, Adding, Settling, WaitMoney, Transit }
 
     private enum Supply { Stim, Recharger }
 
@@ -99,6 +105,11 @@ public sealed class ResupplyController : IPacketConsumer
     // walk can never reach (walled off, indoors): give up on it and try the next.
     private const double ApproachTimeout = 90.0;
 
+    // The travel to the shop playfield is watched per-leg by the MovementController's own
+    // machinery; this only bounds the WHOLE trip (multi-zone routes walk for minutes) so a run
+    // can never sit in transit forever.
+    private const double TransitTimeout = 600.0;
+
     // After his accept (an accept right on his change is dropped) / after our accept.
     private const double OwnerAcceptDelay = 1.0;
     private const double OwnerConfirmDelay = 1.5;
@@ -115,8 +126,10 @@ public sealed class ResupplyController : IPacketConsumer
     private readonly List<Identity> _candidates = new();
     private Identity _machine = Identity.None;
     private string _machineName = "";
-    private int _runPf = -1; // the playfield the run started in; a zone ends it
+    private int _runPf = -1; // the playfield the run started in; a zone ends it (travel legs excepted)
     private double _arrivedAt = -1; // standing on the terminal since (settle beat starts here)
+    private double _transitAt = -1; // in transit to the shop playfield since (trip watchdog starts here)
+    private bool _travelPlanned; // the trip to the shop playfield: at most once per run
     private int _opens; // machine opens this run (runaway guard)
 
     // What the current machine answered with.
@@ -277,28 +290,49 @@ public sealed class ResupplyController : IPacketConsumer
         }
 
         var candidates = BuildCandidates(me, needs);
+        var travel = ShopTravel.Local;
+        var travelLine = "";
         if (candidates.Count == 0)
         {
-            reply($"No shop terminals within {_config.ResupplySearchRadius:0}m that could sell " +
-                  $"{string.Join(" or ", needs.Select(Plural))}.");
-            return;
+            travel = PlanShopTravel(out travelLine);
+            if (travel == ShopTravel.Failed)
+            {
+                reply($"Nothing in reach within {_config.ResupplySearchRadius:0}m. {travelLine}");
+                return;
+            }
+
+            if (travel == ShopTravel.Local)
+            {
+                reply($"No shop terminals within {_config.ResupplySearchRadius:0}m that could sell " +
+                      $"{string.Join(" or ", needs.Select(Plural))}.");
+                return;
+            }
         }
 
         _runPf = (int)Playfield.ModelId;
         _opens = 0;
         _retryCount = 0;
         me.TryGetStat(Stat.Cash, out var cash);
+        var where = candidates.Count > 0
+            ? $"{candidates.Count} terminal(s) to check"
+            : $"traveling to {Zoning.Name(_config.ResupplyShopPf)}";
         reply($"Resupplying: {string.Join(", ", needs.Select(s => $"{Remaining(s)} {Plural(s)}"))}. " +
-              $"{cash} credits, {candidates.Count} terminal(s) to check.");
+              $"{cash} credits, {where}.{(travel == ShopTravel.Travelled ? $" {travelLine}" : "")}");
         _logger.LogInformation($"RESUPPLY: start — needs " +
                                $"{string.Join(", ", needs.Select(s => $"{s} have {Have(s)} want {Want(s)}"))}, cash {cash}, " +
-                               $"candidates {candidates.Count}.");
+                               $"{where}.");
 
         // While the run is active this controller owns the body at its priority: lower systems
         // yield the arbiter, and the walk to a terminal is a goal no lower priority can take.
         _controlArbiter.TakeControl(ControlPriority.Resupply);
-        _candidates.AddRange(candidates);
-        NextMachine(me);
+        if (candidates.Count > 0)
+        {
+            _candidates.AddRange(candidates);
+            NextMachine(me);
+        }
+
+        // else PlanShopTravel already set the Transit phase; the trip walks on the
+        // MovementController's travel goals
     }
 
     public void Stop(string why)
@@ -315,6 +349,38 @@ public sealed class ResupplyController : IPacketConsumer
 
         _logger.LogInformation($"RESUPPLY: stopped ({why}).");
         TearDown();
+    }
+
+    // What became of the try to plan the trip to the shop playfield.
+    private enum ShopTravel { Travelled, Local, Failed }
+
+    // No terminal in reach here: the one travel a resupply run plans - to the shop playfield
+    // (ResupplyShopPf, default 1187 "Neutral Supermarket Advanced", the Fair Trade instance:
+    // entered over proxy terminals, in-game an instance whose playfield MODEL is 1187). The way
+    // BACK is not resupply's business - when the shopping ends, follow/mission own the body again.
+    // The trip itself walks on the MovementController's travel machinery (zone-line route, legs,
+    // re-planning after every zone); this only books it and watches for arrival. At most once per
+    // run, so an empty shop can't bounce us into planning the same trip again.
+    private ShopTravel PlanShopTravel(out string line)
+    {
+        line = "";
+        var shopPf = _config.ResupplyShopPf;
+        if (shopPf <= 0 || _travelPlanned || (int)Playfield.ModelId == shopPf)
+        {
+            return ShopTravel.Local;
+        }
+
+        line = _movement.PlanTravel(shopPf, null);
+        if (_movement.TravelTargetPf != shopPf)
+        {
+            _logger.LogInformation($"RESUPPLY: travel to {Zoning.Name(shopPf)} refused - {line}");
+            return ShopTravel.Failed;
+        }
+
+        _travelPlanned = true;
+        SetPhase(Phase.Transit);
+        _logger.LogInformation($"RESUPPLY: nothing in reach here - traveling to {Zoning.Name(shopPf)}.");
+        return ShopTravel.Travelled;
     }
 
     public void Forget()
@@ -500,13 +566,19 @@ public sealed class ResupplyController : IPacketConsumer
 
         if ((int)Playfield.ModelId != _runPf)
         {
-            // The zone-in interrupted us (an approach that grazed a line): the candidates and the
-            // open shop belong to the old playfield. AOBuddy10 stopped here too; the next 'resupply'
-            // (or solo mode) starts fresh from wherever we are now.
-            _logger.LogInformation("RESUPPLY: zoned mid-run — stopping.");
-            Tell("Zoned while resupplying — stopped.");
-            Stop("zoned");
-            return false;
+            if (_phase != Phase.Transit)
+            {
+                // The zone-in interrupted us (an approach that grazed a line): the candidates and
+                // the open shop belong to the old playfield. AOBuddy10 stopped here too; the next
+                // 'resupply' (or solo mode) starts fresh from wherever we are now.
+                _logger.LogInformation("RESUPPLY: zoned mid-run — stopping.");
+                Tell("Zoned while resupplying — stopped.");
+                Stop("zoned");
+                return false;
+            }
+
+            // In transit to the shop playfield a zone IS the plan working; TransitTick below
+            // watches for the arrival.
         }
 
         _phaseTime += dt;
@@ -527,9 +599,57 @@ public sealed class ResupplyController : IPacketConsumer
             case Phase.WaitMoney:
                 WaitMoneyTick(me, dt);
                 break;
+            case Phase.Transit:
+                TransitTick(me);
+                break;
         }
 
         return true;
+    }
+
+    // En route to the shop playfield. The legs are the MovementController's (its own goals, leg
+    // watchdogs and re-planning after every zone); this watches for the arrival - the playfield
+    // MODEL reads 1187 even though in-game it is an instance - or the plan giving up.
+    private void TransitTick(LocalPlayer me)
+    {
+        var shopPf = _config.ResupplyShopPf;
+        if ((int)Playfield.ModelId == shopPf)
+        {
+            _runPf = shopPf; // arrival: the local-zone guard works again from here
+            RebuildCandidates(me);
+            if (_candidates.Count == 0)
+            {
+                Finish(me, $"No terminal in reach at {Zoning.Name(shopPf)} either. " +
+                           $"Have {Have(Supply.Stim)} stims, {Have(Supply.Recharger)} rechargers.");
+                return;
+            }
+
+            _logger.LogInformation($"RESUPPLY: arrived in {Zoning.Name(shopPf)} - " +
+                                   $"{_candidates.Count} terminal(s) in reach.");
+            NextMachine(me);
+            return;
+        }
+
+        if (_movement.TravelTargetPf != shopPf)
+        {
+            // The plan gave up (no route / an exit blacklisted out) or a manual order took the
+            // body from it.
+            Finish(me, $"Travel to {Zoning.Name(shopPf)} didn't happen - resupply stopped here. " +
+                       $"Have {Have(Supply.Stim)} stims, {Have(Supply.Recharger)} rechargers.");
+            return;
+        }
+
+        if (_transitAt < 0)
+        {
+            _transitAt = _phaseTime;
+            return;
+        }
+
+        if (_phaseTime - _transitAt > TransitTimeout)
+        {
+            Finish(me, $"Travel to {Zoning.Name(shopPf)} ran over {TransitTimeout / 60:0} minutes - giving up. " +
+                       $"Have {Have(Supply.Stim)} stims, {Have(Supply.Recharger)} rechargers.");
+        }
     }
 
     // Walk to the machine through the MovementController (a goal at ControlPriority.Resupply, so
@@ -955,6 +1075,16 @@ public sealed class ResupplyController : IPacketConsumer
         if (_candidates.Count == 0)
         {
             var left = Needs();
+            if (left.Count > 0)
+            {
+                var travel = PlanShopTravel(out var line);
+                if (travel == ShopTravel.Travelled)
+                {
+                    Tell($"Nothing more in reach here - heading for {Zoning.Name(_config.ResupplyShopPf)}. {line}");
+                    return; // the Transit phase owns the body from here
+                }
+            }
+
             Finish(me, left.Count == 0
                 ? "Resupplied."
                 : $"Couldn't find a terminal here selling {string.Join(" or ", left.Select(Plural))} I can use. " +
@@ -1024,10 +1154,13 @@ public sealed class ResupplyController : IPacketConsumer
     }
 
     // Hand the body and the arbiter back: the run's goal goes (the walk holds, follow may resume),
-    // the arbiter returns to whoever is next.
+    // a still-open trip to the shop playfield is cancelled with it ('resupply stop' must not leave
+    // the walk running; the owner's 'stop' clears everything anyway), and the arbiter returns to
+    // whoever is next.
     private void TearDown()
     {
         _controlArbiter.ReleaseControl();
+        _movement.CancelTravel();
         _movement.ClearDesiredGoal(ControlPriority.Resupply);
         Reset();
     }
@@ -1043,6 +1176,8 @@ public sealed class ResupplyController : IPacketConsumer
         _offer = null;
         _retryCount = 0;
         _arrivedAt = -1;
+        _transitAt = -1;
+        _travelPlanned = false;
         _runPf = -1;
     }
 
@@ -1051,6 +1186,7 @@ public sealed class ResupplyController : IPacketConsumer
         _phase = p;
         _phaseTime = 0;
         _arrivedAt = -1;
+        _transitAt = -1;
     }
 
     // For 'resupply machines': every terminal within the search radius, nearest first.

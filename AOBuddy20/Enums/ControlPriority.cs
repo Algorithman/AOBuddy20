@@ -15,11 +15,11 @@ public enum ControlPriority
 {
     None = 0,
     Travel = 100,
-    Resupply = 200,
-    Selling = 300,
-    Mission = 400,
+    Selling = 200,
+    Mission = 300,
+    Resupply = 400, // above mission (a run must not starve mid-mission), below combat
     Combat = 500, // interrupts everything below it
     LowHealthNanoEmergency = 600,
     Emergency = 700, // e.g. player dying, disconnect
-    
+
 }

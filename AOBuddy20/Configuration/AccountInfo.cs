@@ -36,4 +36,8 @@ public class AccountInfo
     {
         "Medic", "Health", "Stim", "Recharg", "First Aid", "Treatment", "Pharma",
     }; // a terminal name with one of these ranks first when nothing is remembered about it
+    public int ResupplyShopPf = 1187; // nothing in reach: travel here to shop (Neutral Supermarket
+    // Advanced, the Fair Trade instance - entered over proxy terminals; in-game an instance whose
+    // playfield MODEL is 1187). The way back is not resupply's: follow/mission own the body next.
+    // 0 = shop locally only.
 }
