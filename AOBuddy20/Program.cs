@@ -160,9 +160,11 @@ internal class Program
 
         var provider = services.BuildServiceProvider();
 
-        // The zone graph before the session starts: the walk keeps off doors and zone lines that do
-        // not lead to its goal, and the loaded maps are immutable from here on.
+        // The zone graph and the price tables before the session starts: the walk keeps off doors
+        // and zone lines that do not lead to its goal, resupply prices from ItemValues.bin, and the
+        // loaded data is immutable from here on.
         Zoning.Load(AppDomain.CurrentDomain.BaseDirectory, s => Log.Logger.Information(s));
+        ItemValues.Load(AppDomain.CurrentDomain.BaseDirectory, s => Log.Logger.Information(s));
 
         Client.SuppressItemDataLoad();
 
@@ -194,6 +196,7 @@ internal class Program
         services.AddSingleton<PacketRouter>();
         services.AddSingleton<ControlArbiter>();
         services.AddSingleton<MissionController>();
+        services.AddSingleton<ResupplyController>();
         services.AddSingleton<Awareness>();
         services.AddSingleton<MovementController>();
         services.AddSingleton<BotLoop>();
@@ -208,6 +211,7 @@ internal class Program
         {
             provider.GetService<Awareness>()?.RegisterPackets(router);
             provider.GetService<MovementController>()?.RegisterPackets(router);
+            provider.GetService<ResupplyController>()?.RegisterPackets(router);
             // MissionController: not wired yet - its handlers are still stubs (owner, 2026-10-01).
         }
     }

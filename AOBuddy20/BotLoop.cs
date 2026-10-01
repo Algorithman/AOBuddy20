@@ -34,13 +34,15 @@ public sealed class BotLoop
     private readonly ControlArbiter _controlArbiter;
     private readonly ILogger<BotLoop> _logger;
     private readonly MissionController _missionController;
+    private readonly ResupplyController _resupply;
     private readonly NavController _navMemory;
     private bool _running;
 
-    public BotLoop(ControlArbiter controlArbiter, MissionController missionController, NavController navMemory, AccountInfo config, ILogger<BotLoop> logger)
+    public BotLoop(ControlArbiter controlArbiter, MissionController missionController, ResupplyController resupply, NavController navMemory, AccountInfo config, ILogger<BotLoop> logger)
     {
         _controlArbiter = controlArbiter;
         _missionController = missionController;
+        _resupply = resupply;
         _navMemory = navMemory;
         _config = config;
         _logger = logger;
@@ -93,6 +95,19 @@ public sealed class BotLoop
                 _navMemory.RecordOwner(owner?.Transform.Position ?? default,
                     owner != null); // not visible: close the run, a break never becomes a segment
                 _navMemory.Tick(deltaTime);
+
+                // RESUPPLY (AOBuddy10 ResupplyController): the decision tick runs here on the update
+                // thread, the same one its packet handlers fire on. While a run is active it owns
+                // the body through a MovementController goal at ControlPriority.Resupply and holds
+                // the arbiter at that priority; idle, it only answers the owner's trade.
+                if (_resupply.Tick(me, deltaTime))
+                {
+                    CurrentTask = Tasks.Resupply;
+                }
+                else if (CurrentTask == Tasks.Resupply)
+                {
+                    CurrentTask = Tasks.Nothing;
+                }
             }
 
             switch (CurrentTask)
