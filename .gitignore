@@ -67,3 +67,5 @@ TestResult.xml
 nunit-*.xml
 
 *.csproj.DotSettings
+/__pycache__/*
+*.pyc
