@@ -96,6 +96,20 @@ public sealed class MovementController : IPacketConsumer
     private const int MaxStandTries = 3;
     private const double StandRetrySeconds = 1.5;
 
+    // DRIFT GUARD (Newland City, 2026-10-01 22:10: the pad quarter's ground reads blocked in the
+    // grid, the route wove around it, the server silently rejected the steps and rubberbanded the
+    // bot 19 m later). While the body walks, the gap between the dictated position and the
+    // server's last confirmed one must stay small (normal echo lag is ~1.5 m); past this, stop and
+    // wait for the server's truth instead of ghost-walking on.
+    private const float DriftGuardMetres = 6f;
+
+    // A server correction this big while walking is a YANK, not the usual sub-metre Y noise: hold,
+    // re-plan from where the server actually has us, and count. After this many yanks on one goal
+    // the data and the server disagree too often - give the goal up instead of walking into the
+    // same rejection again.
+    private const float YankMetres = 5f;
+    private const int MaxYanks = 3;
+
     // Server's CurrentMovementMode (Stat 173) values — OmniCell MoveModes (AOBuddy10 Main.cs:48-50). A
     // character in a SEATED mode cannot move: the server rejects every move packet and snaps him back
     // to where he sat. You log out by sitting, so you can log back in seated.
@@ -125,6 +139,9 @@ public sealed class MovementController : IPacketConsumer
     private Vector3 _confirmedPosition; // where the server last had US
     private Quaternion _confirmedHeading;
     private Vector3? _pendingCorrection; // SetPos the walk thread will apply
+    private bool _pendingYank; // that SetPos overrode a big drift: hold and re-plan after applying
+    private int _yanks; // yanks on the current goal (reset when a new goal is set)
+    private bool _driftHeld; // the drift guard is holding the body
 
     // The playfield's nav data and walk grid, built off every loop thread (NavGridCache). Nav supplies
     // the Y of every dictated step - without it the walk holds the login Y and floats (owner, 2026-10-01).
@@ -274,6 +291,8 @@ public sealed class MovementController : IPacketConsumer
                 SendStandUp(me, "new goal");
             }
         }
+
+        _yanks = 0; // a fresh order starts with a clean yank count
     }
 
     /// <summary>The owner's sit command: stop (goals go) and sit. The posture track follows the order.</summary>
@@ -746,6 +765,26 @@ public sealed class MovementController : IPacketConsumer
 
         ApplyPendingCorrection(me);
 
+        // THE DRIFT GUARD: the server stopped following our steps (an area it forbids - it rejects
+        // silently and rubberbands much later). Past a few metres of gap between the body's
+        // dictated position and the server's last confirmed one, stop and wait for the truth; the
+        // SetPos resets the position, the guard releases, and the route re-plans from there.
+        var drift = Movement.Flat(me.MovementComponent.Position, CurrentPosition);
+        if (drift > DriftGuardMetres && _movement.Moving)
+        {
+            _movement.Hold(me, SendIntervalMs);
+            if (!_driftHeld)
+            {
+                _driftHeld = true;
+                _routePrio = -1; // re-plan from the server's truth once it lands
+                _logger.LogInformation($"Movement: the server is {drift:0.0} m behind the walk - holding until it catches up.");
+            }
+
+            return;
+        }
+
+        _driftHeld = false;
+
         // The playfield's nav data, built off every loop thread (Lush Fields took 6.3 s, log 2026-09-24):
         // while it loads there is no honest Y, so hold rather than walk blind.
         if (!_nav.Request(snap.Playfield, BaseDir, s => _logger.LogInformation(s), "MOVE"))
@@ -775,6 +814,18 @@ public sealed class MovementController : IPacketConsumer
         var goal = SelectActiveGoal(_pf);
         if (goal != null)
         {
+            if (_yanks > MaxYanks)
+            {
+                // The data and the server disagree too often on this one (three yanks): walking on
+                // only collects more rubberbands. Give the goal up; the owner can re-order.
+                ClearDesiredGoal((ControlPriority)goal.Value.Key);
+                _yanks = 0;
+                _movement.Hold(me, SendIntervalMs);
+                _logger.LogWarning($"Movement: the server kept overruling the walk ({MaxYanks}+ yanks) - giving up the " +
+                                   $"priority {goal.Value.Key} goal at ({goal.Value.Value.Position.X:0.0} {goal.Value.Value.Position.Z:0.0}).");
+                return;
+            }
+
             if (_follow.MirrorLocked)
             {
                 _follow.BreakMirror("a goal took the body");
@@ -1499,6 +1550,7 @@ public sealed class MovementController : IPacketConsumer
     private void ApplyPendingCorrection(LocalPlayer me)
     {
         Vector3 pos;
+        bool yank;
         lock (_poslock)
         {
             if (_pendingCorrection == null)
@@ -1507,11 +1559,27 @@ public sealed class MovementController : IPacketConsumer
             }
 
             pos = _pendingCorrection.Value;
+            yank = _pendingYank;
             _pendingCorrection = null;
+            _pendingYank = false;
             _confirmedPosition = pos;
             _yBias = _pendingBias;
             _wetY = pos.Y;
             _wetYAt = _wetClock.Elapsed.TotalSeconds;
+        }
+
+        if (yank && _movement.Moving)
+        {
+            // A YANK while walking: the server overrode a big drift. Stop, and let the route
+            // re-plan from where the server actually has us (_routePrio reset); the yank counts
+            // against this goal (Tick gives it up after MaxYanks). Measured before the SetPose
+            // below, this is the drift the server just erased.
+            var yankDist = Movement.Flat(me.MovementComponent.Position, pos);
+            _yanks++;
+            _routePrio = -1;
+            _stuck.Reset();
+            _movement.Hold(me, SendIntervalMs);
+            _logger.LogInformation($"Movement: the server yanked the walk {yankDist:0.0} m - holding and re-planning (yank {_yanks}/{MaxYanks}).");
         }
 
         // A correction moved us off his stream: the mirror cannot copy what the server overrode
@@ -1646,6 +1714,7 @@ public sealed class MovementController : IPacketConsumer
             {
                 _pendingCorrection = m.Position;
                 _pendingBias = bias;
+                _pendingYank = off >= YankMetres && _movement.Moving; // a yank: hold and re-plan after applying
             }
 
             _logger.LogInformation($"Movement: SetPos APPLIED ({(onNav ? "nav walk" : off >= 10f ? "resync" : "standing")}): " +
