@@ -74,6 +74,19 @@ public sealed class MovementController : IPacketConsumer
     private const double StuckSeconds = 4;
     private const int MaxStuck = 4; // re-routes around a stuck spot per goal
 
+    // TRAVEL legs (AOBuddy10 OverlandController): stand still a moment before using (the server must
+    // have our stop before we use from where it has us), wait per kind for the zone, and give each exit
+    // a try budget before it is written off and the plan re-routes round it. Booths, grid exits and lift
+    // beams (kind Line) are pads WALKED ONTO (PadReach, exactly on the centre); whompas and teleporters
+    // are terminals walked up to (ObjectReach) and used with GenericCmd Use.
+    private const int MaxLegTries = 3;
+    private const double SettleSeconds = 0.6;
+    private const double ZoneLineWait = 6;
+    private const double PadWait = 10;
+    private const double ObjectWait = 8;
+    private const float PadReach = 0.6f;
+    private const float ObjectReach = 2.5f;
+
     // Server's CurrentMovementMode (Stat 173) values — OmniCell MoveModes (AOBuddy10 Main.cs:48-50). A
     // character in a SEATED mode cannot move: the server rejects every move packet and snaps him back
     // to where he sat. You log out by sitting, so you can log back in seated.
@@ -93,9 +106,12 @@ public sealed class MovementController : IPacketConsumer
     // TRAVEL (PlanTravel): the cross-playfield plan - the destination playfield, its optional
     // coordinates, and the leg currently walked. Legs are re-planned from wherever we actually are
     // after every zone, so a surprise zone cannot derail the plan. Guarded by _travelLock; the lock
-    // order is always _travelLock -> _goallock, never the reverse.
+    // order is always _travelLock -> _goallock, never the reverse. _travelFailed is the exits written
+    // off on THIS trip (an exit that gave nothing MaxLegTries times is routed round), same lock.
     private TravelPlan? _travel;
+    private readonly HashSet<ZoneExit> _travelFailed = new();
     private readonly object _travelLock = new object();
+    private int _wetPf = -1; // the playfield whose wet verdict Zoning carries for line crossings
 
     private Vector3 _confirmedPosition; // where the server last had US
     private Quaternion _confirmedHeading;
@@ -331,16 +347,17 @@ public sealed class MovementController : IPacketConsumer
                 _travel = null;
                 _logger.LogInformation("TRAVEL: plan cleared with the goals.");
             }
+
+            _travelFailed.Clear(); // the write-offs belonged to the trip, not to the bot
         }
     }
 
     /// <summary>
-    ///     Travel to another playfield, optionally to coordinates in it: the zone-line route comes
-    ///     from the Zoning graph (fewest hops), every hop is one walked leg across its line, and the
-    ///     final leg is the coordinates themselves. Returns a one-line summary for the owner's tell,
-    ///     including the refusal when the graph has no walking route (whompas and teleporters are
-    ///     objects to be used - AOBuddy20 cannot use objects yet, so they route nowhere). Safe from
-    ///     any thread.
+    ///     Travel to another playfield, optionally to coordinates in it: the Zoning graph's Dijkstra
+    ///     plans the cheapest way - zone lines walked across, whompas and teleporters walked up to and
+    ///     used, booth/grid/lift pads walked onto - every hop is one leg, and the final leg is the
+    ///     coordinates themselves. Returns a one-line summary for the owner's tell, including the
+    ///     refusal when nothing usable connects the two. Safe from any thread.
     /// </summary>
     public string PlanTravel(int targetPf, Vector3? targetPos)
     {
@@ -369,17 +386,16 @@ public sealed class MovementController : IPacketConsumer
                 return $"Already in {Zoning.Name(targetPf)}.";
             }
 
-            var route = Zoning.FindRoute(_pf, targetPf);
+            _travelFailed.Clear(); // a fresh order starts with a clean exit blacklist
+            var route = Zoning.FindRoute(_pf, CurrentPosition, targetPf, targetPos, TravelOptions(null));
             if (route == null)
             {
-                return $"No walking route from {Zoning.Name(_pf)} to {Zoning.Name(targetPf)} - " +
-                       "zone lines only so far (whompas/teleporters need object use, not built yet).";
+                return $"No route from {Zoning.Name(_pf)} to {Zoning.Name(targetPf)} - nothing usable connects them in the zoning data.";
             }
 
             _travel = new TravelPlan { TargetPf = targetPf, TargetPos = targetPos };
-            SetLeg(route[0]);
-            return $"Travel to {Zoning.Name(targetPf)}: {Zoning.Name(_pf)} -> " +
-                   string.Join(" -> ", route.Select(h => Zoning.Name(h.ToPf))) +
+            SetLeg(route.Hops[0].Exit);
+            return $"Travel to {Zoning.Name(targetPf)} - {route.Describe()}" +
                    (targetPos.HasValue ? $", then ({targetPos.Value.X:0.0} {targetPos.Value.Z:0.0})." : ".");
         }
     }
@@ -652,6 +668,22 @@ public sealed class MovementController : IPacketConsumer
             return;
         }
 
+        // This playfield's wet verdict, so a zone line is crossed at a dry point: Zoning.CrossLine
+        // moves along the line to dry ground (Stret East Bank's line to Andromeda runs the whole south
+        // border, and its nearest point was open water that never took the bot, owner 2026-09-27).
+        if (_wetPf != snap.Playfield)
+        {
+            Func<float, float, bool> wet = null;
+            var ground = _nav.Nav?.Ground;
+            if (ground != null)
+            {
+                wet = (x, z) => !double.IsNaN(ground.SwimY(x, z, WadeDepth));
+            }
+
+            Zoning.SetWet(snap.Playfield, wet);
+            _wetPf = snap.Playfield;
+        }
+
         TravelTick(); // the leg watchdog: a line that never zones us must not strand the plan
 
         var goal = SelectActiveGoal(_pf);
@@ -920,20 +952,39 @@ public sealed class MovementController : IPacketConsumer
 
     // ── travel legs (the PlanTravel state machine, owner 2026-10-01) ──────────────────────
 
-    // The current leg: walk THROUGH the line - the goal lies 6 m beyond it (Zoning.CrossPoint), so
-    // the crossing itself, which is what the server zones on, happens while the walk still has
-    // metres in hand. Called under _travelLock.
+    // The current leg, shaped by its exit's kind (AOBuddy10 OverlandController.BeginLeg): a zone line
+    // is walked THROUGH (the goal is a few metres OUT of the playfield, so the crossing - which is
+    // what the server zones on - happens while the walk still has metres in hand); a booth, grid exit
+    // or lift beam (kind Line) is a pad walked ONTO, exactly on its centre; a whompa or teleporter is
+    // a terminal walked up to and then used. Called under _travelLock.
     private void SetLeg(ZoneExit hop)
     {
         var t = _travel!;
         t.LegExit = hop;
         t.LegPf = _pf;
-        t.LegFromSide = Math.Sign(Zoning.SideOf(hop, CurrentPosition));
-        t.LegGoal = Zoning.CrossPoint(hop, CurrentPosition);
         t.LegReachedAt = -1;
-        SetDesiredGoal(t.LegGoal, _pf, ControlPriority.Travel);
-        _logger.LogInformation($"TRAVEL: leg to {Zoning.Name(hop.ToPf)} - crossing the line at " +
-                               $"({t.LegGoal.X:0.0} {t.LegGoal.Z:0.0}).");
+        t.AwaitAt = -1;
+        switch (hop.Kind)
+        {
+            case ExitKind.ZoneLine:
+            {
+                var (at, beyond, _) = Zoning.CrossLine(hop, CurrentPosition);
+                t.LegGoal = beyond;
+                SetDesiredGoal(beyond, _pf, ControlPriority.Travel, 1.5f);
+                _logger.LogInformation($"TRAVEL: leg to {Zoning.Name(hop.ToPf)} - crossing the zone line at ({at.X:0.0} {at.Z:0.0}).");
+                break;
+            }
+            case ExitKind.Line:
+                t.LegGoal = hop.A;
+                SetDesiredGoal(hop.A, _pf, ControlPriority.Travel, PadReach);
+                _logger.LogInformation($"TRAVEL: leg to {Zoning.Name(hop.ToPf)} - stepping onto the pad at ({hop.A.X:0.0} {hop.A.Z:0.0}).");
+                break;
+            default:
+                t.LegGoal = hop.A;
+                SetDesiredGoal(hop.A, _pf, ControlPriority.Travel, ObjectReach);
+                _logger.LogInformation($"TRAVEL: leg to {Zoning.Name(hop.ToPf)} - walking up to the {hop.Kind.ToString().ToLower()} at ({hop.A.X:0.0} {hop.A.Z:0.0}).");
+                break;
+        }
     }
 
     // A zone during a travel plan: arrived (final coordinates or done), or on to the next leg -
@@ -979,7 +1030,7 @@ public sealed class MovementController : IPacketConsumer
             return;
         }
 
-        var route = Zoning.FindRoute(_pf, t.TargetPf);
+        var route = Zoning.FindRoute(_pf, CurrentPosition, t.TargetPf, t.TargetPos, TravelOptions(SnapshotFailed()));
         bool dead;
         lock (_travelLock)
         {
@@ -988,7 +1039,7 @@ public sealed class MovementController : IPacketConsumer
                 return;
             }
 
-            if (route == null)
+            if (route == null || route.Hops.Count == 0)
             {
                 _travel = null;
                 dead = true;
@@ -996,7 +1047,7 @@ public sealed class MovementController : IPacketConsumer
             else
             {
                 dead = false;
-                SetLeg(route[0]);
+                SetLeg(route.Hops[0].Exit);
             }
         }
 
@@ -1007,12 +1058,52 @@ public sealed class MovementController : IPacketConsumer
         }
     }
 
+    // The blacklist as the planner sees it: a stable copy (the live set is mutated under the lock).
+    private HashSet<ZoneExit> SnapshotFailed()
+    {
+        lock (_travelLock)
+        {
+            return new HashSet<ZoneExit>(_travelFailed);
+        }
+    }
+
+    // The route ask for travel: requirements against our live stats (TryGetStat is the sanctioned
+    // cross-thread read - the ConcurrentDictionary stats), Scotty off until its data lands, an exit
+    // we cannot name (no object identity) or that failed on this trip left out.
+    private ZoneRouteOptions TravelOptions(HashSet<ZoneExit> failed)
+    {
+        var o = Zoning.RouteOptions(DynelManager.LocalPlayer);
+        o.Filter = e =>
+            (e.Kind == ExitKind.ZoneLine || e.Kind == ExitKind.Scotty || e.ObjInstance != 0) &&
+            (failed == null || !failed.Contains(e));
+        return o;
+    }
+
+    // The wire-proven use (AOBuddy10 GameCommands.UseObject, capture 20260923-201746): GenericCmd Use
+    // on a WORLD object - whompa, grid terminal, lift - Count=1, Temp4=1, the exact bytes the owner's
+    // client sends. Sent from the walk thread; the send lock (the packet id) makes that safe.
+    private void SendUse(ZoneExit e)
+    {
+        var me = DynelManager.LocalPlayer;
+        if (me == null || e.ObjInstance == 0)
+        {
+            return; // no character, or an exit the data cannot name
+        }
+
+        Client.Send(new GenericCmdMessage
+        { Action = GenericCmdAction.Use, User = me.Identity, Target = new Identity((IdentityType)e.ObjType, e.ObjInstance), Count = 1, Temp4 = 1 });
+        _logger.LogInformation($"TRAVEL: used {e.ObjType}:{e.ObjInstance} at ({e.A.X:0.0} {e.A.Y:0.0} {e.A.Z:0.0}).");
+    }
+
     // The leg watchdog. The NORMAL beat is the zone-in above, which advances the plan while the
-    // server is still handing us the new playfield; this only fires when a leg's goal reads
-    // reached and NO zone followed within 8 s: either the walk stopped this side of the line
-    // (the data's far side has no walkable ground for the route to aim at) - then once more,
-    // straight through - or the line is simply wrong where it says it is, and the plan ends
-    // honestly instead of stranding the body at a line that leads nowhere.
+    // server is still handing us the new playfield. This fires when a leg's goal reads reached and
+    // the leg must finish its own business (AOBuddy10's Settle/Use/AwaitZone): stand still a moment
+    // so the server has our stop, use terminals (a pad only on its last stand - standing is what
+    // takes you), then wait per kind for the zone. When the wait runs out with no zone, the exit is
+    // walked up to again - until the try budget is spent, and then it is written off and the plan
+    // re-routes round it. A same-playfield exit (lift beam, inner teleporter) zones nobody: when a
+    // server correction lands us at its arrival point, the ride is simply taken and the plan moves
+    // on from there.
     private void TravelTick()
     {
         TravelPlan? t;
@@ -1026,45 +1117,143 @@ public sealed class MovementController : IPacketConsumer
             return;
         }
 
+        bool retry = false, writeOff = false, rideTaken = false;
         lock (_goallock)
         {
             if (!goals.TryGetValue((int)ControlPriority.Travel, out var g) ||
                 g.PlayfieldId != t.LegPf || Movement.Flat(g.Position, t.LegGoal) > 0.01f || !g.Reached)
             {
-                t.LegReachedAt = -1; // not (any more) standing on the leg goal: restart any window
-                return;
+                // Not (any more) standing on the leg goal: restart any window. But a same-playfield
+                // exit that has meanwhile MOVED us to its arrival point has done its job.
+                t.LegReachedAt = -1;
+                t.AwaitAt = -1;
+                var e = t.LegExit;
+                if (e.ToPf == t.LegPf && e.Arrival.HasValue &&
+                    Movement.Flat(CurrentPosition, e.Arrival.Value) < 5f &&
+                    Movement.Flat(CurrentPosition, t.LegGoal) > 2f)
+                {
+                    rideTaken = true;
+                }
+                else
+                {
+                    return;
+                }
             }
-
-            if (t.LegReachedAt < 0)
+            else
             {
-                t.LegReachedAt = _wetClock.Elapsed.TotalSeconds;
-            }
+                var now = _wetClock.Elapsed.TotalSeconds;
+                if (t.LegReachedAt < 0)
+                {
+                    t.LegReachedAt = now;
+                }
 
-            if (_wetClock.Elapsed.TotalSeconds - t.LegReachedAt < 8)
-            {
-                return; // the zone normally lands long before this
-            }
+                if (now - t.LegReachedAt < SettleSeconds)
+                {
+                    return; // settle: the server has our stop before we use from where it has us
+                }
 
-            if (!t.Retried && Math.Sign(Zoning.SideOf(t.LegExit, CurrentPosition)) == t.LegFromSide)
-            {
-                t.Retried = true; // still this side of the line: once more, through it
-                _logger.LogInformation("TRAVEL: stopped this side of the line - walking through again.");
-                SetLeg(t.LegExit);
-                return;
+                if (t.AwaitAt < 0)
+                {
+                    t.AwaitAt = now;
+                    t.Tries++;
+                    var kind = t.LegExit.Kind;
+                    if (kind == ExitKind.Teleport || kind == ExitKind.Proxy || kind == ExitKind.Line && t.Tries >= MaxLegTries)
+                    {
+                        SendUse(t.LegExit); // terminals are used; a pad only ever on its last stand
+                    }
+
+                    return; // the window starts
+                }
+
+                var wait = t.LegExit.Kind == ExitKind.ZoneLine ? ZoneLineWait
+                    : t.LegExit.Kind == ExitKind.Line ? PadWait : ObjectWait;
+                if (now - t.AwaitAt < wait)
+                {
+                    return; // the zone normally lands long before this
+                }
+
+                if (t.Tries < MaxLegTries)
+                {
+                    retry = true; // walk up / over again
+                }
+                else
+                {
+                    writeOff = true; // the exit gave nothing: route round it
+                }
             }
         }
 
+        if (rideTaken)
+        {
+            _logger.LogInformation("TRAVEL: the exit moved us within its own playfield - planning on from there.");
+            TravelAfterZone();
+            return;
+        }
+
+        if (retry)
+        {
+            _logger.LogInformation($"TRAVEL: try {t.Tries + 1}/{MaxLegTries} at {t.LegExit}.");
+            lock (_travelLock)
+            {
+                if (_travel == t)
+                {
+                    SetLeg(t.LegExit);
+                }
+            }
+
+            return;
+        }
+
+        if (writeOff)
+        {
+            WriteOffLeg(t);
+        }
+    }
+
+    // An exit that gave nothing MaxLegTries times: on the blacklist, and the plan re-routes round it
+    // (AOBuddy10 FailExit) - or, when nothing left connects, ends honestly.
+    private void WriteOffLeg(TravelPlan t)
+    {
+        HashSet<ZoneExit> failed;
         lock (_travelLock)
         {
-            if (_travel == t)
+            if (_travel != t)
+            {
+                return;
+            }
+
+            _travelFailed.Add(t.LegExit);
+            failed = new HashSet<ZoneExit>(_travelFailed);
+            _logger.LogInformation($"TRAVEL: {t.LegExit} gave nothing after {MaxLegTries} tries - routing round it.");
+        }
+
+        var route = Zoning.FindRoute(_pf, CurrentPosition, t.TargetPf, t.TargetPos, TravelOptions(failed));
+        bool dead;
+        lock (_travelLock)
+        {
+            if (_travel != t)
+            {
+                return;
+            }
+
+            if (route == null || route.Hops.Count == 0)
             {
                 _travel = null;
+                dead = true;
+            }
+            else
+            {
+                dead = false;
+                SetLeg(route.Hops[0].Exit);
             }
         }
 
-        ClearDesiredGoal(ControlPriority.Travel);
-        _logger.LogWarning($"TRAVEL: the line to {Zoning.Name(t.LegExit.ToPf)} did not zone us - " +
-                           "travel abandoned (check that line in Zoning.json).");
+        if (dead)
+        {
+            ClearDesiredGoal(ControlPriority.Travel);
+            _logger.LogWarning($"TRAVEL: nothing left between {Zoning.Name(_pf)} and {Zoning.Name(t.TargetPf)} " +
+                               "once the dead exits are out - travel abandoned.");
+        }
     }
 
     // The travel line for 'status'.
@@ -1085,7 +1274,7 @@ public sealed class MovementController : IPacketConsumer
 
             return _travel.LegExit == null
                 ? to
-                : $"{to}, leg: zone line to {Zoning.Name(_travel.LegExit.ToPf)}";
+                : $"{to}, leg: {_travel.LegExit} (try {_travel.Tries}/{MaxLegTries})";
         }
     }
 
@@ -1331,18 +1520,18 @@ public sealed class MovementController : IPacketConsumer
     }
 
     // A travel order's state (guarded by _travelLock): where the trip ends and the leg currently
-    // walked. Only the leg fields change while the plan runs; the route itself is re-derived from
-    // the Zoning graph after every zone, not stored.
+    // walked - its goal, the settle/use/await beat, and the try budget. The route itself is re-derived
+    // from the Zoning graph after every zone, not stored.
     private sealed class TravelPlan
     {
         public int TargetPf;
         public Vector3? TargetPos; // null = just get to the playfield
-        public ZoneExit LegExit; // the line this leg crosses; null between legs
-        public Vector3 LegGoal; // the crossing point the leg walks to (beyond the line)
+        public ZoneExit LegExit; // the exit this leg takes; null between legs
+        public Vector3 LegGoal; // where the leg walks: past the line, on the pad, or at the terminal
         public int LegPf; // the playfield the leg walks in
-        public int LegFromSide; // which side of the line the leg started on
-        public double LegReachedAt = -1; // when the leg goal first read reached (watchdog window)
-        public bool Retried; // the one walk-through-again has been spent
+        public double LegReachedAt = -1; // standing on the leg goal since (settle beat starts here)
+        public double AwaitAt = -1; // the post-settle window: use sent (terminals) or standing (pads)
+        public int Tries; // visits to this leg's goal: uses, stand-ons, walk-throughs
     }
 
     internal sealed class GoalLocation

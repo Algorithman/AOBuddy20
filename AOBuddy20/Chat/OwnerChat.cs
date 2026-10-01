@@ -211,7 +211,7 @@ public sealed class OwnerChat
         {
             reply("Commands: follow | stay | pos | status | goto x [y] z | come | travel <pf> | travel x z <pf> | stop | sit | stand | navdata | help." +
                   " follow stacks me on you and mirrors your movement; goto/come walk at priority Travel and hand me back to follow on arrival;" +
-                  " travel crosses playfields by their zone lines (id or name) and walks to the point.");
+                  " travel crosses playfields by zone lines, whompas and pads (id or name) and walks to the point.");
         };
 
         // FOLLOW (AOBuddy10's stack/mirror tier): once on, the body's idle state is the owner - run
@@ -282,8 +282,8 @@ public sealed class OwnerChat
             reply("On my way.");
         };
 
-        // TRAVEL (cross-playfield): the Zoning graph plans the zone-line route, every hop is walked
-        // across its line, then a plain walk to the coordinates. 'travel <playfield>' or
+        // TRAVEL (cross-playfield): the Zoning graph plans the cheapest way - zone lines walked across,
+        // whompas used, pads walked onto - then a plain walk to the coordinates. 'travel <playfield>' or
         // 'travel <x> <z> <playfield>'; the playfield takes its id or any unambiguous part of its name.
         t["travel"] = (reply, p) =>
         {
