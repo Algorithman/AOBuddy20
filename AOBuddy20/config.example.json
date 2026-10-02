@@ -1,7 +1,42 @@
 {
+  "_comment": "One config per character (--config dadbod.json). Unknown keys are ignored; a missing key keeps its code default. Edit and restart - values are read at runtime, no recompile.",
+
   "Username": "YOUR_ALT_ACCOUNT",
   "Password": "YOUR_ALT_PASSWORD",
   "Character": "YourBotChar",
   "Owner": "YourMainChar",
-  "Dimension": "RubiKa"
+  "Dimension": "RubiKa",
+
+  "_comment_mission": "MISSION (blitz run): the mission-terminal sliders, exactly what the roll packet puts on the wire. Difficulty is the terminal's level slider (captures show 1/6/11; byte-clamped 0..255). The six sliders are WIRE values -100..+100, 0 = middle (terminal default), -100 = left end, +100 = right end - e.g. CreditsXp -100 rolls all-credit missions, +100 all-XP. MissionZones: zone names or playfield ids a mission may sit in (empty = any).",
+  "MissionDifficulty": 6,
+  "MissionSliderGoodBad": 0,
+  "MissionSliderOrderChaos": 0,
+  "MissionSliderOpenHidden": 0,
+  "MissionSliderPhysicalMystical": 0,
+  "MissionSliderHeadonStealth": 0,
+  "MissionSliderCreditsXp": 0,
+  "MissionTerminalRadius": 5,
+  "MissionZones": [],
+
+  "_comment_resupply": "RESUPPLY: buying stims/rechargers in a shop ('resupply' command). Counts are of usable ones; targets are how many it tops back up to (stims in 25s, rechargers in 20s).",
+  "LowStimCount": 10,
+  "LowRechargerCount": 10,
+  "ResupplyStimName": "Health and Nano Stim",
+  "ResupplyRechargerName": "Health and Nano Recharger",
+  "ResupplyStimTarget": 2,
+  "ResupplyRechargerTarget": 3,
+  "ResupplySearchRadius": 40,
+  "ResupplyUseRange": 3,
+  "ResupplyKeepFreeSlots": 2,
+  "ResupplyCashReserve": 0,
+  "ResupplyNagSeconds": 120,
+  "ResupplyContainerName": "Large Backpack",
+  "ResupplyShopPf": 1187,
+
+  "_comment_heal": "HEAL: popping the carried stims (combat) / rechargers (out of combat) when health or nano falls under these % of max.",
+  "HealNanoCombatPct": 50,
+  "HealNanoOutOfCombatPct": 70,
+
+  "_comment_api": "LOCAL API: GET /status /nav /inventory /log and POST /command on 127.0.0.1. 0 = off.",
+  "BotApiPort": 5591
 }
