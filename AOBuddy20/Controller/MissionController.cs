@@ -64,8 +64,8 @@ namespace AOBuddy20.Controlling;
 ///     holds; the heal keeps working. While the run waits on the SELL step (full bags) its Tick
 ///     answers false, so the decision chain falls through to the SellController.
 ///     The decision tick runs on the update thread (BotLoop); the same thread every packet handler
-///     below fires on, so the state machine needs no locks. The one foreign-thread input is the raw
-///     packet tap (Client.PacketRaw, network thread): it only swaps two volatile byte buffers.
+///     below fires on (the PacketRouter dispatches on Client.Update), so the state machine needs no
+///     locks and no foreign-thread inputs.
 /// </summary>
 [MinLogLevel(LogEventLevel.Debug)]
 public sealed class MissionController : IPacketConsumer
@@ -144,9 +144,12 @@ public sealed class MissionController : IPacketConsumer
     // Held terminal missions, from the quest log (QuestFullUpdate): the deletion list.
     private readonly Dictionary<Identity, Quest> _heldQuests = new();
 
-    // Raw packet taps (the network thread swaps, the update thread consumes).
-    private volatile byte[] _zoneInRaw;
-    private volatile byte[] _questRaw;
+    // The raw bytes of the two packets the typed model can't answer (the zone-in carries the
+    // building layout and the return playfield; the raw QuestFullUpdate carries the target).
+    // Captured through the PacketRouter (every AOMessage carries its RawPacket), consumed on the
+    // same update thread - plain fields, no locks.
+    private byte[] _zoneInRaw;
+    private byte[] _questRaw;
 
     // Inside the building.
     private int _missionPf = -1;
@@ -213,10 +216,6 @@ public sealed class MissionController : IPacketConsumer
             _logger.LogInformation($"MISSION: saved terminal pf {_savedTerminal.pf} {_savedTerminal.type}:{_savedTerminal.id}.");
         }
 
-        // The raw packet tap (network thread): the zone-in bytes carry the building layout, the raw
-        // QuestFullUpdate carries the target. Buffer swaps only here; the parse runs on the update
-        // thread in Tick.
-        Client.PacketRaw += OnPacketRaw;
         _logger.LogInformation("Mission controller initialized.");
     }
 
@@ -485,27 +484,15 @@ public sealed class MissionController : IPacketConsumer
         router.Register(QuestFullUpdateHandler, N3MessageType.QuestFullUpdate, 0);
         router.Register(CharacterActionHandler, N3MessageType.CharacterAction, 0);
         router.Register(SimpleItemHandler, N3MessageType.SimpleItemFullUpdate, 0);
+        router.Register(ZoneInHandler, N3MessageType.PlayfieldAnarchyF, 0); // raw bytes: the building layout
     }
 
-    private void OnPacketRaw(byte[] packet, bool fromServer)
+    // The zone-in's raw bytes: NavData composes the mission building's rooms out of the
+    // BuildingGeneratorData block, which the typed model does not carry.
+    private bool ZoneInHandler(AOMessage arg)
     {
-        // Network thread. Two raw feeds only: the zone-in (its BuildingGeneratorData block composes
-        // the building) and the QuestFullUpdate (its record names the target). Both are re-sent at
-        // every zone-in, so the freshest one before a parse is the right one.
-        if (!fromServer || packet == null || packet.Length < 20 || packet[2] != 0 || packet[3] != 0x0A)
-        {
-            return;
-        }
-
-        var type = (packet[16] << 24) | (packet[17] << 16) | (packet[18] << 8) | packet[19];
-        if (type == (int)N3MessageType.PlayfieldAnarchyF)
-        {
-            _zoneInRaw = packet;
-        }
-        else if (type == (int)N3MessageType.QuestFullUpdate)
-        {
-            _questRaw = packet;
-        }
+        _zoneInRaw = arg.RawPacket;
+        return false;
     }
 
     // The terminal's list of five.
@@ -529,9 +516,11 @@ public sealed class MissionController : IPacketConsumer
     }
 
     // The quest log: every held mission whose giver is a mission terminal (or our terminal in
-    // person - at login it reads as a SimpleChar whose low bytes match ours) is deletable.
+    // person - at login it reads as a SimpleChar whose low bytes match ours) is deletable. The raw
+    // bytes are kept too: the record parse reads the target out of them.
     private bool QuestFullUpdateHandler(AOMessage arg)
     {
+        _questRaw = arg.RawPacket;
         if (arg.Body is not QuestFullUpdateMessage full || full.Quests == null)
         {
             return false;
@@ -653,7 +642,8 @@ public sealed class MissionController : IPacketConsumer
     /// </summary>
     public bool Tick(LocalPlayer me, double dt)
     {
-        var zone = Interlocked.Exchange(ref _zoneInRaw, null);
+        var zone = _zoneInRaw;
+        _zoneInRaw = null;
         if (zone != null)
         {
             OnZoneIn(me, zone);
@@ -728,7 +718,8 @@ public sealed class MissionController : IPacketConsumer
             _acts = 0;
             _actTarget = null;
             _goalSet = false;
-            var questBytes = Interlocked.Exchange(ref _questRaw, null);
+            var questBytes = _questRaw;
+            _questRaw = null;
             _record = ParseRecord(questBytes, me.Identity.Instance, nav.Layout.Instance);
             if (_record != null)
             {
@@ -1231,7 +1222,8 @@ public sealed class MissionController : IPacketConsumer
         if (_record == null)
         {
             // The zone-in also re-sends the quest log; the record lands a beat after we do.
-            var fresh = Interlocked.Exchange(ref _questRaw, null);
+            var fresh = _questRaw;
+                _questRaw = null;
             if (fresh != null)
             {
                 _record = ParseRecord(fresh, me.Identity.Instance, _nav.Layout.Instance);

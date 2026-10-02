@@ -11,6 +11,7 @@
 
 #nullable disable
 
+using AOBuddy20.Enums;
 using AOSharp.Common.GameData;
 
 namespace AOBuddy20.Nav;
@@ -137,6 +138,14 @@ public sealed class OverlandGrid : IWalkGrid
 
         grid.StampHeadroom();
         grid.StampClearance();
+        // The doorways stay passages: walls.bin carries the whole door/shop-front assembly as
+        // solid, and nothing in the data says where the openings are - but Zoning does (the
+        // contact exits: proxy doors, pads, teleporters). Keep a disc of cells open at each one,
+        // LAST so no earlier stamping re-seals it - a proxy landing is ground the server PLACES
+        // the bot on, and a sealed pocket there killed the trip home where it stood (Newland
+        // Desert's Fair Trade front, 2026-10-02: zoned out onto a wall-stamped plateau at
+        // y 21.2 - "every floor under me is blocked").
+        grid.KeepExitsOpen(pf);
         for (var i = 0; i < grid._blocked.Length; i++)
         {
             if (grid._blocked[i])
@@ -699,6 +708,57 @@ public sealed class OverlandGrid : IWalkGrid
     }
 
     private static float Len(float x, float y, float z) => (float)Math.Sqrt(x * x + y * y + z * z);
+
+    // Reopen the cells under and around every contact exit of the playfield (proxy door, booth/
+    // grid/lift pad, teleporter): the cell-level block, every wall-stamped floor and the
+    // structure-top override go, in a ~3 m disc. The server walks these spots - it PLACES the bot
+    // there on every proxy crossing - and the walk's own route planning still keeps its distance
+    // from an exit that is not its goal (the per-search exit discs in PlanRoute). Zone lines stay
+    // blocked (their band IS the corridor the walk crosses on purpose) and Scotty tells have no
+    // ground presence.
+    // The structure-top override matters: at a shop front the collision's stair/shell triangles
+    // make the cell a structure top and DROP the terrain level as a floor - but the terrain is
+    // exactly where the bot lands (Newland Desert's Fair Trade plateau, 2026-10-02: the bot zoned
+    // out onto y 21.2 and the grid had no floor under it at any level - "every floor under me is
+    // blocked"). No height band either: the stored exit Y can sit above the real floor (the Desert
+    // door reads y 22.7, the landing is 21.2), and a door is a passage at every level the building
+    // has. A cell whose centre height is unknown (NaN centres read 0) gets no terrain floor.
+    internal void KeepExitsOpen(int pf)
+    {
+        foreach (var e in Zoning.ExitsFrom(pf))
+        {
+            if (e.Kind == ExitKind.ZoneLine || e.Kind == ExitKind.Scotty)
+            {
+                continue;
+            }
+
+            int cx = CellX(e.A.X), cz = CellZ(e.A.Z);
+            int r = (int)Math.Ceiling(3f / Cell);
+            for (var dz = -r; dz <= r; dz++)
+            {
+                for (var dx = -r; dx <= r; dx++)
+                {
+                    int x = cx + dx, z = cz + dz;
+                    if (!In(x, z) || dx * dx + dz * dz > r * r)
+                    {
+                        continue;
+                    }
+
+                    int k = z * _w + x;
+                    _blocked[k] = false;
+                    if (_ch[k] != 0f)
+                    {
+                        _terrainTop?.Remove(k);
+                    }
+
+                    for (int f = 0; f < FloorCount(k); f++)
+                    {
+                        _blockedFl.Remove(((long)k << FloorShift) | f);
+                    }
+                }
+            }
+        }
+    }
 
     // ---- queries ------------------------------------------------------------------------------------------
 

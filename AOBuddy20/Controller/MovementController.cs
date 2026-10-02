@@ -560,6 +560,7 @@ public sealed class MovementController : IPacketConsumer
     {
         router.Register(DCMoveHandler, N3MessageType.CharDCMove, (int)ControlPriority.None);
         router.Register(SetPosHandler, N3MessageType.SetPos, (int)ControlPriority.None);
+        router.Register(ZoneInHandler, N3MessageType.PlayfieldAnarchyF, (int)ControlPriority.None); // the proxy return playfield
     }
 
     // ── lifecycle ─────────────────────────────────────────────────────────────────────────
@@ -1140,48 +1141,46 @@ public sealed class MovementController : IPacketConsumer
         _logger.LogInformation($"Movement: {route.Count}-point route to the priority {priority} goal.");
     }
 
-    // ── proxy origin (the memory a proxy playfield's back exit resolves against) ──────────
+    // ── proxy origin (what a proxy playfield's back exit resolves against) ────────────────
 
     // PROXY playfields (shops, houses - entered through a proxy door) have no static destination
     // in their exit data: the server wires the door per instance. Zoning carries the door as a
-    // back exit (to 0); its destination is where we CAME FROM, which only the running bot knows.
-    // Every zone-in records it here (and to proxy.json, so a reconnect inside the instance - the
-    // packets then tell us only WHICH playfield we are in - keeps the way out). Zoning reads the
-    // origin under a volatile swap.
-    private sealed class ProxyMemory
-    {
-        public int pf, from;
-        public float[]? fromPos;
-    }
+    // back exit (to 0). Its destination is LIVE SERVER DATA: the zone-in message names the return
+    // playfield (PlayfieldAnarchyFMessage.ProxyReturn, 0xC0090000 | pf) - never a remembered file,
+    // so a bot moved to another instance by the live client, or one that relogs inside a shop,
+    // reads the right way out from the packet it is actually in (owner, 2026-10-02). Mission
+    // instances send none (their way out is the composed building's doorway); a plain crossing
+    // falls back to the playfield we came from. Arrives through the PacketRouter (update thread);
+    // read on the walk thread's playfield switch - a volatile int, no torn reads.
+    private volatile int _zoneInReturnPf = -1; // the latest zone-in's ReturnPlayfield (-1 = none yet)
 
-    private static string ProxyFile => Path.Combine(BaseDir, "proxy.json");
+    private bool ZoneInHandler(AOMessage arg)
+    {
+        if (arg.Body is PlayfieldAnarchyFMessage zoneIn)
+        {
+            _zoneInReturnPf = zoneIn.ReturnPlayfield;
+        }
+
+        return false;
+    }
 
     private void ProxyCrossed(int prevPf, Vector3? legExitPos)
     {
-        if (prevPf < 0)
+        var returnPf = _zoneInReturnPf;
+        _zoneInReturnPf = -1;
+        var fromPf = returnPf > 0 ? returnPf : prevPf;
+        if (fromPf <= 0)
         {
-            // Login: the packets name the playfield, the file names the way we got in. A file for
-            // another playfield stays untouched - it may become true again on a later zone-in.
-            var mem = JsonStore.Load<ProxyMemory>(ProxyFile, s => _logger.LogInformation(s));
-            if (mem != null && mem.pf == _pf && mem.from > 0)
-            {
-                Vector3? pos = mem.fromPos is { Length: 3 } p ? new Vector3(p[0], p[1], p[2]) : null;
-                Zoning.SetProxyOrigin(_pf, mem.from, pos);
-                _logger.LogInformation($"Movement: logged in inside {Zoning.Name(_pf)} - the way back to " +
-                                       $"{Zoning.Name(mem.from)} is remembered from proxy.json.");
-            }
-
-            return;
+            return; // no origin from packet or crossing: the back exits stay unusable until a real one
         }
 
-        Zoning.SetProxyOrigin(_pf, prevPf, legExitPos);
-        var save = new ProxyMemory
-        {
-            pf = _pf,
-            from = prevPf,
-            fromPos = legExitPos.HasValue ? new[] { legExitPos.Value.X, legExitPos.Value.Y, legExitPos.Value.Z } : null,
-        };
-        JsonStore.Save(ProxyFile, Newtonsoft.Json.JsonConvert.SerializeObject(save), s => _logger.LogInformation(s));
+        // The position we stood at is ours only when it agrees with the server's playfield; on a
+        // login inside the instance there is no crossing position at all.
+        Vector3? pos = returnPf > 0 && prevPf >= 0 && returnPf != prevPf ? null : legExitPos;
+        Zoning.SetProxyOrigin(_pf, fromPf, pos);
+        _logger.LogInformation($"Movement: {Zoning.Name(_pf)} (proxy) entered from {Zoning.Name(fromPf)}" +
+                               $"{(returnPf > 0 ? " (zone-in)" : " (crossing)")}, " +
+                               $"{(pos.HasValue ? $"came out at ({pos.Value.X:0.0} {pos.Value.Z:0.0})" : "no crossing position")}.");
     }
 
     // ── travel legs (the PlanTravel state machine, owner 2026-10-01) ──────────────────────

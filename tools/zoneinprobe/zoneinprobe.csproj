@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <AssemblyName>zoneinprobe</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="AOSharp.Common">
+      <HintPath>..\..\obj\verifybuild\AOSharp.Common.dll</HintPath>
+    </Reference>
+    <Reference Include="AOBuddy20">
+      <HintPath>..\..\obj\verifybuild\AOBuddy20.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+</Project>

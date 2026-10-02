@@ -79,7 +79,14 @@ public class PlayfieldAnarchyFMessage : N3Message
 
     [AoMember(4)] public int Group { get; set; }
 
-    [AoMember(5)] public int SG { get; set; }
+    // The return playfield of a proxy instance (shop, house): the raw word 0xC0090000 | playfield
+    // id, 0 when the zone-in carries none (plain zones, mission instances - owner, 2026-10-02;
+    // verified on the saved 1187 zone-ins: one word each, the zone actually entered from). This is
+    // where a proxy back exit leads - live server data, never remembered across sessions.
+    [AoMember(5)] public int ProxyReturn { get; set; }
+
+    /// <summary>The playfield to step out to (ProxyReturn's low half); 0 when none was sent.</summary>
+    public int ReturnPlayfield => ProxyReturn & 0xFFFF;
 
     [AoMember(6)] public Identity ProxyId { get; set; }
 

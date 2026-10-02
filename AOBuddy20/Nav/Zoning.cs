@@ -141,10 +141,11 @@ public sealed class ZoneRouteOptions
 ///     after every zone, so a wrong guess costs cost accuracy, never the trip.
 ///     BACK EXITS (proxy playfields): a playfield entered through a proxy door (shop, house) carries
 ///     its exit door in the data but NOT its destination - the server wires it per instance
-///     (tools/rdb-zoning emits those doors as zoneLines with to 0). The destination is where we came
-///     from, remembered per zone-in and across restarts (proxy.json): SetProxyOrigin keeps it,
-///     FindRoute resolves the back exits of that one playfield against it and leaves them unusable
-///     while it is unknown.
+///     (tools/rdb-zoning emits those doors as zoneLines with to 0). The destination comes from the
+///     ZONE-IN MESSAGE (PlayfieldAnarchyFMessage.ProxyReturn, 0xC0090000 | pf) - live server data,
+///     never a remembered file: SetProxyOrigin keeps it for the playfield just entered, FindRoute
+///     resolves the back exits of that one playfield against it and leaves them unusable while it
+///     is unknown.
 ///     THREADING: Load once at startup, before the session starts and before any walk - the loaded maps
 ///     are immutable afterwards, so ExitsFrom/FindRoute/CrossLine are pure reads from any thread (the
 ///     _wet table is the one mutable side table, guarded by its lock; SetWet registers the playfield the
@@ -160,8 +161,10 @@ public static class Zoning
 
     // The proxy playfield the bot is in (or last entered through a proxy), and the playfield it
     // came from - the only truth a back exit's destination has, since the client data names none.
-    // Written on every zone-in and restored from proxy.json at login (a reconnect inside a proxy
-    // playfield must not lose the way out); swapped as a whole, read without locks.
+    // LIVE SERVER DATA ONLY (owner, 2026-10-02): the zone-in message itself names the return
+    // playfield (PlayfieldAnarchyFMessage.ProxyReturn), so nothing is remembered across sessions -
+    // a bot moved to another instance by the live client, or one that relogs inside a shop, reads
+    // the way out from the packet it is actually in. Swapped as a whole, read without locks.
     private sealed class ProxyOrigin
     {
         public int Pf, FromPf;
