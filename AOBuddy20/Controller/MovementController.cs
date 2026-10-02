@@ -107,6 +107,10 @@ public sealed class MovementController : IPacketConsumer
     // this often and this many times - then walk anyway and let the server have the last word.
     private const int MaxStandTries = 3;
     private const double StandRetrySeconds = 1.5;
+    private const double StandRearmSeconds = 5.0; // the slow beat once the fast retries are spent
+    private const int MaxStandRearms = 6; // slow re-arms before the walk assumes standing
+    private const double LoginModeTimeout = 30.0; // no login movement mode on the wire this long: assume standing
+    private const double DriftHoldSeatedSeconds = 15.0; // a drift hold this long with no server truth: the body is seated
 
     // DRIFT GUARD (Newland City, 2026-10-01 22:10: the pad quarter's ground reads blocked in the
     // grid, the route wove around it, the server silently rejected the steps and rubberbanded the
@@ -125,9 +129,14 @@ public sealed class MovementController : IPacketConsumer
     // Server's CurrentMovementMode (Stat 173) values — OmniCell MoveModes (AOBuddy10 Main.cs:48-50). A
     // character in a SEATED mode cannot move: the server rejects every move packet and snaps him back
     // to where he sat. You log out by sitting, so you can log back in seated.
-    private const int MoveModeSit = 8;
-    private const int MoveModeSleep = 11;
-    private const int MoveModeLounge = 12;
+    // Server's CurrentMovementMode (stat 173) values that CANNOT walk - a seated body's every
+    // step is rejected. The set is empirical, the modes seen on the wire:
+    //   3 = sit (the live client / OmniCell LOGOUT sit - a login after a client session reads 3;
+    //       2026-10-02: the bot came up seated three logins in a row and "standing" was logged)
+    //   8 = sit (the emulator's sit), 11 = sleep, 12 = lounge
+    // Stat 173 is only set from the login FullCharacter and never updates afterwards, so this
+    // read is the ONE sitting/standing signal in the starting packets.
+    private static readonly HashSet<int> SeatedModes = new HashSet<int> { 3, 8, 11, 12 };
 
     private readonly ILogger<MovementController> _logger;
 
@@ -211,8 +220,12 @@ public sealed class MovementController : IPacketConsumer
     // stand-up went unheard and nothing ever checked again).
     private volatile bool _seated;
     private volatile bool _standEchoPending; // a stand-up toggle is on the wire, no 0x57 echo yet
+    private volatile bool _postureGivenUp; // the stand-up budget ran out: walk assumes standing,
+                                           // _seated stays true so the next command re-arms
     private double _standSentAt = -1;
     private int _standTries;
+    private double _loginSeenAt = -1; // the walk clock's first tick with a body: the login-mode timeout runs from here
+    private double _driftHeldSince = -1; // the drift hold began (the seated signature reads it)
 
     // Published by the update thread, consumed by the walk thread. One immutable snapshot per tick
     // so the walk never sees a torn combination (LocalPlayer is swapped on zone-in).
@@ -318,8 +331,18 @@ public sealed class MovementController : IPacketConsumer
             var me = DynelManager.LocalPlayer;
             if (me != null)
             {
-                _standTries = 0; // a fresh order, a fresh campaign
-                SendStandUp(me, "new goal");
+                if (!_postureGivenUp)
+                {
+                    _standTries = 0; // a fresh order, a fresh campaign
+                    SendStandUp(me, "new goal");
+                }
+                else
+                {
+                    // The stand-up budget ran out and the walk assumed standing - a blind toggle
+                    // now would SIT a possibly-walking body. Walk; if the body proves still
+                    // seated, the drift guard re-arms the stand-up from the rejections.
+                    _seated = false;
+                }
             }
         }
 
@@ -339,6 +362,7 @@ public sealed class MovementController : IPacketConsumer
         me.MovementComponent.ChangeMovement(MovementAction.SwitchToSit);
         _seated = true;
         _standEchoPending = false; // the sit is ours; no stand-up is in flight any more
+        _postureGivenUp = false;
         _standTries = 0;
         _follow.BreakMirror("sitting");
         _logger.LogInformation("Movement: sitting (owner command); goals cleared.");
@@ -358,20 +382,23 @@ public sealed class MovementController : IPacketConsumer
     }
 
     // The stand-up toggle (action 87) and the campaign around it. Sent only when the posture track
-    // says seated - never blind, a blind toggle SITS a standing character - but a toggle the server
-    // never echoes leaves the body sitting with the track saying standing (owner, 2026-10-01: a
-    // real-client logout always sits the character; the bot's login stand-up raced the character
-    // load and went unheard, and 'goto' then never stood him up). So every send continues a
-    // confirmation campaign: Tick re-sends, bounded, until the 0x57 echo lands or the tries run
-    // out. The campaign only runs while a goal wants the body - a chosen sit is never fought.
+    // says seated - never blind, a blind toggle SITS a standing character. The body is believed
+    // seated until the server's 0x57 echo says otherwise - a send alone proves nothing: the
+    // live-client logout leaves the character seated, and the login stand-up raced the character
+    // load and went unheard (owner, 2026-10-01 and 2026-10-02: after a client session the bot
+    // came up seated and no travel/goto ever stood it up, because the track had believed
+    // "standing" since the first unheard send). Every send continues the campaign: fast retries,
+    // then a slow re-arm, until the echo lands - and if the budget runs out the walk assumes
+    // standing (the echo is occasionally lost even when the stand applied), but _seated stays
+    // true, so the NEXT movement command re-arms the whole campaign.
     private void SendStandUp(LocalPlayer me, string why)
     {
         me.MovementComponent.ChangeMovement(MovementAction.LeaveSit); // the StandUp toggle (action 87)
-        _seated = false;
         _standEchoPending = true;
+        _postureGivenUp = false;
         _standSentAt = _wetClock.Elapsed.TotalSeconds;
         _standTries++;
-        _logger.LogInformation($"Movement: standing up ({why}, try {_standTries}/{MaxStandTries}).");
+        _logger.LogInformation($"Movement: standing up ({why}, try {_standTries}).");
     }
 
     public void ClearDesiredGoal(ControlPriority priority)
@@ -607,6 +634,8 @@ public sealed class MovementController : IPacketConsumer
         if (me != null && identity == me.Identity)
         {
             _standEchoPending = false; // the toggle we were waiting for landed
+            _seated = false;
+            _postureGivenUp = false;
             _logger.LogInformation("Movement: server confirmed the posture change (stand-up echo).");
         }
     }
@@ -688,6 +717,11 @@ public sealed class MovementController : IPacketConsumer
         }
 
         var me = snap.Me;
+        var now = _wetClock.Elapsed.TotalSeconds;
+        if (_loginSeenAt < 0)
+        {
+            _loginSeenAt = now; // the login-mode timeout runs from the first tick with a body
+        }
 
         // The ONE login stand-up decision (AOBuddy10 Main.cs, wire-proven): the stand-up wire action
         // (CharacterAction 87 / 0x57) is a sit/stand TOGGLE, and stat 173 is only set from the login
@@ -701,7 +735,7 @@ public sealed class MovementController : IPacketConsumer
             if (snap.MovementMode > 0)
             {
                 _stoodUp = true;
-                if (snap.MovementMode is MoveModeSit or MoveModeSleep or MoveModeLounge)
+                if (SeatedModes.Contains(snap.MovementMode))
                 {
                     _seated = true;
                     SendStandUp(me, "login mode " + snap.MovementMode);
@@ -711,44 +745,29 @@ public sealed class MovementController : IPacketConsumer
 
                 _logger.LogInformation($"Movement: login mode {snap.MovementMode} (standing) - no stand-up needed.");
             }
+            else if (now - _loginSeenAt > LoginModeTimeout)
+            {
+                // The login FullCharacter carried no movement mode at all (it happens after a
+                // live-client session): decide standing - if the body turns out seated, the
+                // stand-up campaign below still stands it up on the first command.
+                _stoodUp = true;
+                _logger.LogInformation("Movement: no login movement mode on the wire - assuming standing.");
+            }
             else
             {
                 return; // the login FullCharacter has not carried the mode yet: hold, never walk blind
             }
         }
 
-        // Seated bodies do not walk: the server rejects every step. Whatever sat us (the owner's sit
-        // command) also cleared the goals; a NEW goal stands us up first (SetDesiredGoal).
-        if (_seated)
+        // A believed-seated body with no stand-up in flight is a CHOSEN sit (the owner's sit
+        // command) or a login sit whose first toggle has yet to go out: hold. Seated bodies do not
+        // walk - the server rejects every step.
+        if (_seated && !_standEchoPending && !_postureGivenUp)
         {
             _movement.Hold(me, SendIntervalMs);
             return;
         }
 
-        // The stand-up campaign: a toggle the server never echoed (a login stand-up racing the
-        // character load - a real-client logout always sits the character - or a dropped packet)
-        // leaves the body sitting with the track saying standing. While any goal wants the body,
-        // keep re-sending until the 0x57 echo lands or the tries run out. No goal: a chosen sit is
-        // never fought.
-        var now = _wetClock.Elapsed.TotalSeconds;
-        bool anyGoal;
-        lock (_goallock)
-        {
-            anyGoal = goals.Count > 0;
-        }
-
-        if (_standEchoPending && anyGoal)
-        {
-            if (_standTries >= MaxStandTries)
-            {
-                _standEchoPending = false;
-                _logger.LogInformation($"Movement: no posture echo after {MaxStandTries} stand-ups - walking anyway.");
-            }
-            else if (now - _standSentAt >= StandRetrySeconds)
-            {
-                SendStandUp(me, "no posture echo");
-            }
-        }
 
         if (snap.Playfield != _pf)
         {
@@ -818,13 +837,25 @@ public sealed class MovementController : IPacketConsumer
             {
                 _driftHeld = true;
                 _routePrio = -1; // re-plan from the server's truth once it lands
+                _driftHeldSince = now;
                 _logger.LogInformation($"Movement: the server is {drift:0.0} m behind the walk - holding until it catches up.");
+            }
+            else if (now - _driftHeldSince > DriftHoldSeatedSeconds && !_standEchoPending && !_seated)
+            {
+                // Held this long with no server truth at all is the seated signature: the server
+                // silently rejects every step of a seated body (no corrections, no movement). The
+                // login mode can be missing entirely after a live-client session - the drift is
+                // what tells us. One stand-up from here; the campaign owns it from there.
+                _driftHeldSince = now;
+                _seated = true;
+                SendStandUp(me, "the walk is held with no server movement - seated?");
             }
 
             return;
         }
 
         _driftHeld = false;
+        _driftHeldSince = -1;
 
         // The playfield's nav data, built off every loop thread (Lush Fields took 6.3 s, log 2026-09-24):
         // while it loads there is no honest Y, so hold rather than walk blind. A mission instance's
@@ -853,6 +884,33 @@ public sealed class MovementController : IPacketConsumer
         }
 
         TravelTick(); // the leg watchdog: a line that never zones us must not strand the plan
+
+        // The stand-up campaign: an unresolved posture holds the body (walking seated only
+        // collects yanks) while the toggle goes out again and again - fast at first, then on a
+        // slow re-arm, until the 0x57 echo lands. When the budget runs out the walk assumes
+        // standing (the echo is occasionally lost even when the stand applied), but _seated stays
+        // true, so the NEXT movement command re-arms the whole campaign (owner, 2026-10-02).
+        if (_standEchoPending)
+        {
+            if (now - _standSentAt >= (_standTries <= MaxStandTries ? StandRetrySeconds : StandRearmSeconds))
+            {
+                if (_standTries >= MaxStandTries + MaxStandRearms)
+                {
+                    _standEchoPending = false;
+                    _postureGivenUp = true;
+                    _logger.LogWarning(
+                        $"Movement: no posture echo after {_standTries} stand-ups - assuming standing. " +
+                        "If I'm still seated, the next movement command re-arms the stand-up ('stand' works too).");
+                }
+                else
+                {
+                    SendStandUp(me, _standTries <= MaxStandTries ? "no posture echo" : "still no echo - slow re-arm");
+                }
+            }
+
+            _movement.Hold(me, SendIntervalMs);
+            return;
+        }
 
         var goal = SelectActiveGoal(_pf);
         if (goal != null)
