@@ -16,10 +16,12 @@ public enum ControlPriority
     None = 0,
     Travel = 100,
     Selling = 200,
-    Mission = 300,
-    Resupply = 400, // above mission (a run must not starve mid-mission), below combat
-    Combat = 500, // interrupts everything below it
-    LowHealthNanoEmergency = 600,
-    Emergency = 700, // e.g. player dying, disconnect
+    ExternalBuffing = 300, // being buffed by someone else - above selling, below mission
+    Mission = 400,
+    Resupply = 500, // above mission (a run must not starve mid-mission), below combat
+    Selfbuffing = 600, // buffing self - above resupply, below combat
+    Combat = 700, // interrupts everything below it
+    LowHealthNanoEmergency = 800,
+    Emergency = 900, // e.g. player dying, disconnect
 
 }
