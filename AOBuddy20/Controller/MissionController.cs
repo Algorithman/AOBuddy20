@@ -1299,7 +1299,11 @@ public sealed class MissionController : IPacketConsumer
             return; // already walking there
         }
 
-        _movement.SetDesiredGoal(to, _missionPf, ControlPriority.Mission, radius);
+        // Outside an instance _missionPf is still -1, and a -1 goal is never serviced: SelectActiveGoal
+        // walks only goals of the CURRENT playfield (owner, 2026-10-02: the door-side approaches in
+        // Wailing Wastes were planned but never walked - every side timed out standing still).
+        var pf = _missionPf >= 0 ? _missionPf : (int)Playfield.ModelId;
+        _movement.SetDesiredGoal(to, pf, ControlPriority.Mission, radius);
         _goalSet = true;
         _goalAt = _phaseTime;
         _goalWhat = what;
