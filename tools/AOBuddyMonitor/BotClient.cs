@@ -157,7 +157,8 @@ namespace AOBuddyMonitor
         {
             public string Name;
             public bool Known = true;               // false = the bot hasn't opened this bag, contents unknown
-            public int Free = -1;
+            public int Free = -1; public bool Loot;                       // designated as a loot bag
+            public int N = -1;                      // its number in the bot's 'lootbag add/remove <n>' list
             public List<InvItem> Items = new List<InvItem>();
         }
 
@@ -401,7 +402,7 @@ namespace AOBuddyMonitor
             if (o["bags"] is JArray bags)
                 foreach (var b in bags.OfType<JObject>())
                 {
-                    var bag = new Bag { Name = (string)b["name"] ?? "backpack", Known = (bool?)b["known"] ?? true, Free = (int?)b["free"] ?? -1 };
+                    var bag = new Bag { Name = (string)b["name"] ?? "backpack", Known = (bool?)b["known"] ?? true, Free = (int?)b["free"] ?? -1, Loot = (bool?)b["loot"] ?? false, N = (int?)b["n"] ?? -1 };
                     if (b["items"] is JArray bi)
                         foreach (var i in bi.OfType<JObject>())
                             bag.Items.Add(new InvItem { Slot = (int?)i["slot"] ?? 0, Name = (string)i["name"] ?? "?", Ql = (int?)i["ql"] ?? 0, Count = (int?)i["count"] ?? 1 });

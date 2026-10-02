@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading;
 using Avalonia;
@@ -52,6 +53,10 @@ namespace AOBuddyMonitor
             _map = new MapView(_render);
             MapHost.Children.Add(_map);
             _map.FollowToggled += on => CbFollow.IsChecked = on;   // zone change re-grabs follow; keep the box honest
+            // right-click on the map: walk the bot to the world point under the cursor — the same bare
+            // 'goto x z' an owner tell carries (height comes from the bot's own nav floor). The map
+            // shows the bot's playfield, so no playfield suffix is needed.
+            _map.GoToRequested += (x, z) => SendText(string.Format(CultureInfo.InvariantCulture, "goto {0:0.##} {1:0.##}", x, z));
             _render.Rendered += pf => Dispatcher.UIThread.Post(() => _map.InvalidateVisual());
             LogLine("monitor up — " + (_cfg.PluginDir.Length > 0 ? "nav data: " + _cfg.PluginDir : "no plugin dir found; maps will be grids"));
             LogLine("waiting for the bot on " + _cfg.Base);
@@ -259,15 +264,37 @@ namespace AOBuddyMonitor
             {
                 // an unopened bag claims nothing: the bot only learns a bag's contents by opening it,
                 // so "21 free" there would be a guess dressed as a number
-                InvPanel.Children.Add(new TextBlock
+                var header = new TextBlock
                 {
-                    Text = bag.Known ? $"{bag.Name}  ({bag.Free} free)" : $"{bag.Name}  (not opened — contents unknown)",
+                    Text = (bag.N > 0 ? $"#{bag.N} " : "") + (bag.Known ? $"{bag.Name}  ({bag.Free} free)" : $"{bag.Name}  (not opened — contents unknown)")
+                           + (bag.Loot ? "  · loot bag" : ""),
                     TextWrapping = TextWrapping.Wrap,
-                    Foreground = new SolidColorBrush(Color.FromRgb(0x9a, 0x9a, 0x9a)),
+                    Foreground = bag.Loot ? new SolidColorBrush(Color.FromRgb(0xd8, 0xb8, 0x4a)) : new SolidColorBrush(Color.FromRgb(0x9a, 0x9a, 0x9a)),
                     Margin = new Avalonia.Thickness(0, 6, 0, 0),
-                });
+                };
+                if (bag.N > 0) AttachLootbagMenu(header, bag);
+                InvPanel.Children.Add(header);
                 foreach (var it in bag.Items) InvPanel.Children.Add(ItemLine(it, 12));
             }
+        }
+
+        // Right-click a bag line: set or reset its loot-bag designation — the bot's own command
+        // ('lootbag add/remove <n>', n = the bag's number from /inventory, numbered exactly like
+        // 'lootbag list'). The reply lands in the log; the next inventory poll shows the marker.
+        private void AttachLootbagMenu(TextBlock line, BotClient.Bag bag)
+        {
+            var n = bag.N;
+            var set = new MenuItem { Header = "set as loot bag", IsEnabled = !bag.Loot };
+            set.Click += (s, e) => LootbagCmd(true, n);
+            var reset = new MenuItem { Header = "reset loot bag", IsEnabled = bag.Loot };
+            reset.Click += (s, e) => LootbagCmd(false, n);
+            line.ContextMenu = new ContextMenu { Items = { set, reset } };
+        }
+
+        private void LootbagCmd(bool set, int n)
+        {
+            SendText(string.Format(CultureInfo.InvariantCulture, "lootbag {0} {1}", set ? "add" : "remove", n));
+            _nextInventory = DateTime.MinValue;   // the designation changes /inventory — fetch it on the next poll
         }
 
         private static TextBlock ItemLine(BotClient.InvItem it, double indent) => new TextBlock
@@ -319,8 +346,16 @@ namespace AOBuddyMonitor
         private void Send()
         {
             string text = (CmdBox.Text ?? "").Trim();
-            if (text.Length == 0 || !CmdBox.IsEnabled) return;
+            if (text.Length == 0) return;
             CmdBox.Text = "";
+            SendText(text);
+        }
+
+        // The one writer for the bot's command channel: the tell box and the map's "go to position"
+        // land here (POST /command, replies into the log, input locked while replies are collected).
+        private void SendText(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text) || !CmdBox.IsEnabled) return;
             CmdBox.IsEnabled = false;
             CmdState.Text = "sending — collecting replies…";
             if (!_cmdHistory.Contains(text)) _cmdHistory.Add(text);

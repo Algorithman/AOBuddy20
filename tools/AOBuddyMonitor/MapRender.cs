@@ -3,7 +3,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using AOBuddy;
+using Avalonia;
+using AOBuddy20.Nav;
 using Newtonsoft.Json;
 
 namespace AOBuddyMonitor
@@ -115,7 +116,7 @@ namespace AOBuddyMonitor
             public float[] ExitXZ;                      // world [x, z] of the way out, on ExitFloor
             public int ExitFloor;
             public string Name = "";
-            internal readonly Dictionary<int, byte[]> FloorBgra = new Dictionary<int, byte[]>();
+            public readonly Dictionary<int, byte[]> FloorBgra = new Dictionary<int, byte[]>();
         }
 
         public sealed class RoomLabel { public readonly string Name; public readonly int Floor; public readonly float X, Z; public RoomLabel(string n, int f, float x, float z) { Name = n; Floor = f; X = x; Z = z; } }
@@ -244,8 +245,10 @@ namespace AOBuddyMonitor
                 var d = nav?.Dungeon;
                 if (d == null || d.Rooms.Count == 0) return null;
 
-                // cell → world, the exact inverse of NavDungeon.CellOf: local offset from the rect's centre,
-                // turned back by the room's rotation (CellOf un-rotates world→local; this re-rotates local→world)
+                // cell → world, the exact inverse of NavDungeon.CellOf (and the same transform the
+                // bot's StampRoomFloors stamps by): tile centre = pos + turned((x1+col-mx)*cell,
+                // (z1+row-mz)*cell). The +0.5 cell an earlier version added here painted every room
+                // 1 m east and south of where the bot walks it — the "offset corridors" (1187).
                 float cell = d.Cell;
                 void Walk(NavDungeon.Room rm, Action<int, int, double, double> cellAt)
                 {
@@ -256,16 +259,27 @@ namespace AOBuddyMonitor
                         {
                             if (rm.Tile[row][col] == 0) continue;
                             int a = rm.Rect[0] + col, b = rm.Rect[1] + row;
-                            double dx = (a + 0.5 - ccx) * cell, dz = (b + 0.5 - ccz) * cell;
+                            double dx = (a - ccx) * cell, dz = (b - ccz) * cell;
                             for (int i = 0; i < turns; i++) { double t = dx; dx = -dz; dz = t; }
                             cellAt(a, b, rm.Pos[0] + dx, rm.Pos[2] + dz);
                         }
                 }
 
-                // pass 1: world bounds over every walkable cell (all floors share the grid, so floors align)
+                // pass 1: world bounds - static dungeons: the room rect footprints (they are painted
+                // as rects below, and a rect can reach past its tiled cells); missions: the tiled cells
+                bool staticDungeon = nav.Kind == "dungeon";
                 double minX = double.MaxValue, minZ = double.MaxValue, maxX = double.MinValue, maxZ = double.MinValue;
-                foreach (var rm in d.Rooms)
-                    Walk(rm, (a, b, x, z) => { if (x < minX) minX = x; if (x > maxX) maxX = x; if (z < minZ) minZ = z; if (z > maxZ) maxZ = z; });
+                void Bound(double x, double z) { if (x < minX) minX = x; if (x > maxX) maxX = x; if (z < minZ) minZ = z; if (z > maxZ) maxZ = z; }
+                if (staticDungeon)
+                    foreach (var rm in d.Rooms)
+                        foreach (var (ci, cj) in RectCornerIndices(rm))
+                        {
+                            var (x, z) = RectCorner(rm, ci, cj, cell);
+                            Bound(x, z);
+                        }
+                else
+                    foreach (var rm in d.Rooms)
+                        Walk(rm, (a, b, x, z) => Bound(x, z));
                 if (minX > maxX) return null;
                 // ×10 supersampling: a building is ~100 m against a 4 km outdoor zone, so the view zooms
                 // ~×10 on entry (MapView does that) — one pixel per 2 m cell would blur to mush there.
@@ -283,7 +297,14 @@ namespace AOBuddyMonitor
                 };
                 if (nav.Exit != null) { plan.ExitXZ = new[] { (float)nav.Exit.X, (float)nav.Exit.Z }; plan.ExitFloor = nav.Exit.Floor; }
 
-                // per floor: paint the walkable cells (a shade per room, so rooms read as rooms)…
+                // per floor: paint the rooms. Static dungeons draw each room as its authored RECT
+                // footprint, filled and outlined: the tile bitmask's voids at doorways and shared
+                // cells are the wall assembly between rooms, not missing floor, and painting raw
+                // tiles cut the shop into islands that only painted bridges reconnected (1187,
+                // 2026-10-02). The rects meet at every seam — verified against the client: the walls
+                // the owner measured in-game (154.5 / 121.5 / 249.5 / 179.5) sit exactly inside these
+                // footprints. Missions keep the tile painting: their placement was verified against
+                // 425 walked points, and their pools tile the full floor.
                 foreach (int floor in plan.Floors)
                 {
                     var img = new byte[plan.W * plan.H * 4];
@@ -291,23 +312,60 @@ namespace AOBuddyMonitor
                     {
                         if (rm.Floor != floor) continue;
                         int v = 56 + (Math.Max(0, rm.PoolIndex >= 0 ? rm.PoolIndex : rm.Index) * 37 % 26);
-                        Walk(rm, (a, b, x, z) =>
+                        if (staticDungeon)
                         {
-                            int px = (int)((x - minX) / cell * s), py = (int)((z - minZ) / cell * s);
-                            for (int dz = 0; dz < s; dz++)
-                                for (int dx = 0; dx < s; dx++)
+                            // the rect footprint: filled with the room's shade, outlined crisp
+                            var cs = RectCornerIndices(rm).Select(t => RectCorner(rm, t.ci, t.cj, cell)).ToList();
+                            var pxs = cs.Select(p => (int)Math.Floor((p.x - minX) / cell * s)).ToList();
+                            var pys = cs.Select(p => (int)Math.Floor((p.z - minZ) / cell * s)).ToList();
+                            int px0 = Math.Max(0, pxs.Min()), px1 = Math.Min(plan.W - 1, pxs.Max());
+                            int py0 = Math.Max(0, pys.Min()), py1 = Math.Min(plan.H - 1, pys.Max());
+                            for (int qy = py0; qy <= py1; qy++)
+                                for (int qx = px0; qx <= px1; qx++)
                                 {
-                                    int qx = px + dx, qy = py + dz;
-                                    if (qx < 0 || qy < 0 || qx >= plan.W || qy >= plan.H) continue;
                                     int i = (qy * plan.W + qx) * 4;
                                     img[i] = (byte)v; img[i + 1] = (byte)v; img[i + 2] = (byte)(v + 4); img[i + 3] = 255;
                                 }
-                        });
+                        }
+                        else
+                        {
+                            Walk(rm, (a, b, x, z) =>
+                            {
+                                int px = (int)((x - minX) / cell * s), py = (int)((z - minZ) / cell * s);
+                                for (int dz = 0; dz < s; dz++)
+                                    for (int dx = 0; dx < s; dx++)
+                                    {
+                                        int qx = px + dx, qy = py + dz;
+                                        if (qx < 0 || qy < 0 || qx >= plan.W || qy >= plan.H) continue;
+                                        int i = (qy * plan.W + qx) * 4;
+                                        img[i] = (byte)v; img[i + 1] = (byte)v; img[i + 2] = (byte)(v + 4); img[i + 3] = 255;
+                                    }
+                            });
+                        }
                         // the label at the room's walkable centroid, not its pivot — rotated rooms put the pivot oddly
                         double sx = 0, sz = 0; int n = 0;
                         Walk(rm, (a, b, x, z) => { sx += x; sz += z; n++; });
                         if (n > 0) plan.Rooms.Add(new RoomLabel(string.IsNullOrEmpty(rm.PoolName) ? rm.Name : rm.PoolName, floor, (float)(sx / n), (float)(sz / n)));
                     }
+
+                    // the doorways (static dungeons): a red ring at each decoded doorway - both rooms
+                    // of a pair decode it to the same world point (turned-parity frame), so one ring
+                    // marks each connection in the plan
+                    if (staticDungeon)
+                        foreach (var dw in AOBuddyNav.StaticDoorways(d))
+                        {
+                            int dcx = (int)Math.Floor((dw.X - minX) / cell * s), dcy = (int)Math.Floor((dw.Z - minZ) / cell * s);
+                            int r = (int)Math.Round(1.0 / cell * s / 2);                 // ring radius 1 m
+                            for (int qy = dcy - r; qy <= dcy + r; qy++)
+                                for (int qx = dcx - r; qx <= dcx + r; qx++)
+                                {
+                                    if (qx < 0 || qy < 0 || qx >= plan.W || qy >= plan.H) continue;
+                                    int dd = (qx - dcx) * (qx - dcx) + (qy - dcy) * (qy - dcy);
+                                    if (dd > r * r || dd < (r - 2) * (r - 2)) continue;
+                                    int i = (qy * plan.W + qx) * 4;
+                                    img[i] = 64; img[i + 1] = 64; img[i + 2] = 208; img[i + 3] = 255;
+                                }
+                        }
 
                     // …then bake the walls: nav.Walls' triangles whose height sits in this floor's band
                     var onFloor = d.Rooms.Where(r => r.Floor == floor).ToList();
@@ -354,7 +412,30 @@ namespace AOBuddyMonitor
             catch { return null; }
         }
 
-        /// <summary>Decodes the extractor's terrain.png (8-bit truecolour, our own writer) to world-ordered
+        // the room's tile-grid centre in the boundary frame ((x1+x2+1)/2): tiles hang their placement
+    // off it, and the outline corners are the tile centres +/- half a cell - the same frame as Walk.
+    private static double Ccx(NavDungeon.Room rm) => (rm.Rect[0] + rm.Rect[2] + 1) / 2.0;
+    private static double Ccz(NavDungeon.Room rm) => (rm.Rect[1] + rm.Rect[3] + 1) / 2.0;
+
+    /// <summary>The four corners of a room's rect footprint, as rect-grid corner indices.</summary>
+    private static IEnumerable<(int ci, int cj)> RectCornerIndices(NavDungeon.Room rm)
+    {
+        yield return (0, 0);
+        yield return (rm.Rect[2] - rm.Rect[0] + 1, 0);
+        yield return (rm.Rect[2] - rm.Rect[0] + 1, rm.Rect[3] - rm.Rect[1] + 1);
+        yield return (0, rm.Rect[3] - rm.Rect[1] + 1);
+    }
+
+    /// <summary>A rect corner in world coordinates (corner = tile centre +/- half a cell, turned).</summary>
+    private static (double x, double z) RectCorner(NavDungeon.Room rm, int ci, int cj, float cell)
+    {
+        double lx = (rm.Rect[0] + ci - Ccx(rm)) * cell - 1, lz = (rm.Rect[1] + cj - Ccz(rm)) * cell - 1;
+        double tx = lx, tz = lz;
+        for (int i = 0; i < ((-rm.Rot) % 4 + 4) % 4; i++) { double t = tx; tx = -tz; tz = t; }
+        return (rm.Pos[0] + tx, rm.Pos[2] + tz);
+    }
+
+    /// <summary>Decodes the extractor's terrain.png (8-bit truecolour, our own writer) to world-ordered
         /// BGRA — un-flipping the game-oriented rows on the way in. null when anything about it surprises us.</summary>
         private static (int w, int h, byte[] bgra)? DecodePng(byte[] all)
         {

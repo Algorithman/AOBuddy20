@@ -29,8 +29,10 @@ namespace AOBuddy20.Nav;
 /// </summary>
 public static class GridCache
 {
-    public const int CodeVersion = 8; // 8: FloorGrid stamps the room-tile floors (rooms.json) - the indoor
-                                      // grid was void over the shop's own floor and routes crossed real walls
+    public const int CodeVersion = 10; // 10: FloorGrid serializes its doorway keep-open cells and the
+                                       // doorway centres/normals (cached grids lost both - doorways
+                                       // walled shut again after a cache reload), and FindPath walks
+                                       // standoff + door + exit waypoints through every doorway
 
     private static readonly byte[] Magic = { (byte)'A', (byte)'O', (byte)'G', (byte)'C' };
 

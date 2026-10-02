@@ -15,6 +15,6 @@
   </PropertyGroup>
   <ItemGroup>
     <!-- The folder README ships with the output so the data documents itself. -->
-    <EmbeddedResource Include="..\..\AOBuddy\GameData\Nav\README.md" LogicalName="README.md" />
+    <EmbeddedResource Include="..\..\AOBuddy20\GameData\Nav\README.md" LogicalName="README.md" />
   </ItemGroup>
 </Project>

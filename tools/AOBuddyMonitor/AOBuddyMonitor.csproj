@@ -9,22 +9,23 @@
     <ApplicationIcon>Assets/aobuddy-monitor.ico</ApplicationIcon>
     <!-- The owner's monitoring GUI for the running bot (2026-09-26): a dashboard over the bot's local
          control API (BotApi: /status /nav /log /inventory, POST /command) plus a map that renders the
-         bot's own nav data. Thick client ON PURPOSE: it links AOBuddy.csproj the way tools/navmap does,
-         so the terrain on screen is computed by the same NavGround code the bot walks on — the picture
-         cannot drift from the bot's logic. net10.0-windows is inherited from the root props; the owner
-         means to lift that solution-wide later. Avalonia is the only new dependency (OS-agnostic UI);
-         JSON rides the Newtonsoft the AOBuddy link already brings. -->
+         bot's own nav data. Thick client ON PURPOSE: it links the bot project (AOBuddy20.csproj), so the
+         terrain on screen is computed by the same NavGround/AOBuddyNav code the bot walks on — the
+         picture cannot drift from the bot's logic (the ported NavData.cs carries the rooms.json floor
+         stamping and the wall handling the pathfinding uses). net10.0 is inherited from the root props.
+         Avalonia is the only new dependency (OS-agnostic UI). -->
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="11.*" />
     <PackageReference Include="Avalonia.Desktop" Version="11.*" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="11.*" />
     <PackageReference Include="Avalonia.Fonts.Inter" Version="11.*" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.*" />
   </ItemGroup>
   <ItemGroup>
     <AvaloniaResource Include="Assets/aobuddy-monitor.ico" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\AOBuddy\AOBuddy.csproj" />
+    <ProjectReference Include="..\..\AOBuddy20\AOBuddy20.csproj" />
   </ItemGroup>
 </Project>

@@ -69,3 +69,5 @@ nunit-*.xml
 *.csproj.DotSettings
 /__pycache__/*
 *.pyc
+# stray output folders from a mangled -p:OutputPath argument
+binprobe*/

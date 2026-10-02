@@ -12,6 +12,7 @@
 #nullable disable
 
 using System.IO.Compression;
+using System.Linq;
 using System.Text;
 using AOSharp.Common.GameData;
 using Newtonsoft.Json;
@@ -48,6 +49,144 @@ public sealed class AOBuddyNav
     }
 
     public static string FolderFor(string pluginDir, int pf) => Path.Combine(pluginDir, "GameData", "Nav", pf.ToString());
+
+    /// <summary>One 90° turn of (x, z) about the origin, per turn count: (x, z) -> (-z, x).</summary>
+    private static (double x, double z) turned(double x, double z, int turns)
+    {
+        for (var i = 0; i < turns; i++)
+        {
+            var t = x;
+            x = -z;
+            z = t;
+        }
+
+        return (x, z);
+    }
+
+    /// <summary>
+    ///     A STATIC dungeon's room doorways in world coordinates - every doors entry of every room,
+    ///     including the inner (shop section) doors that <see cref="DoorwaysFromField" /> skips for
+    ///     missions. The geometry floor centre follows the AOBuddy10 mission rule, WITH the room's
+    ///     rotation applied to the parity: centre = pos + turned(-1 m on an even-sized axis, 0 on an
+    ///     odd one) (a room's floor is (w-1) x (h-1) cells - the rect's last column and row are the
+    ///     cell it shares with its neighbour). Verified on 1187 Neutral Supermarket Advanced: with
+    ///     the turned parity, both rooms of every door pair decode to the SAME world point (before,
+    ///     every rot-3 room's doors sat (−1,+1) off its rot-0 neighbour's - the unturned parity).
+    ///     The walk grid uses these as keep-open cells: walls.bin stamps the door leaves and frames
+    ///     solid, and nothing else in the data says a doorway is a passage (2026-10-02: the shop's
+    ///     section doors walled the bot into the entrance room).
+    ///     Door codes: row = code / (4*(W-1)), col = code % (4*(W-1)); row 0 south, row H-2 north
+    ///     (col = half-metres across), col 3 west, col 4*(W-1)-3 east (row = 2 m cell row, +1 m for
+    ///     the door's centre line).
+    /// </summary>
+    public static List<Doorway> StaticDoorways(NavDungeon d)
+    {
+        var doorways = new List<Doorway>();
+        if (d?.Rooms == null)
+        {
+            return doorways;
+        }
+
+        foreach (var rm in d.Rooms)
+        {
+            if (rm?.Rect == null || rm.Pos == null || rm.Doors == null)
+            {
+                continue;
+            }
+
+            int x1 = rm.Rect[0], z1 = rm.Rect[1], x2 = rm.Rect[2], z2 = rm.Rect[3];
+            int w = x2 - x1 + 1, h = z2 - z1 + 1, stride = 4 * (w - 1);
+            if (stride <= 0)
+            {
+                continue;
+            }
+
+            var turns = ((-rm.Rot) % 4 + 4) % 4;
+            // the geometry floor centre: pos turned-parity corrected (see summary)
+            double pcx = w % 2 == 0 ? -1 : 0, pcz = h % 2 == 0 ? -1 : 0;
+            var (pcxt, pczt) = turned(pcx, pcz, turns);
+            double fcx = rm.Pos[0] + pcxt, fcz = rm.Pos[2] + pczt;
+
+            foreach (var door in rm.Doors)
+            {
+                if (door == null || door.Length < 2)
+                {
+                    continue;
+                }
+
+                int row = door[1] / stride, col = door[1] % stride;
+                double lx, lz;
+                if (row == 0)
+                {
+                    lx = col / 2.0;
+                    lz = 0;
+                }
+                else if (row >= h - 2)
+                {
+                    lx = col / 2.0 + 1;
+                    lz = 2.0 * (h - 1);
+                }
+                else if (col == 3)
+                {
+                    lx = 0;
+                    lz = row * 2 + 1;
+                }
+                else if (col == stride - 3)
+                {
+                    lx = 2.0 * (w - 1);
+                    lz = row * 2 + 1;
+                }
+                else
+                {
+                    continue; // not on an edge: no confident position, leave the cells as they are
+                }
+
+                double ex = lx - (w - 1), ez = lz - (h - 1);
+                double nx = 0, nz = 0;
+                if (row == 0)
+                {
+                    nz = -1;
+                }
+                else if (row >= h - 2)
+                {
+                    nz = 1;
+                }
+                else if (col == 3)
+                {
+                    nx = -1;
+                }
+                else
+                {
+                    nx = 1;
+                }
+
+                for (var i = 0; i < turns; i++)
+                {
+                    (ex, ez) = (-ez, ex);
+                    (nx, nz) = (-nz, nx);
+                }
+
+                // both records of a shared doorway decode to the same world point (the turned parity
+                // made them exact) - keep one; the opposite normal adds nothing downstream
+                if (doorways.Any(o => Math.Abs(o.X - (fcx + ex)) < 0.25 && Math.Abs(o.Z - (fcz + ez)) < 0.25))
+                {
+                    continue;
+                }
+
+                doorways.Add(new Doorway
+                {
+                    X = fcx + ex,
+                    Y = rm.Pos[1],
+                    Z = fcz + ez,
+                    Nx = nx,
+                    Nz = nz,
+                    Floor = 0,
+                });
+            }
+        }
+
+        return doorways;
+    }
 
     /// <summary>Load one playfield's folder. Returns null when there is no folder for it.</summary>
     public static AOBuddyNav Load(string pluginDir, int pf)

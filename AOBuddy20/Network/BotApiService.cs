@@ -290,22 +290,36 @@ public sealed class BotApiService
 
             o["items"] = items;
 
+            // The bags' lootbag-list numbers: the same filter and order the 'lootbag' command numbers
+            // by (OwnerChat.LootBagCommand), so the monitor's set/reset names the exact bag.
+            var numbered = (Inventory.Items ?? new List<Item>())
+                .Where(x => x != null && x.Slot.Type == IdentityType.Inventory && x.UniqueIdentity.Type == IdentityType.Container)
+                .OrderBy(x => x.Slot.Instance)
+                .ToList();
+
             var bags = new JArray();
             foreach (var c in Inventory.Containers ?? new List<Container>())
             {
                 // KNOWN vs UNKNOWN: a bag's contents arrive only when it is OPENED (the read-through
                 // below, or the sell flow). An unopened bag's count would be a guess.
                 var known = c.Items.Count > 0;
-                bags.Add(new JObject
+                var n = numbered.FindIndex(b => b.UniqueIdentity == c.Identity) + 1;
+                var bag = new JObject
                 {
                     ["name"] = c.Item?.Name ?? "backpack",
                     ["known"] = known,
                     ["free"] = known ? c.NumFreeSlots : (int?)null,
-                    ["loot"] = _lootBags.IsLootBag(c.Identity), // the lootbag designation (monitor ignores it for now)
+                    ["loot"] = _lootBags.IsLootBag(c.Identity), // the lootbag designation
                     ["items"] = known
                         ? new JArray(c.Items.OrderBy(x => x.Slot.Instance).Select(ItemJson))
                         : new JArray(),
-                });
+                };
+                if (n > 0)
+                {
+                    bag["n"] = n; // 'lootbag add <n>' / 'remove <n>' name this bag
+                }
+
+                bags.Add(bag);
             }
 
             o["bags"] = bags;

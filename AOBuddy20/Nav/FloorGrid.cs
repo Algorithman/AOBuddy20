@@ -74,6 +74,19 @@ public sealed class FloorGrid : IWalkGrid
         {
             bw.Write(b);
         }
+
+        bw.Write(_doorways.Count);
+        foreach (int d in _doorways)
+        {
+            bw.Write(d);
+        }
+
+        bw.Write(_doorwayList.Count);
+        foreach (var dw in _doorwayList)
+        {
+            bw.Write(dw.X); bw.Write(dw.Y); bw.Write(dw.Z);
+            bw.Write(dw.Nx); bw.Write(dw.Nz);
+        }
     }
 
     internal static FloorGrid Read(BinaryReader br, int pf)
@@ -98,6 +111,23 @@ public sealed class FloorGrid : IWalkGrid
         for (var i = 0; i < m; i++)
         {
             g._blocked.Add(br.ReadInt64());
+        }
+
+        int nd = br.ReadInt32();
+        for (var i = 0; i < nd; i++)
+        {
+            g._doorways.Add(br.ReadInt32());
+        }
+
+        int ndl = br.ReadInt32();
+        for (var i = 0; i < ndl; i++)
+        {
+            var dw = new AOBuddyNav.Doorway
+            {
+                X = br.ReadDouble(), Y = br.ReadDouble(), Z = br.ReadDouble(),
+                Nx = br.ReadDouble(), Nz = br.ReadDouble(),
+            };
+            g._doorwayList.Add(dw);
         }
 
         return g;
@@ -143,11 +173,16 @@ public sealed class FloorGrid : IWalkGrid
         var walls = File.Exists(wp);
         if (walls)
         {
+            // The room doors go first: walls.bin carries the door leaves and frames as solid, and
+            // nothing in the data says a doorway is a passage - without the keep-open cells the
+            // shop's section doors walled the bot into the entrance room (Neutral Supermarket 1187,
+            // 2026-10-02: half the room-to-room connections had no path across their doors).
+            grid.StampDoorways(AOBuddyNav.StaticDoorways(nav.Dungeon));
             grid.StampWalls(NavCollision.Read(wp));
         }
 
         grid.StampHeadroom();
-        log?.Invoke($"FLOORGRID: floor grid for pf {pf}: {w}x{h} cells of {Cell} m, {grid._floors.Count} with floor, {grid._blocked.Count} floor cells blocked, walls {(walls ? "yes" : "NONE")}, {sw.ElapsedMilliseconds} ms");
+        log?.Invoke($"FLOORGRID: floor grid for pf {pf}: {w}x{h} cells of {Cell} m, {grid._floors.Count} with floor, {grid._blocked.Count} floor cells blocked, walls {(walls ? "yes" : "NONE")} ({grid._doorways.Count} doorway cells kept open), {sw.ElapsedMilliseconds} ms");
         return grid;
     }
 
@@ -305,6 +340,74 @@ public sealed class FloorGrid : IWalkGrid
         }
     }
 
+    // Cells a room doorway covers: walls there are door leaves and frames, not walls - StampWalls
+    // leaves them open. Across the door: the ~2 m passage (the frame lands the centre line true, the
+    // jambs at ±1.25 m stay blocked, so the opening threads like a doorway, not a hole in a wall).
+    // ALONG the door's normal: the threshold strip is untiled in BOTH rooms' data (it belongs to the
+    // wall - 1187's section doors had a ~2.5 m void where the floor should be), so the doorway also
+    // BRIDGES floor at the door's height across that strip; the long reach along the normal never
+    // approaches the jambs. Verified cell-by-cell against 1187 Neutral Supermarket Advanced.
+    private const float DoorwayAcross = 1.25f;
+    private const float DoorwayAlong = 3.5f;
+
+    private readonly HashSet<int> _doorways = new HashSet<int>();
+
+    // The doorway world centres and normals (static rooms): the pathfinder walks a crossing route
+    // through the doorway's exact centre (InsertDoorWaypoints).
+    private List<AOBuddyNav.Doorway> _doorwayList = new List<AOBuddyNav.Doorway>();
+
+    private void StampDoorways(List<AOBuddyNav.Doorway> doorways)
+    {
+        _doorwayList = doorways;
+        foreach (var dw in doorways)
+        {
+            double ax = Math.Abs(dw.Nx) > 0.5 ? DoorwayAlong : DoorwayAcross;
+            double az = Math.Abs(dw.Nz) > 0.5 ? DoorwayAlong : DoorwayAcross;
+            int i0 = CellX((float)(dw.X - ax)), i1 = CellX((float)(dw.X + ax));
+            int j0 = CellZ((float)(dw.Z - az)), j1 = CellZ((float)(dw.Z + az));
+            for (int j = j0; j <= j1; j++)
+            {
+                for (int i = i0; i <= i1; i++)
+                {
+                    if (!In(i, j))
+                    {
+                        continue;
+                    }
+
+                    int k = j * _w + i;
+                    _doorways.Add(k);
+
+                    // the threshold bridge: floor at the door's height where neither room has tiles
+                    if (!_floors.TryGetValue(k, out var fl))
+                    {
+                        _floors[k] = new[] { (float)dw.Y };
+                    }
+                    else
+                    {
+                        var folded = false;
+                        foreach (var f in fl)
+                        {
+                            if (Math.Abs(f - dw.Y) <= Merge)
+                            {
+                                folded = true;
+                                break;
+                            }
+                        }
+
+                        if (!folded && fl.Length < MaxFloors)
+                        {
+                            var merged = new float[fl.Length + 1];
+                            Array.Copy(fl, merged, fl.Length);
+                            merged[fl.Length] = (float)dw.Y;
+                            Array.Sort(merged);
+                            _floors[k] = merged;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     private void StampWalls(NavCollision walls)
     {
         foreach (var ch in walls.Chunks)
@@ -324,9 +427,9 @@ public sealed class FloorGrid : IWalkGrid
                         float s = i / (float)n, t = j / (float)n;
                         float px = ax + ux * s + wx * t, py = ay + uy * s + wy * t, pz = az + uz * s + wz * t;
                         int k = Key(px, pz);
-                        if (k < 0 || !_floors.TryGetValue(k, out var fl))
+                        if (k < 0 || !_floors.TryGetValue(k, out var fl) || _doorways.Contains(k))
                         {
-                            continue;
+                            continue; // a doorway cell: walls here are the door, not a wall
                         }
 
                         for (int f = 0; f < fl.Length; f++)
@@ -401,6 +504,13 @@ public sealed class FloorGrid : IWalkGrid
     /// <summary>Standable ground at p (a floor within 3 m of p.Y) — the front-ray test for doorway exits.</summary>
     public bool OpenAt(Vector3 p) => FloorAt(Key(p.X, p.Z), p.Y, 3f, null) >= 0;
 
+    /// <summary>
+    ///     Walkable ground within tol of y at (x, z)? The outside view of the grid for renderers and
+    ///     tools: the same FloorAt verdict the pathfinder walks by (a floor exists there AND no wall,
+    ///     no headroom rule, no doorway exception pending - the doorway keep-open is already baked in).
+    /// </summary>
+    public bool WalkableAt(float x, float z, float y, float tol) => FloorAt(Key(x, z), y, tol, null) >= 0;
+
     public HashSet<int> CellsAlong(Vector3 a, Vector3 b, float radius, HashSet<int> into = null)
     {
         into ??= new HashSet<int>();
@@ -429,9 +539,79 @@ public sealed class FloorGrid : IWalkGrid
     /// <summary>
     ///     A path over the floors from a (on the floor nearest a.Y) to within reach metres of b. b.Y NaN: any
     ///     level; otherwise the end must be on b's level (within 1.5 m). Points carry their floor height.
+    ///     A crossed room doorway splits the route (see FindPathCore): approach standoff, the door's
+    ///     exact centre, exit standoff, then a FRESH search for the rest - so the walk through a door
+    ///     never re-joins whatever line the through-route happened to have.
     /// </summary>
     public List<Vector3> FindPath(Vector3 a, Vector3 b, HashSet<int> extra, float snap, float reach, out string why)
     {
+        return FindPathCore(a, b, extra, snap, reach, null, 0, out why);
+    }
+
+    private List<Vector3> FindPathCore(Vector3 a, Vector3 b, HashSet<int> extra, float snap, float reach,
+        HashSet<AOBuddyNav.Doorway> skip, int depth, out string why)
+    {
+        // DOOR PRECISION: the first crossed doorway (both endpoints on opposite sides of its plane,
+        // the straight line passing within 3 m of its centre) splits the route into two freshly
+        // planned legs - up to the approach standoff, through the door's exact centre, and from the
+        // exit standoff on. Deeper routes handle their remaining doorways the same way (depth cap
+        // 4; the skip set keeps a handled doorway from splitting again).
+        if (depth < 4 && _doorwayList.Count > 0 && a != default)
+        {
+            var inv = System.Globalization.CultureInfo.InvariantCulture;
+            var candidates = new List<(AOBuddyNav.Doorway dw, Vector3 before, Vector3 after, double fromA)>();
+            foreach (var dw in _doorwayList)
+            {
+                if (skip != null && skip.Contains(dw))
+                {
+                    continue;
+                }
+
+                double s0 = (a.X - dw.X) * dw.Nx + (a.Z - dw.Z) * dw.Nz;
+                double s1 = (b.X - dw.X) * dw.Nx + (b.Z - dw.Z) * dw.Nz;
+                if ((s0 > 0) == (s1 > 0) || Math.Abs(s0 - s1) < 1e-9)
+                {
+                    continue;
+                }
+
+                double t = s0 / (s0 - s1);
+                double cx = a.X + (b.X - a.X) * t, cz = a.Z + (b.Z - a.Z) * t;
+                double dist = Math.Sqrt((cx - dw.X) * (cx - dw.X) + (cz - dw.Z) * (cz - dw.Z));
+                if (dist > 3.0)
+                {
+                    continue;
+                }
+
+                var sign = s0 > 0 ? 1 : -1;
+                var before = new Vector3((float)(dw.X + dw.Nx * 1.5 * sign), (float)dw.Y, (float)(dw.Z + dw.Nz * 1.5 * sign));
+                var after = new Vector3((float)(dw.X - dw.Nx * 1.5 * sign), (float)dw.Y, (float)(dw.Z - dw.Nz * 1.5 * sign));
+                candidates.Add((dw, before, after, Math.Sqrt((a.X - dw.X) * (a.X - dw.X) + (a.Z - dw.Z) * (a.Z - dw.Z))));
+            }
+
+            foreach (var (dw, before, after, _) in candidates.OrderBy(c => c.fromA))
+            {
+                skip ??= new HashSet<AOBuddyNav.Doorway>();
+                skip.Add(dw);
+                var leg1 = FindPathCore(a, before, extra, snap, reach, skip, depth + 1, out _);
+                if (leg1 == null)
+                {
+                    continue; // this doorway does not work for the approach - try the next crossed one
+                }
+
+                var leg2 = FindPathCore(after, b, extra, snap, reach, skip, depth + 1, out _);
+                if (leg2 == null)
+                {
+                    continue;
+                }
+
+                why = "";
+                var full = new List<Vector3>(leg1) { new Vector3((float)dw.X, (float)dw.Y, (float)dw.Z) };
+                full.AddRange(leg2.Skip(1));
+                return full;
+            }
+            // no doorway split worked: the plain through-route below still walks
+        }
+
         why = "";
         long start = NearestNode(a, snap, extra);
         if (start < 0)

@@ -16,7 +16,9 @@ namespace AOBuddyMonitor
     /// has none, e.g. mission interiors); the overlays are exactly what GET /nav reports: the hike route
     /// and its exit line, the building walk, the door, his trail faded by age, and the server's snap-backs
     /// (red server→local segments — where the world said no). Pan by drag (dragging turns Follow off),
-    /// zoom at the wheel, coordinates under the cursor.
+    /// zoom at the wheel, coordinates under the cursor. Right-click opens "go to position": the world
+    /// point under the cursor, sent to the bot as a goto (GoToRequested — MainWindow turns it into the
+    /// tell).
     /// </summary>
     public sealed class MapView : Control
     {
@@ -40,6 +42,8 @@ namespace AOBuddyMonitor
         private bool _dragging;
         private Vector2 _dragPoint;                          // screen point the drag started at
         private Vector2 _dragCenter;
+        private Vector2? _menuWorld;                         // world x,z under the cursor when the menu opened
+        private readonly MenuItem _menuItem;                 // the context menu's one item ("go to position")
 
         private readonly Pen _stepsPen = new Pen(new SolidColorBrush(Color.FromArgb(150, 220, 220, 220)), 1) { LineJoin = PenLineJoin.Round };
         private readonly Pen _trailPen = new Pen(Brushes.White, 2) { LineJoin = PenLineJoin.Round };
@@ -59,11 +63,24 @@ namespace AOBuddyMonitor
             _render = render;
             ClipToBounds = true;
             Focusable = true;
+
+            // The context menu: one item, "go to position" — the world point the cursor was over when
+            // the right button went down (MainWindow sends it as the bot's goto).
+            _menuItem = new MenuItem { Header = "go to position" };
+            _menuItem.Click += (s, e) =>
+            {
+                if (_menuWorld != null) GoToRequested?.Invoke(_menuWorld.Value.X, _menuWorld.Value.Y);
+            };
+            ContextMenu = new ContextMenu { Items = { _menuItem } };
         }
 
         public bool Follow { get => _follow; set { _follow = value; InvalidateVisual(); } }
         public bool ShowSteps { get => _steps; set { _steps = value; InvalidateVisual(); } }
         public double ZoomPct => _scale * 100;
+
+        /// <summary>Raised when "go to position" is clicked: the world x,z that was under the cursor
+        /// when the menu opened. MainWindow turns it into the goto tell.</summary>
+        public event Action<float, float> GoToRequested;
 
         /// <summary>Raised when the view itself flips Follow (a zone change grabs the leash back), so the
         /// toolbar checkbox can stay in sync without a binding.</summary>
@@ -361,7 +378,17 @@ namespace AOBuddyMonitor
         protected override void OnPointerPressed(PointerPressedEventArgs e)
         {
             base.OnPointerPressed(e);
-            if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
+            var pt = e.GetCurrentPoint(this);
+            if (pt.Properties.IsRightButtonPressed)
+            {
+                // anchor the menu here: the world position under the cursor, named on the item, sent
+                // if it is clicked. Not marked handled — the ContextMenu opens.
+                _menuWorld = ToWorld(e.GetPosition(this));
+                _menuItem.IsEnabled = _nav != null;
+                _menuItem.Header = $"go to position  ({_menuWorld.Value.X:0}, {_menuWorld.Value.Y:0})";
+                return;
+            }
+            if (!pt.Properties.IsLeftButtonPressed) return;
             _dragging = true;
             _dragPoint = new Vector2((float)e.GetPosition(this).X, (float)e.GetPosition(this).Y);
             _dragCenter = _center;
