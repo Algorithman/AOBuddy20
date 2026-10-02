@@ -18,6 +18,7 @@ using AOBuddy20.Controlling;
 using AOBuddy20.Nav;
 using AOBuddy20.Network;
 using AOBuddy20.PacketConsumers;
+using AOBuddy20.Storage;
 using AOBuddy20.Utils;
 using AOSharp.Clientless;
 using AOSharp.Clientless.Common;
@@ -205,6 +206,8 @@ internal class Program
         // after login, when the profession is on the wire (BrainBank.EnsureSelected from BotLoop).
         services.AddSingleton<BrainRegistry>();
         services.AddSingleton<BrainBank>();
+        // LOOT BAGS: the designation store (per-character JSON); the API over it comes later.
+        services.AddSingleton<LootBagStore>();
         services.AddSingleton<Awareness>();
         services.AddSingleton<MovementController>();
         services.AddSingleton<BotLoop>();

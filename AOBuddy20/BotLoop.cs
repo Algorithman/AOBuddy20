@@ -14,6 +14,7 @@ using AOBuddy20.Configuration;
 using AOBuddy20.Controlling;
 using AOBuddy20.Enums;
 using AOBuddy20.Nav;
+using AOBuddy20.PacketConsumers;
 using AOBuddy20.Utils;
 using AOSharp.Clientless;
 using Microsoft.Extensions.Logging;
@@ -37,12 +38,13 @@ public sealed class BotLoop
     private readonly HealController _heal;
     private readonly ILogger<BotLoop> _logger;
     private readonly MissionController _missionController;
+    private readonly Awareness _awareness;
     private readonly ResupplyController _resupply;
     private readonly SellController _sell;
     private readonly NavController _navMemory;
     private bool _running;
 
-    public BotLoop(ControlArbiter controlArbiter, MissionController missionController, ResupplyController resupply, SellController sell, HealController heal, BrainBank brains, NavController navMemory, AccountInfo config, ILogger<BotLoop> logger)
+    public BotLoop(ControlArbiter controlArbiter, MissionController missionController, ResupplyController resupply, SellController sell, HealController heal, BrainBank brains, NavController navMemory, Awareness awareness, AccountInfo config, ILogger<BotLoop> logger)
     {
         _controlArbiter = controlArbiter;
         _missionController = missionController;
@@ -51,6 +53,7 @@ public sealed class BotLoop
         _heal = heal;
         _brains = brains;
         _navMemory = navMemory;
+        _awareness = awareness;
         _config = config;
         _logger = logger;
     }
@@ -102,6 +105,10 @@ public sealed class BotLoop
                 _navMemory.RecordOwner(owner?.Transform.Position ?? default,
                     owner != null); // not visible: close the run, a break never becomes a segment
                 _navMemory.Tick(deltaTime);
+
+                // AWARENESS: the monster picture (near / on bot / on pets) is sensory input - it
+                // refreshes before anything decides on it.
+                _awareness.Tick(me, deltaTime);
 
                 // BRAINS: pick this character's combat/selfbuffing/externalbuffing brains once the
                 // profession is on the wire. The DI container was built before login, so the bank
