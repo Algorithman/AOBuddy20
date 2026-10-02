@@ -20,4 +20,5 @@ public enum Tasks
     Resupply,
     SellGoods,
     Buff,
+    Heal,
 }

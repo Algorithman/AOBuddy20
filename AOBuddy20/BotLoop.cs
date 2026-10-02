@@ -32,6 +32,7 @@ public sealed class BotLoop
 {
     private readonly AccountInfo _config;
     private readonly ControlArbiter _controlArbiter;
+    private readonly HealController _heal;
     private readonly ILogger<BotLoop> _logger;
     private readonly MissionController _missionController;
     private readonly ResupplyController _resupply;
@@ -39,12 +40,13 @@ public sealed class BotLoop
     private readonly NavController _navMemory;
     private bool _running;
 
-    public BotLoop(ControlArbiter controlArbiter, MissionController missionController, ResupplyController resupply, SellController sell, NavController navMemory, AccountInfo config, ILogger<BotLoop> logger)
+    public BotLoop(ControlArbiter controlArbiter, MissionController missionController, ResupplyController resupply, SellController sell, HealController heal, NavController navMemory, AccountInfo config, ILogger<BotLoop> logger)
     {
         _controlArbiter = controlArbiter;
         _missionController = missionController;
         _resupply = resupply;
         _sell = sell;
+        _heal = heal;
         _navMemory = navMemory;
         _config = config;
         _logger = logger;
@@ -98,12 +100,20 @@ public sealed class BotLoop
                     owner != null); // not visible: close the run, a break never becomes a segment
                 _navMemory.Tick(deltaTime);
 
+                // HEAL (HealController): the stims and rechargers go in before anything else looks
+                // at its state - an in-combat episode holds the arbiter at
+                // ControlPriority.LowHealthNanoEmergency while it runs; out-of-combat top-ups are
+                // quiet (no task claim, no arbiter).
                 // RESUPPLY (AOBuddy10 ResupplyController): the decision tick runs here on the update
                 // thread, the same one its packet handlers fire on. While a run is active it owns
                 // the body through a MovementController goal at ControlPriority.Resupply and holds
                 // the arbiter at that priority; idle, it only answers the owner's trade. SELLING
                 // (SellController) runs the same way one priority down.
-                if (_resupply.Tick(me, deltaTime))
+                if (_heal.Tick(me, deltaTime))
+                {
+                    CurrentTask = Tasks.Heal;
+                }
+                else if (_resupply.Tick(me, deltaTime))
                 {
                     CurrentTask = Tasks.Resupply;
                 }
@@ -111,7 +121,7 @@ public sealed class BotLoop
                 {
                     CurrentTask = Tasks.SellGoods;
                 }
-                else if (CurrentTask is Tasks.Resupply or Tasks.SellGoods)
+                else if (CurrentTask is Tasks.Resupply or Tasks.SellGoods or Tasks.Heal)
                 {
                     CurrentTask = Tasks.Nothing;
                 }

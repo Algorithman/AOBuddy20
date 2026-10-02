@@ -198,6 +198,7 @@ internal class Program
         services.AddSingleton<MissionController>();
         services.AddSingleton<ResupplyController>();
         services.AddSingleton<SellController>();
+        services.AddSingleton<HealController>();
         services.AddSingleton<Awareness>();
         services.AddSingleton<MovementController>();
         services.AddSingleton<BotLoop>();

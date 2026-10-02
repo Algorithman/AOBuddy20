@@ -40,4 +40,11 @@ public class AccountInfo
     // Advanced, the Fair Trade instance - entered over proxy terminals; in-game an instance whose
     // playfield MODEL is 1187). The way back is not resupply's: follow/mission own the body next.
     // 0 = shop locally only.
+
+    // --- Heal (ControlPriority.LowHealthNanoEmergency): popping the carried stims/rechargers.
+    // Which item and when: in combat Health and Nano Stims, out of combat Health and Nano Rechargers
+    // (names from ResupplyStimName/ResupplyRechargerName above). Health in combat fires as soon as one
+    // stim's heal capacity no longer covers the missing health.
+    public int HealNanoCombatPct = 50; // in combat: stim when nano falls under this % of max
+    public int HealNanoOutOfCombatPct = 70; // out of combat: recharger when nano is under this % (more than 30% missing)
 }
