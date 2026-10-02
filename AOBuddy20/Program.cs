@@ -35,6 +35,9 @@ internal class Program
     private static ILogger _logger;
     private static readonly List<ClientDomain> _domains = new List<ClientDomain>();
 
+    // The /log ring: created in Main before the logger (it is a sink), handed to the API here.
+    private static ApiLogRing _logRing = null!;
+
     private static string BaseDir => AppDomain.CurrentDomain.BaseDirectory;
 
     public static async Task Main(string[] args)
@@ -45,6 +48,10 @@ internal class Program
         {
             logfile = args[index + 1];
         }
+
+        // The /log ring (the monitor and the MCP follow the log through GET /log?after=N): created
+        // before the logger so it can be wired as a sink, and shared with the API as a singleton.
+        _logRing = new ApiLogRing(400);
 
         var loggerConfiguration = new LoggerConfiguration();
         loggerConfiguration.MinimumLevel.Verbose();
@@ -60,6 +67,7 @@ internal class Program
         Log.Logger = loggerConfiguration
             .WriteTo.Console()
             .WriteTo.File(logfile, rollingInterval: RollingInterval.Month)
+            .WriteTo.Sink(_logRing)
             .CreateLogger();
         _logger = Log.Logger;
         Log.Logger.Information("Starting AOBuddy...");
@@ -184,9 +192,11 @@ internal class Program
         provider.GetRequiredService<MovementController>().Start();
         provider.GetRequiredService<BotLoop>().Start();
         provider.GetRequiredService<OwnerChat>().Start();
+        provider.GetRequiredService<BotApiService>().Start();
 
         Console.ReadLine();
 
+        provider.GetRequiredService<BotApiService>().Stop();
         provider.GetRequiredService<OwnerChat>().Stop();
         provider.GetRequiredService<BotLoop>().Stop();
         provider.GetRequiredService<MovementController>().Stop();
@@ -206,8 +216,13 @@ internal class Program
         // after login, when the profession is on the wire (BrainBank.EnsureSelected from BotLoop).
         services.AddSingleton<BrainRegistry>();
         services.AddSingleton<BrainBank>();
-        // LOOT BAGS: the designation store (per-character JSON); the API over it comes later.
+        // LOOT BAGS: the designation store (per-character JSON); commands reach it through
+        // OwnerChat (tell or POST /command), the monitor sees the flag in /inventory.
         services.AddSingleton<LootBagStore>();
+        services.AddSingleton(_logRing);
+        // The local control API (BotApi): its JSON snapshots are rebuilt ON THE UPDATE THREAD by the
+        // service; the listener only serves the cached strings and enqueues commands.
+        services.AddSingleton<BotApiService>();
         services.AddSingleton<Awareness>();
         services.AddSingleton<MovementController>();
         services.AddSingleton<BotLoop>();

@@ -15,6 +15,7 @@ using AOBuddy20.Configuration;
 using AOBuddy20.Controlling;
 using AOBuddy20.Enums;
 using AOBuddy20.Nav;
+using AOBuddy20.Storage;
 using AOBuddy20.Utils;
 using AOSharp.Clientless;
 using AOSharp.Clientless.Chat;
@@ -39,6 +40,7 @@ public sealed class OwnerChat
     private readonly BrainBank _brains;
     private readonly Dictionary<string, Action<Action<string>, string[]>> _commands;
     private readonly ILogger<OwnerChat> _logger;
+    private readonly LootBagStore _lootBags;
     private readonly MovementController _movement;
     private readonly ResupplyController _resupply;
     private readonly SellController _sell;
@@ -51,12 +53,13 @@ public sealed class OwnerChat
     // so a name-only check silently drops the owner's own commands (AOBuddy10 OwnerTracker).
     private uint _tellId;
 
-    public OwnerChat(MovementController movement, ResupplyController resupply, SellController sell, BrainBank brains, AccountInfo config, ILogger<OwnerChat> logger)
+    public OwnerChat(MovementController movement, ResupplyController resupply, SellController sell, BrainBank brains, LootBagStore lootBags, AccountInfo config, ILogger<OwnerChat> logger)
     {
         _movement = movement;
         _resupply = resupply;
         _sell = sell;
         _brains = brains;
+        _lootBags = lootBags;
         _config = config;
         _logger = logger;
         _commands = BuildCommands();
@@ -193,6 +196,17 @@ public sealed class OwnerChat
 
     // ── commands ──────────────────────────────────────────────────────────────────────────
 
+    /// <summary>
+    ///     Run one command exactly as an owner tell would. This is the local control API's entry
+    ///     (POST /command lands here via the update-thread drain) - same table, same replies, and
+    ///     every use logged, so an API-driven bot reads like a told bot.
+    /// </summary>
+    public void RunCommand(string text, Action<string> reply)
+    {
+        _logger.LogInformation($"API CMD: '{text}'");
+        HandleCommand(text, reply);
+    }
+
     private void HandleCommand(string? message, Action<string> reply)
     {
         if (string.IsNullOrWhiteSpace(message))
@@ -212,22 +226,98 @@ public sealed class OwnerChat
         }
     }
 
+    // LOOTBAG: the packs' bags, numbered the way `lootbag list` shows them; add/remove (de)signates
+    // by that number. Identities go into the LootBagStore - a designation follows the bag, never
+    // its name (renames are client-side).
+    private void LootBagCommand(string[] p, Action<string> reply)
+    {
+        var arg = p.Length > 1 ? p[1].ToLowerInvariant() : "list";
+        var bags = Inventory.Items?
+            .Where(i => i != null && i.Slot.Type == IdentityType.Inventory && i.UniqueIdentity.Type == IdentityType.Container)
+            .OrderBy(i => i.Slot.Instance)
+            .ToList() ?? new List<Item>();
+
+        if (arg == "add" || arg == "remove")
+        {
+            if (bags.Count == 0)
+            {
+                reply("No bags in the packs.");
+                return;
+            }
+
+            if (p.Length < 3 || !int.TryParse(p[2], out var n) || n < 1 || n > bags.Count)
+            {
+                reply($"Usage: lootbag {arg} <1-{bags.Count}> ('lootbag list' shows the numbers).");
+                return;
+            }
+
+            var bag = bags[n - 1];
+            if (arg == "add")
+            {
+                _lootBags.Designate(bag.UniqueIdentity, bag.Id, bag.Name);
+                reply($"Loot bag: '{bag.Name}' (#{n} in the packs) designated - loot goes there.");
+            }
+            else
+            {
+                reply(_lootBags.Undesignate(bag.UniqueIdentity)
+                    ? $"Loot bag: '{bag.Name}' (#{n} in the packs) undesignated."
+                    : $"'{bag.Name}' (#{n} in the packs) was not designated.");
+            }
+
+            return;
+        }
+
+        // LIST (the default): one reply per bag, capped so a full packs cannot spam thirty tells.
+        var designated = 0;
+        var lines = 0;
+        for (var i = 0; i < bags.Count; i++)
+        {
+            var b = bags[i];
+            var isLoot = _lootBags.IsLootBag(b.UniqueIdentity);
+            if (isLoot)
+            {
+                designated++;
+            }
+
+            if (lines >= 10)
+            {
+                continue; // counted, not told
+            }
+
+            var ct = Inventory.Containers?.FirstOrDefault(c => c.Identity == b.UniqueIdentity);
+            var contents = ct == null || ct.Items.Count == 0 ? "not opened yet" : $"{ct.Items.Count} item(s), {ct.NumFreeSlots} free";
+            reply($"#{i + 1}: {(string.IsNullOrEmpty(b.Name) ? "backpack" : b.Name)} - {contents}{(isLoot ? " - DESIGNATED" : "")}");
+            lines++;
+        }
+
+        var orphans = _lootBags.Bags.Count(x => bags.All(b => b.UniqueIdentity != x.Key));
+        var rest = bags.Count - lines;
+        reply($"{designated} of {bags.Count} bag(s) designated" +
+              (rest > 0 ? $" (+{rest} more, all in the log)" : "") +
+              (orphans > 0 ? $", {orphans} designated bag(s) not in the packs right now" : "") + ".");
+    }
+
     private Dictionary<string, Action<Action<string>, string[]>> BuildCommands()
     {
         var t = new Dictionary<string, Action<Action<string>, string[]>>();
 
         t["help"] = (reply, p) =>
         {
-            reply("Commands: follow | stay | pos | status | goto x [y] z | goto x z [pf] | come | travel pf | travel x z [pf] | resupply [stop|status|forget|machines] | sell [stop|status] | brain | stop | sit | stand | navdata | help." +
+            reply("Commands: follow | stay | pos | status | goto x [y] z | goto x z [pf] | come | travel pf | travel x z [pf] | resupply [stop|status|forget|machines] | sell [stop|status] | lootbag [list|add N|remove N] | brain | stop | sit | stand | navdata | help." +
                   " follow stacks me on you and mirrors your movement; goto/come walk at priority Travel and hand me back to follow on arrival;" +
                   " travel crosses playfields by zone lines, doors, whompas and pads (id or name); resupply shops for stims and rechargers by my own skills;" +
                   " sell sells the bag contents to a shop terminal (NODROP and main inventory untouched);" +
+                  " lootbag lists the bags and designates/undesignates loot bags by their number;" +
                   " brain names the combat/selfbuffing/externalbuffing brains loaded for this character and whether each is dormant.");
         };
 
         // BRAINS: which per-profession brains this character loaded - the verification command
         // for the brain selection at logon (BrainBank.EnsureSelected).
         t["brain"] = (reply, p) => { reply(_brains.Describe()); };
+
+        // LOOTBAGS: the bags of the packs, numbered; add/remove (de)signates by number. The
+        // designation lives in the LootBagStore (per-character JSON); loot logic consumes it later.
+        t["lootbag"] = (reply, p) => { LootBagCommand(p, reply); };
 
         // FOLLOW (AOBuddy10's stack/mirror tier): once on, the body's idle state is the owner - run
         // to him, stack on his spot, and replay his movement packets as ours. Any goal preempts it;

@@ -47,4 +47,8 @@ public class AccountInfo
     // stim's heal capacity no longer covers the missing health.
     public int HealNanoCombatPct = 50; // in combat: stim when nano falls under this % of max
     public int HealNanoOutOfCombatPct = 70; // out of combat: recharger when nano is under this % (more than 30% missing)
+
+    // Local control API (BotApi): /status /nav /inventory /log and POST /command on 127.0.0.1 only -
+    // the monitor (tools/AOBuddyMonitor), the MCP (tools/aobuddy-mcp) and run-bot.ps1 talk to it. 0 = off.
+    public int BotApiPort = 5591;
 }
