@@ -11,6 +11,7 @@
 
 using System.Reflection;
 using System.Security;
+using AOBuddy20.Brains;
 using AOBuddy20.Chat;
 using AOBuddy20.Configuration;
 using AOBuddy20.Controlling;
@@ -199,6 +200,11 @@ internal class Program
         services.AddSingleton<ResupplyController>();
         services.AddSingleton<SellController>();
         services.AddSingleton<HealController>();
+        // BRAINS (per-profession policy): the registry scans once at startup (the same reflection
+        // pass the MinLogLevel overrides above use); the bank picks this character's brains right
+        // after login, when the profession is on the wire (BrainBank.EnsureSelected from BotLoop).
+        services.AddSingleton<BrainRegistry>();
+        services.AddSingleton<BrainBank>();
         services.AddSingleton<Awareness>();
         services.AddSingleton<MovementController>();
         services.AddSingleton<BotLoop>();

@@ -21,4 +21,7 @@ public enum Tasks
     SellGoods,
     Buff,
     Heal,
+    Combat, // brains: a CombatBrain engagement is open
+    Selfbuff, // brains: a SelfbuffingBrain episode is open
+    ExternalBuff, // brains: an ExternalBuffingBrain episode is open
 }

@@ -10,6 +10,7 @@
 // ---------------------------------------------------------------------------------------
 
 using System.Globalization;
+using AOBuddy20.Brains;
 using AOBuddy20.Configuration;
 using AOBuddy20.Controlling;
 using AOBuddy20.Enums;
@@ -35,6 +36,7 @@ namespace AOBuddy20.Chat;
 public sealed class OwnerChat
 {
     private readonly AccountInfo _config;
+    private readonly BrainBank _brains;
     private readonly Dictionary<string, Action<Action<string>, string[]>> _commands;
     private readonly ILogger<OwnerChat> _logger;
     private readonly MovementController _movement;
@@ -49,11 +51,12 @@ public sealed class OwnerChat
     // so a name-only check silently drops the owner's own commands (AOBuddy10 OwnerTracker).
     private uint _tellId;
 
-    public OwnerChat(MovementController movement, ResupplyController resupply, SellController sell, AccountInfo config, ILogger<OwnerChat> logger)
+    public OwnerChat(MovementController movement, ResupplyController resupply, SellController sell, BrainBank brains, AccountInfo config, ILogger<OwnerChat> logger)
     {
         _movement = movement;
         _resupply = resupply;
         _sell = sell;
+        _brains = brains;
         _config = config;
         _logger = logger;
         _commands = BuildCommands();
@@ -215,11 +218,16 @@ public sealed class OwnerChat
 
         t["help"] = (reply, p) =>
         {
-            reply("Commands: follow | stay | pos | status | goto x [y] z | goto x z [pf] | come | travel pf | travel x z [pf] | resupply [stop|status|forget|machines] | sell [stop|status] | stop | sit | stand | navdata | help." +
+            reply("Commands: follow | stay | pos | status | goto x [y] z | goto x z [pf] | come | travel pf | travel x z [pf] | resupply [stop|status|forget|machines] | sell [stop|status] | brain | stop | sit | stand | navdata | help." +
                   " follow stacks me on you and mirrors your movement; goto/come walk at priority Travel and hand me back to follow on arrival;" +
                   " travel crosses playfields by zone lines, doors, whompas and pads (id or name); resupply shops for stims and rechargers by my own skills;" +
-                  " sell sells the bag contents to a shop terminal (NODROP and main inventory untouched).");
+                  " sell sells the bag contents to a shop terminal (NODROP and main inventory untouched);" +
+                  " brain names the combat/selfbuffing/externalbuffing brains loaded for this character and whether each is dormant.");
         };
+
+        // BRAINS: which per-profession brains this character loaded - the verification command
+        // for the brain selection at logon (BrainBank.EnsureSelected).
+        t["brain"] = (reply, p) => { reply(_brains.Describe()); };
 
         // FOLLOW (AOBuddy10's stack/mirror tier): once on, the body's idle state is the owner - run
         // to him, stack on his spot, and replay his movement packets as ours. Any goal preempts it;

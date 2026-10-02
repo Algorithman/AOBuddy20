@@ -9,6 +9,7 @@
 // Long live OmniCell and AOBuddy
 // ---------------------------------------------------------------------------------------
 
+using AOBuddy20.Brains;
 using AOBuddy20.Configuration;
 using AOBuddy20.Controlling;
 using AOBuddy20.Enums;
@@ -32,6 +33,7 @@ public sealed class BotLoop
 {
     private readonly AccountInfo _config;
     private readonly ControlArbiter _controlArbiter;
+    private readonly BrainBank _brains;
     private readonly HealController _heal;
     private readonly ILogger<BotLoop> _logger;
     private readonly MissionController _missionController;
@@ -40,13 +42,14 @@ public sealed class BotLoop
     private readonly NavController _navMemory;
     private bool _running;
 
-    public BotLoop(ControlArbiter controlArbiter, MissionController missionController, ResupplyController resupply, SellController sell, HealController heal, NavController navMemory, AccountInfo config, ILogger<BotLoop> logger)
+    public BotLoop(ControlArbiter controlArbiter, MissionController missionController, ResupplyController resupply, SellController sell, HealController heal, BrainBank brains, NavController navMemory, AccountInfo config, ILogger<BotLoop> logger)
     {
         _controlArbiter = controlArbiter;
         _missionController = missionController;
         _resupply = resupply;
         _sell = sell;
         _heal = heal;
+        _brains = brains;
         _navMemory = navMemory;
         _config = config;
         _logger = logger;
@@ -100,10 +103,16 @@ public sealed class BotLoop
                     owner != null); // not visible: close the run, a break never becomes a segment
                 _navMemory.Tick(deltaTime);
 
-                // HEAL (HealController): the stims and rechargers go in before anything else looks
-                // at its state - an in-combat episode holds the arbiter at
-                // ControlPriority.LowHealthNanoEmergency while it runs; out-of-combat top-ups are
-                // quiet (no task claim, no arbiter).
+                // BRAINS: pick this character's combat/selfbuffing/externalbuffing brains once the
+                // profession is on the wire. The DI container was built before login, so the bank
+                // resolves them here, post-login, exactly once per process (review.md #12).
+                _brains.EnsureSelected(me);
+
+                // The decision chain, in descending ControlPriority: heal (800) - the stims and
+                // rechargers go in before anything else looks at its state; combat (700) and
+                // selfbuffing (600) - the brains, log-only until their families are implemented;
+                // resupply (500); external buffing (300) - also a brain; selling (200). A brain
+                // family that is unselected or disabled answers false and the chain moves on.
                 // RESUPPLY (AOBuddy10 ResupplyController): the decision tick runs here on the update
                 // thread, the same one its packet handlers fire on. While a run is active it owns
                 // the body through a MovementController goal at ControlPriority.Resupply and holds
@@ -113,15 +122,28 @@ public sealed class BotLoop
                 {
                     CurrentTask = Tasks.Heal;
                 }
+                else if (_brains.TickCombat(me, deltaTime))
+                {
+                    CurrentTask = Tasks.Combat;
+                }
+                else if (_brains.TickSelfbuff(me, deltaTime))
+                {
+                    CurrentTask = Tasks.Selfbuff;
+                }
                 else if (_resupply.Tick(me, deltaTime))
                 {
                     CurrentTask = Tasks.Resupply;
+                }
+                else if (_brains.TickExternalBuff(me, deltaTime))
+                {
+                    CurrentTask = Tasks.ExternalBuff;
                 }
                 else if (_sell.Tick(me, deltaTime))
                 {
                     CurrentTask = Tasks.SellGoods;
                 }
-                else if (CurrentTask is Tasks.Resupply or Tasks.SellGoods or Tasks.Heal)
+                else if (CurrentTask is Tasks.Resupply or Tasks.SellGoods or Tasks.Heal
+                         or Tasks.Combat or Tasks.Selfbuff or Tasks.ExternalBuff)
                 {
                     CurrentTask = Tasks.Nothing;
                 }
