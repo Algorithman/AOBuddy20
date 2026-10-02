@@ -141,7 +141,10 @@ public sealed class MissionController : IPacketConsumer
     private readonly List<(int low, int high)> _rewardIds = new();
     private int _emptyRolls;
 
-    // Held terminal missions, from the quest log (QuestFullUpdate): the deletion list.
+    // Held terminal missions, from the quest log (QuestFullUpdate): the resume source and the
+    // deletion list. The login log carries the whole mission back - the typed Quest has identity,
+    // type code and reward items, the raw log has the door position - and the mission key in the
+    // packs names the building (AOBuddy10's resume: capture 20260923-201746).
     private readonly Dictionary<Identity, Quest> _heldQuests = new();
 
     // The raw bytes of the two packets the typed model can't answer (the zone-in carries the
@@ -227,7 +230,7 @@ public sealed class MissionController : IPacketConsumer
 
     // ---- Commands -----------------------------------------------------------
 
-    /// <summary>The 'mission' command: run, stop, status, roll, list, accept n, buybags n.</summary>
+    /// <summary>The 'mission' command: run, stop, skip, status, roll, list, accept n, buybags n.</summary>
     public void Command(string[] parts, Action<string> reply)
     {
         var sub = parts.Length > 1 ? parts[1].ToLowerInvariant() : "status";
@@ -257,6 +260,25 @@ public sealed class MissionController : IPacketConsumer
                 break;
             case "status":
                 reply("Mission: " + Describe());
+                break;
+            case "skip":
+                // AOBuddy10's 'mission run skip': the held mission is deleted and a fresh one is rolled.
+                if (_heldQuests.Count == 0)
+                {
+                    reply("No held mission to skip.");
+                    break;
+                }
+
+                if (Active)
+                {
+                    DropMission("owner skip");
+                }
+                else
+                {
+                    DeleteHeld("owner skip");
+                    reply("Held mission deleted.");
+                }
+
                 break;
             case "roll":
                 RollHere(me, reply);
@@ -294,7 +316,7 @@ public sealed class MissionController : IPacketConsumer
                 break;
             }
             default:
-                reply("Usage: mission run | stop | status | roll | list | accept n | buybags n");
+                reply("Usage: mission run | stop | skip | status | roll | list | accept n | buybags n");
                 break;
         }
     }
@@ -360,6 +382,36 @@ public sealed class MissionController : IPacketConsumer
             reply(_lootBags.Bags.Count == 0
                 ? "No loot bags designated - loot will pile up in my packs. Send 'lootbag add N' ('lootbag list' shows the numbers)."
                 : "My designated loot bag(s) are not in the packs right now - loot will pile up in the main inventory.");
+        }
+
+        // A mission taken before a restart is still in the quest log: finish it first (AOBuddy10's
+        // Start). The login log carries the whole mission back - the typed Quest has identity, type
+        // code and reward items, the raw log has the door position - and the mission key in the
+        // packs names the building.
+        var resumed = HeldMission();
+        if (resumed != null && resumed.MissionIcon != 0 && !Allowed(resumed, out var whyHeld))
+        {
+            // e.g. taken by hand and a kill person: blitz can't do it - delete it and roll fresh.
+            Tell($"The mission I still hold ({Line(resumed)}) is not one I can blitz ({whyHeld}) - deleting it.");
+            DeleteHeld("not blitzable");
+            resumed = null;
+        }
+
+        if (resumed != null)
+        {
+            _controlArbiter.TakeControl(ControlPriority.Mission);
+            TakeCurrent(resumed);
+            if (_nav != null)
+            {
+                // Logged in inside the building: the zone-in already composed the layout - finish it.
+                SetPhase(Phase.Blitz);
+                reply($"I'm inside the mission already: finishing it first ({KeysText()}).");
+                return;
+            }
+
+            StartToDoor();
+            reply($"First finishing the mission I already have: {Line(resumed)} ({KeysText()}).");
+            return;
         }
 
         // STEP 1: the terminal - the one standing here, else the saved one, else the run says no.
@@ -536,9 +588,15 @@ public sealed class MissionController : IPacketConsumer
 
             seen.Add(q.QuestId);
             var giver = q.UnknownId1;
+            // At login the terminal reads as a SimpleChar (capture 20260923-232359: C0000320 and
+            // C0010320, so the third byte is not compared) and no terminal dynel has been seen yet:
+            // the SAVED terminal's low bytes answer for it - that is how a restart sees its held
+            // mission at all.
             var mine = giver.Type == IdentityType.MissionTerminal ||
-                       (_terminal != Identity.None && giver.Type == IdentityType.SimpleChar &&
-                        (giver.Instance & 0xFFFFFF) == (_terminal.Instance & 0xFFFFFF));
+                       (giver.Type == IdentityType.SimpleChar &&
+                        ((_terminal != Identity.None && (giver.Instance & 0xFFFFFF) == (_terminal.Instance & 0xFFFFFF)) ||
+                         (_savedTerminal != null && _savedTerminal.id != 0 &&
+                          (giver.Instance & 0xFFFFFF) == ((uint)_savedTerminal.id & 0xFFFFFF))));
             if (mine)
             {
                 _heldQuests[q.QuestId] = q;
@@ -990,7 +1048,8 @@ public sealed class MissionController : IPacketConsumer
         return route == null || route.Hops.Count == 0 ? double.MaxValue : route.Hops[route.Hops.Count - 1].Cost;
     }
 
-    private void Accept(MissionInfo m, Action<string> reply)
+    // _current, its reward ids and a fresh completion flag - shared by accept and resume.
+    private void TakeCurrent(MissionInfo m)
     {
         _current = m;
         _rewardIds.Clear();
@@ -1000,6 +1059,11 @@ public sealed class MissionController : IPacketConsumer
         }
 
         _completed = false;
+    }
+
+    private void Accept(MissionInfo m, Action<string> reply)
+    {
+        TakeCurrent(m);
         Client.Send(new CreateQuestMessage { MissionId = m.MissionIdentity });
         var rewards = string.Join(", ", (m.MissionItemData ?? Array.Empty<MissionItemReward>()).Select(RewardName));
         var line = $"Accepted: {Line(m)} - rewards: {(rewards.Length == 0 ? "credits" : rewards)}.";
@@ -1859,19 +1923,26 @@ public sealed class MissionController : IPacketConsumer
 
     // ---- Mission bookkeeping ---------------------------------------------------------
 
-    // A mission that can't be finished is deleted (QuestMessage Delete, as the owner's client does
-    // it) and the loop rolls on: only the owner stops the run.
+    // The held missions are deleted as the owner's client does it: QuestMessage Delete per quest
+    // (capture 20260910-200346 client seq 54). Deleting a mission removes no mission key - the
+    // stale ones stay in the packs (AOBuddy10 learned that the hard way, 2026-09-26).
+    private void DeleteHeld(string why)
+    {
+        foreach (var id in _heldQuests.Keys.ToList())
+        {
+            Client.Send(new QuestMessage { Action = QuestAction.Delete, Mission = id });
+            _logger.LogInformation($"MISSION: deleted held mission {id} ({why}).");
+        }
+
+        _heldQuests.Clear();
+    }
+
+    // A mission that can't be finished is deleted and the loop rolls on: only the owner stops the run.
     private void DropMission(string why)
     {
         _logger.LogInformation($"MISSION: dropping the mission - {why}.");
         Tell($"Dropping the mission ({why}) - rolling another.");
-        foreach (var id in _heldQuests.Keys.ToList())
-        {
-            Client.Send(new QuestMessage { Action = QuestAction.Delete, Mission = id });
-            _logger.LogInformation($"MISSION: deleted held mission {id}.");
-        }
-
-        _heldQuests.Clear();
+        DeleteHeld(why);
         _current = null;
         _completed = false;
 
@@ -1890,6 +1961,97 @@ public sealed class MissionController : IPacketConsumer
             _goalSet = false;
             SetPhase(Phase.ToTerminal);
         }
+    }
+
+    // The held mission rebuilt from the quest log - how a restart finds its way back (AOBuddy10's
+    // resume). The typed Quest gives identity, type code and reward items; the raw log gives the
+    // door. Null when the log holds no terminal mission, or its door couldn't be read (then the
+    // run just rolls fresh and the held mission stays held).
+    private MissionInfo HeldMission()
+    {
+        var quest = _heldQuests.Count == 0 ? null : _heldQuests.Values.First();
+        if (quest?.QuestId == null || quest.QuestId == Identity.None)
+        {
+            return null;
+        }
+
+        var door = DoorFromQuestLog();
+        if (door == null)
+        {
+            _logger.LogWarning("MISSION: the quest log holds a mission but its door could not be read from the raw log.");
+            return null;
+        }
+
+        var m = new MissionInfo
+        {
+            MissionIdentity = quest.QuestId,
+            MissionIcon = quest.MissionIconId,
+            Playfield = new Identity(IdentityType.Playfield2, door.Value.pf),
+            MissionItemData = quest.MissionItemData ?? Array.Empty<MissionItemReward>(),
+            Location = door.Value.at,
+        };
+        _logger.LogInformation("MISSION: the quest log holds " + Line(m) + $" [{m.MissionIdentity}]" +
+                               (quest.MissionItemData == null || quest.MissionItemData.Length == 0
+                                   ? " (no reward items in the log entry)."
+                                   : $", rewards: {string.Join(", ", quest.MissionItemData.Select(RewardName))}."));
+        return m;
+    }
+
+    // The door positions in the raw quest log: each held mission's destination sits in it as an
+    // Identity(Playfield2, pf) followed 8 bytes later by the x/y/z floats (AOBuddy10's FromQuestLog,
+    // checked on capture 20260923-201746). First hit wins - a character holds one terminal mission.
+    private (int pf, Vector3 at)? DoorFromQuestLog()
+    {
+        var b = _questRaw;
+        if (b == null)
+        {
+            return null;
+        }
+
+        for (var i = 0; i + 28 <= b.Length; i++)
+        {
+            if (b[i] != 0 || b[i + 1] != 0 || b[i + 2] != 0x9C || b[i + 3] != 0x50)
+            {
+                continue; // 0x9C50, the Playfield2 identity type
+            }
+
+            var pf = (b[i + 4] << 24) | (b[i + 5] << 16) | (b[i + 6] << 8) | b[i + 7];
+            if (pf <= 0 || pf > 20000)
+            {
+                continue;
+            }
+
+            var x = BeFloat(b, i + 16);
+            var y = BeFloat(b, i + 20);
+            var z = BeFloat(b, i + 24);
+            if (x > 0 && x < 10000 && z > 0 && z < 10000 && y > -500 && y < 3000)
+            {
+                return (pf, new Vector3(x, y, z));
+            }
+        }
+
+        return null;
+    }
+
+    private static float BeFloat(byte[] b, int i)
+    {
+        return BitConverter.ToSingle(new[] { b[i + 3], b[i + 2], b[i + 1], b[i] }, 0);
+    }
+
+    // The mission key rides in the packs from the accept on (the header: the key only rides along);
+    // its name names the building - how a restart shows what the held quest is for (AOBuddy10 MissionKeys).
+    private static List<Item> MissionKeys()
+    {
+        return Inventory.Items.Where(i => i != null && i.Slot.Type == IdentityType.Inventory &&
+                                          i.UniqueIdentity.Type == IdentityType.MissionKey).ToList();
+    }
+
+    private static string KeysText()
+    {
+        var keys = MissionKeys();
+        return keys.Count == 0
+            ? "no mission key in my packs"
+            : $"mission key '{keys[0].Name ?? keys[0].UniqueIdentity.ToString()}' in my packs";
     }
 
     // ---- The sell step (STEP 7) ---------------------------------------------------
