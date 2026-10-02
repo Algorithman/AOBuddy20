@@ -227,6 +227,9 @@ internal class Program
         // The local control API (BotApi): its JSON snapshots are rebuilt ON THE UPDATE THREAD by the
         // service; the listener only serves the cached strings and enqueues commands.
         services.AddSingleton<BotApiService>();
+        // SYSTEM LINES: the always-on record of the server's feedback (FormatFeedback/Feedback),
+        // logged whatever run is active; the mmdb-formatted text is the point.
+        services.AddSingleton<SystemFeedback>();
         services.AddSingleton<Awareness>();
         services.AddSingleton<MovementController>();
         services.AddSingleton<BotLoop>();
@@ -240,6 +243,7 @@ internal class Program
         if (router != null)
         {
             provider.GetService<Awareness>()?.RegisterPackets(router);
+            provider.GetService<SystemFeedback>()?.RegisterPackets(router);
             provider.GetService<MovementController>()?.RegisterPackets(router);
             provider.GetService<ResupplyController>()?.RegisterPackets(router);
             provider.GetService<MissionController>()?.RegisterPackets(router);

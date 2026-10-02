@@ -1,4 +1,4 @@
-﻿// --------------------------------------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------------------------------------
 // <copyright file="FormatFeedbackMessage.cs" company="SmokeLounge">
 //   Copyright © 2013 SmokeLounge.
 //   This program is free software. It comes without any warranty, to
@@ -13,7 +13,6 @@
 // --------------------------------------------------------------------------------------------------------------------
 
 using AOSharp.Common.SmokeLounge.AOtomation.Messaging;
-using AOSharp.Common.Unmanaged.Imports;
 using SmokeLounge.AOtomation.Messaging.Serialization;
 using SmokeLounge.AOtomation.Messaging.Serialization.MappingAttributes;
 
@@ -33,27 +32,20 @@ public class FormatFeedbackMessage : N3Message
 
     #endregion
 
+    // Formatted in managed code from the '~&' ext string and the mmdb templates embedded in
+    // MmdbData. The old getter called ldb.dll's RemoteFormat::ParseString, which only worked
+    // inside the game process and threw clientless.
     public string FormattedMessage
     {
         get
         {
             if (_formattedMessage == null)
             {
-                _formattedMessage = FormatMessage();
+                _formattedMessage = ExtMessageFormatter.Format(Message);
             }
 
             return _formattedMessage;
         }
-    }
-
-    private string FormatMessage()
-    {
-        var stdStr = StdString.Create();
-        RemoteFormat.ParseString(stdStr.Pointer, Message);
-        var formattedMessage = stdStr.ToString();
-        stdStr.Dispose();
-
-        return formattedMessage;
     }
 
     #region AoMember Properties
