@@ -161,6 +161,24 @@ public sealed class MovementController : IPacketConsumer
     private readonly NavGridCache _nav = new();
     private readonly Stopwatch _wetClock = Stopwatch.StartNew();
 
+    // MISSION INSTANCE nav, composed from the zone-in packet and handed in by the MissionController
+    // (SetMissionNav) - a mission playfield has no disk data, so this is the only source for its walk
+    // grid. Keyed by playfield; the cache is reset on every hand-in so a re-entry rebuilds.
+    private volatile AOBuddyNav _missionNav;
+    private volatile int _missionNavPf = -1;
+
+    /// <summary>
+    ///     A mission instance was entered: here is its composed nav (rooms, walls, doorways, exit).
+    ///     Update thread (the zone-in compose); the walk thread picks it up on its next Request.
+    /// </summary>
+    public void SetMissionNav(int playfieldId, AOBuddyNav nav)
+    {
+        _missionNav = nav;
+        _missionNavPf = playfieldId;
+        _nav.Reset();
+        _logger.LogInformation($"Movement: mission nav for pf {playfieldId} handed in ({nav?.Name ?? "null"}).");
+    }
+
     // How far the server's floor sits above our data here (AOBuddy10: Rome Park walked y 16 over ground
     // the data puts at 13.6; with corrections ignored the bot sank back each step, log 2026-09-24 01:30).
     // _wetY: the server's own Y while in water, wet truth for 3 s (AOBuddy10 OverlandController).
@@ -808,8 +826,10 @@ public sealed class MovementController : IPacketConsumer
         _driftHeld = false;
 
         // The playfield's nav data, built off every loop thread (Lush Fields took 6.3 s, log 2026-09-24):
-        // while it loads there is no honest Y, so hold rather than walk blind.
-        if (!_nav.Request(snap.Playfield, BaseDir, s => _logger.LogInformation(s), "MOVE"))
+        // while it loads there is no honest Y, so hold rather than walk blind. A mission instance's
+        // data comes composed from the MissionController, not from disk.
+        if (!_nav.Request(snap.Playfield, BaseDir, s => _logger.LogInformation(s), "MOVE",
+                _missionNavPf == snap.Playfield ? _missionNav : null))
         {
             _movement.Hold(me, SendIntervalMs);
             return;

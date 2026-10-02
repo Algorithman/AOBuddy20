@@ -41,6 +41,7 @@ public sealed class OwnerChat
     private readonly Dictionary<string, Action<Action<string>, string[]>> _commands;
     private readonly ILogger<OwnerChat> _logger;
     private readonly LootBagStore _lootBags;
+    private readonly MissionController _mission;
     private readonly MovementController _movement;
     private readonly ResupplyController _resupply;
     private readonly SellController _sell;
@@ -53,11 +54,13 @@ public sealed class OwnerChat
     // so a name-only check silently drops the owner's own commands (AOBuddy10 OwnerTracker).
     private uint _tellId;
 
-    public OwnerChat(MovementController movement, ResupplyController resupply, SellController sell, BrainBank brains, LootBagStore lootBags, AccountInfo config, ILogger<OwnerChat> logger)
+    public OwnerChat(MovementController movement, ResupplyController resupply, SellController sell,
+        MissionController mission, BrainBank brains, LootBagStore lootBags, AccountInfo config, ILogger<OwnerChat> logger)
     {
         _movement = movement;
         _resupply = resupply;
         _sell = sell;
+        _mission = mission;
         _brains = brains;
         _lootBags = lootBags;
         _config = config;
@@ -124,6 +127,7 @@ public sealed class OwnerChat
         _logger.LogInformation($"CMD from {msg.SenderName}: '{msg.Message}'");
         _resupply.SetTellId(msg.SenderId); // async replies (buys, credit nags) answer this id
         _sell.SetTellId(msg.SenderId); // so do the selling reports
+        _mission.SetTellId(msg.SenderId); // and the mission run's reports
         try
         {
             HandleCommand(msg.Message, text => Client.SendPrivateMessage(msg.SenderId, text));
@@ -285,7 +289,9 @@ public sealed class OwnerChat
             }
 
             var ct = Inventory.Containers?.FirstOrDefault(c => c.Identity == b.UniqueIdentity);
-            var contents = ct == null || ct.Items.Count == 0 ? "not opened yet" : $"{ct.Items.Count} item(s), {ct.NumFreeSlots} free";
+            var contents = ct is not { IsOpen: true } ? "not opened yet"
+                : ct.Items.Count == 0 ? $"empty, {ct.NumFreeSlots} free"
+                : $"{ct.Items.Count} item(s), {ct.NumFreeSlots} free";
             reply($"#{i + 1}: {(string.IsNullOrEmpty(b.Name) ? "backpack" : b.Name)} - {contents}{(isLoot ? " - DESIGNATED" : "")}");
             lines++;
         }
@@ -303,11 +309,12 @@ public sealed class OwnerChat
 
         t["help"] = (reply, p) =>
         {
-            reply("Commands: follow | stay | pos | status | goto x [y] z | goto x z [pf] | come | travel pf | travel x z [pf] | resupply [stop|status|forget|machines] | sell [stop|status] | lootbag [list|add N|remove N] | brain | stop | sit | stand | navdata | help." +
+            reply("Commands: follow | stay | pos | status | goto x [y] z | goto x z [pf] | come | travel pf | travel x z [pf] | resupply [stop|status|forget|machines|bags n] | sell [stop|status] | lootbag [list|add N|remove N] | mission [run|stop|status|roll|list|accept n|buybags n] | brain | stop | sit | stand | navdata | help." +
                   " follow stacks me on you and mirrors your movement; goto/come walk at priority Travel and hand me back to follow on arrival;" +
-                  " travel crosses playfields by zone lines, doors, whompas and pads (id or name); resupply shops for stims and rechargers by my own skills;" +
+                  " travel crosses playfields by zone lines, doors, whompas and pads (id or name); resupply shops for stims and rechargers by my own skills (bags n buys bags);" +
                   " sell sells the bag contents to a shop terminal (NODROP and main inventory untouched);" +
                   " lootbag lists the bags and designates/undesignates loot bags by their number;" +
+                  " mission runs the blitz loop: roll at a mission terminal, take find-item/find-person missions, select the target, bag the reward, walk out, repeat (buybags n buys bags first);" +
                   " brain names the combat/selfbuffing/externalbuffing brains loaded for this character and whether each is dormant.");
         };
 
@@ -437,14 +444,19 @@ public sealed class OwnerChat
         t["stop"] = (reply, p) =>
         {
             _resupply.Stop("owner stop"); // stop means stop: an open shop run ends with everything else
+            _mission.Stop("owner stop"); // so does a mission run
             _movement.SetFollow(false); // stop means stop: follow must not grab the body back (owner, 2026-10-01)
             _movement.ClearAllGoals();
             reply("Stopped - follow off, no goals. Standing down.");
         };
 
         // RESUPPLY (AOBuddy10's command, moved verbatim): bare 'resupply' shops for stims and
-        // rechargers; stop/status/forget/machines manage the run and its terminal memory.
+        // rechargers; stop/status/forget/machines/bags manage the run and its terminal memory.
         t["resupply"] = (reply, p) => { _resupply.Command(p, reply); };
+
+        // MISSION (the blitz run): 'mission run' starts the loop, 'mission stop' ends it;
+        // roll/list/accept are the terminal's by-hand commands, buybags goes shopping for bags.
+        t["mission"] = (reply, p) => { _mission.Command(p, reply); };
 
         // SELL: sell the bag contents to a shop terminal. NODROP items and the bags themselves stay;
         // the main inventory is never sold - bag items are staged through it one batch at a time.

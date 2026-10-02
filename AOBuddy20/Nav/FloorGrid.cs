@@ -135,7 +135,41 @@ public sealed class FloorGrid : IWalkGrid
 
     public static FloorGrid Build(string pluginDir, int pf, AOBuddyNav nav, Action<string> log)
     {
-        if (nav?.Collision == null || nav.Ground != null)
+        if (nav == null || nav.Ground != null)
+        {
+            return null;
+        }
+
+        // MISSION INSTANCE (a mission is composed from its zone-in packet - NavData.ComposeMission):
+        // no disk files, no collision.bin. Floors come from the placed rooms' tiles, walls from the
+        // pool's walls.bin carried alongside the room placement (nav.Walls), and the passages through
+        // the door leaves are the mission's own doorway list. Nothing is cached to disk (GridCache) -
+        // instanced, tiny, built per mission.
+        if (nav.Layout != null)
+        {
+            var mgrid = BoundsFromRooms(nav.Dungeon, pf, out var mx0, out var mz0, out var mw, out var mh);
+            if (mgrid == null)
+            {
+                log?.Invoke($"FLOORGRID: mission pf {pf} has no rooms to walk");
+                return null;
+            }
+
+            var msw = System.Diagnostics.Stopwatch.StartNew();
+            mgrid.StampRoomFloors(nav.Dungeon);
+            mgrid.StampDoorways(nav.MissionDoorways);
+            if (nav.Walls != null && nav.Walls.Length >= 9)
+            {
+                mgrid.StampWalls(NavCollision.FromTriangles(nav.Walls));
+            }
+
+            mgrid.StampHeadroom();
+            log?.Invoke($"FLOORGRID: mission grid for pf {pf} ({nav.Name}): {mw}x{mh} cells of {Cell} m, " +
+                        $"{mgrid._floors.Count} with floor, {mgrid._blocked.Count} blocked, " +
+                        $"{mgrid._doorways.Count} doorway cells kept open, {msw.ElapsedMilliseconds} ms");
+            return mgrid;
+        }
+
+        if (nav.Collision == null)
         {
             return null;
         }
@@ -184,6 +218,49 @@ public sealed class FloorGrid : IWalkGrid
         grid.StampHeadroom();
         log?.Invoke($"FLOORGRID: floor grid for pf {pf}: {w}x{h} cells of {Cell} m, {grid._floors.Count} with floor, {grid._blocked.Count} floor cells blocked, walls {(walls ? "yes" : "NONE")} ({grid._doorways.Count} doorway cells kept open), {sw.ElapsedMilliseconds} ms");
         return grid;
+    }
+
+    // A mission grid's bounds, from the placed rooms alone (there is no collision.bin to measure):
+    // each room's tile area spans at most (rect size x cell) in both axes about its Pos, whichever way
+    // it is turned, so the generous box around that covers every floor cell. Null when there is nothing.
+    private static FloorGrid BoundsFromRooms(NavDungeon d, int pf, out int x0, out int z0, out int w, out int h)
+    {
+        x0 = z0 = w = h = 0;
+        if (d?.Rooms == null || d.Rooms.Count == 0)
+        {
+            return null;
+        }
+
+        float minX = float.MaxValue, minZ = float.MaxValue, maxX = float.MinValue, maxZ = float.MinValue;
+        foreach (var rm in d.Rooms)
+        {
+            if (rm?.Rect == null || rm.Pos == null)
+            {
+                continue;
+            }
+
+            float ex = (rm.Rect[2] - rm.Rect[0] + 1) * d.Cell, ez = (rm.Rect[3] - rm.Rect[1] + 1) * d.Cell;
+            minX = Math.Min(minX, rm.Pos[0] - ex);
+            maxX = Math.Max(maxX, rm.Pos[0] + ex);
+            minZ = Math.Min(minZ, rm.Pos[2] - ez);
+            maxZ = Math.Max(maxZ, rm.Pos[2] + ez);
+        }
+
+        if (minX > maxX)
+        {
+            return null;
+        }
+
+        x0 = (int)Math.Floor(minX / Cell) - 2;
+        z0 = (int)Math.Floor(minZ / Cell) - 2;
+        w = (int)Math.Ceiling(maxX / Cell) + 2 - x0;
+        h = (int)Math.Ceiling(maxZ / Cell) + 2 - z0;
+        if ((long)w * h > 16_000_000)
+        {
+            return null;
+        }
+
+        return new FloorGrid(pf, x0, z0, w, h);
     }
 
     private void StampFloors(NavCollision col)

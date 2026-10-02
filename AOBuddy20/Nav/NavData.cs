@@ -37,6 +37,9 @@ public sealed class AOBuddyNav
     public readonly NavDungeon Dungeon; // dungeon only
     public readonly NavCollision Collision; // whenever the client has surfaces for the zone
     public MissionLayout Layout; // a mission instance only: the zone-in placement it was composed from
+    public List<Doorway> MissionDoorways = new List<Doorway>(); // a mission instance only: every placed
+    // room's doorways to neighbours, world coordinates - the walk grid keeps these cells open (the pool
+    // walls.bin stamps the door leaves solid, and nothing else in the data says a doorway is a passage)
 
     private AOBuddyNav(int pf, string kind, string name, NavGround g, NavDungeon d, NavCollision c)
     {
@@ -590,6 +593,7 @@ public sealed class AOBuddyNav
 
         var nav = new AOBuddyNav(m.Instance, "mission", d.Name, null, d, null) { Layout = m, Walls = PlaceWalls(pluginDir, m.TemplatePlayfield, pool, d) };
         var doors = PlaceDoors(pool, d);
+        nav.MissionDoorways = doors.SelectMany(list => list).ToList();
         DoorCheck = CheckDoorways(d, doors);
         nav.Exit = FindExit(d, doors);
         return nav;
@@ -1382,6 +1386,23 @@ public sealed class NavCollision
     public int Triangles;
 
     private static long Key(int a, int c) => ((long)a << 32) ^ (uint)c;
+
+    /// <summary>
+    ///     A collision set straight from world-space triangle data - a mission instance's composed
+    ///     walls (nav.Walls, 9 floats per triangle, exactly the walls.bin layout). One chunk, no file.
+    /// </summary>
+    public static NavCollision FromTriangles(float[] verts)
+    {
+        var nc = new NavCollision();
+        if (verts != null && verts.Length >= 9)
+        {
+            nc.Chunks.Add(new Chunk { Instance = 0, Verts = verts });
+            nc.Triangles = verts.Length / 9;
+            nc.Index();
+        }
+
+        return nc;
+    }
 
     public static NavCollision Read(string path)
     {

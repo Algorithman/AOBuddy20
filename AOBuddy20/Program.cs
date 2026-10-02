@@ -207,6 +207,10 @@ internal class Program
     {
         services.AddSingleton<PacketRouter>();
         services.AddSingleton<ControlArbiter>();
+        // MISSION (the blitz run): roll/accept at a mission terminal, walk in over the composed
+        // building nav, select the target, bag the reward, walk out, loop. Owns the body at
+        // ControlPriority.Mission through MovementController goals; its raw packet tap is wired in
+        // the constructor.
         services.AddSingleton<MissionController>();
         services.AddSingleton<ResupplyController>();
         services.AddSingleton<SellController>();
@@ -238,7 +242,7 @@ internal class Program
             provider.GetService<Awareness>()?.RegisterPackets(router);
             provider.GetService<MovementController>()?.RegisterPackets(router);
             provider.GetService<ResupplyController>()?.RegisterPackets(router);
-            // MissionController: not wired yet - its handlers are still stubs (owner, 2026-10-01).
+            provider.GetService<MissionController>()?.RegisterPackets(router);
         }
     }
 

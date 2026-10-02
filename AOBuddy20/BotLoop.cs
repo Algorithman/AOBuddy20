@@ -14,6 +14,7 @@ using AOBuddy20.Configuration;
 using AOBuddy20.Controlling;
 using AOBuddy20.Enums;
 using AOBuddy20.Nav;
+using AOSharp.Common.GameData;
 using AOBuddy20.PacketConsumers;
 using AOBuddy20.Utils;
 using AOSharp.Clientless;
@@ -118,18 +119,22 @@ public sealed class BotLoop
                 // The decision chain, in descending ControlPriority: heal (800) - the stims and
                 // rechargers go in before anything else looks at its state; combat (700) and
                 // selfbuffing (600) - the brains, log-only until their families are implemented;
-                // resupply (500); external buffing (300) - also a brain; selling (200). A brain
-                // family that is unselected or disabled answers false and the chain moves on.
+                // resupply (500); MISSION (400) - the blitz run, whose Tick answers false while it
+                // waits on the sell step so the chain falls through; external buffing (300) - also
+                // a brain; selling (200). A brain family that is unselected or disabled answers
+                // false and the chain moves on. Combat is skipped while the mission run is inside a
+                // building - blitz means fight nothing there (the heal keeps working).
                 // RESUPPLY (AOBuddy10 ResupplyController): the decision tick runs here on the update
                 // thread, the same one its packet handlers fire on. While a run is active it owns
                 // the body through a MovementController goal at ControlPriority.Resupply and holds
                 // the arbiter at that priority; idle, it only answers the owner's trade. SELLING
-                // (SellController) runs the same way one priority down.
+                // (SellController) runs the same way one priority down, and MISSION the same way
+                // at its own.
                 if (_heal.Tick(me, deltaTime))
                 {
                     CurrentTask = Tasks.Heal;
                 }
-                else if (_brains.TickCombat(me, deltaTime))
+                else if (!_missionController.SuppressCombat && _brains.TickCombat(me, deltaTime))
                 {
                     CurrentTask = Tasks.Combat;
                 }
@@ -141,6 +146,10 @@ public sealed class BotLoop
                 {
                     CurrentTask = Tasks.Resupply;
                 }
+                else if (_missionController.Tick(me, deltaTime))
+                {
+                    CurrentTask = Tasks.Mission;
+                }
                 else if (_brains.TickExternalBuff(me, deltaTime))
                 {
                     CurrentTask = Tasks.ExternalBuff;
@@ -150,7 +159,7 @@ public sealed class BotLoop
                     CurrentTask = Tasks.SellGoods;
                 }
                 else if (CurrentTask is Tasks.Resupply or Tasks.SellGoods or Tasks.Heal
-                         or Tasks.Combat or Tasks.Selfbuff or Tasks.ExternalBuff)
+                         or Tasks.Combat or Tasks.Selfbuff or Tasks.ExternalBuff or Tasks.Mission)
                 {
                     CurrentTask = Tasks.Nothing;
                 }

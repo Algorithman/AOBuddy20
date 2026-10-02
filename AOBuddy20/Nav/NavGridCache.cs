@@ -72,6 +72,16 @@ public sealed class NavGridCache
     /// <summary>tag prefixes the failure log line so it reads as the consumer that asked.</summary>
     public bool Request(int pf, string pluginDir, Action<string> log, string tag)
     {
+        return Request(pf, pluginDir, log, tag, null);
+    }
+
+    /// <summary>
+    ///     The mission-instance form: the caller (MissionController, on the zone-in) hands in the
+    ///     nav it COMPOSED from the zone-in packet. Nothing is read from disk and nothing is cached
+    ///     (GridCache) - instanced, tiny, built per mission; a re-entry composes afresh.
+    /// </summary>
+    public bool Request(int pf, string pluginDir, Action<string> log, string tag, AOBuddyNav missionNav)
+    {
         lock (_sync)
         {
             if (pf == _loadedPf)
@@ -83,9 +93,16 @@ public sealed class NavGridCache
             {
                 var dir = pluginDir;
                 var logger = log;
+                var mnav = missionNav;
                 _taskPf = pf;
                 _task = Task.Run(() =>
                 {
+                    if (mnav != null)
+                    {
+                        var mgrid = (IWalkGrid)OverlandGrid.Build(dir, pf, mnav, logger) ?? FloorGrid.Build(dir, pf, mnav, logger);
+                        return (mnav, mgrid);
+                    }
+
                     var nav = AOBuddyNav.Load(dir, pf);
                     // The finished grid first from the disk cache (GridCache); only a miss pays the
                     // 0.6-3.8 s stamping, and a fresh build is saved back for next time.
@@ -124,6 +141,23 @@ public sealed class NavGridCache
             }
 
             return true;
+        }
+    }
+
+    /// <summary>
+    ///     Drop whatever is loaded so the next Request rebuilds from scratch - the mission
+    ///     controller hands in a freshly composed instance for a playfield whose id may have been
+    ///     seen before, and a stale grid behind it must not survive.
+    /// </summary>
+    public void Reset()
+    {
+        lock (_sync)
+        {
+            _task = null;
+            _taskPf = -1;
+            _loadedPf = -1;
+            Nav = null;
+            Grid = null;
         }
     }
 }

@@ -500,10 +500,11 @@ public sealed class SellController
 
     // ---- bags and vendors ------------------------------------------------------
 
-    // Open only the bags whose contents the SDK doesn't have yet. Container.Items is the session
-    // cache: once delivered (opened, or a server content dump) it stays for the whole session and
-    // survives the login inventory rebuild; a relog starts empty. An empty bag reads as unknown
-    // and gets opened once - harmless.
+    // Open only the bags whose contents the SDK doesn't have yet. The marker is the container's
+    // Handle (IsOpen): the login read-through or any earlier open answers with one, and an OPENED
+    // bag that is empty is known-empty - only the Handle-0 shell login plants needs the open.
+    // Container.Items is the session cache: once delivered it stays for the whole session and
+    // survives the login inventory rebuild; a relog starts empty.
     private void OpenUnknownBags(LocalPlayer me)
     {
         foreach (var b in Inventory.Items.Where(i =>
@@ -511,9 +512,9 @@ public sealed class SellController
                      i.UniqueIdentity.Type == IdentityType.Container))
         {
             var ct = Inventory.Containers.FirstOrDefault(c => c.Identity == b.UniqueIdentity);
-            if (ct != null && ct.Items.Count > 0)
+            if (ct is { IsOpen: true })
             {
-                continue; // contents already cached
+                continue; // contents already delivered (or known-empty)
             }
 
             GameCommands.OpenContainer(me, b.Slot);

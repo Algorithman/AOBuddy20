@@ -45,7 +45,7 @@ public sealed class BotApiService
     // The read-through starts this long after the inventory model first shows items (let the
     // login dump land), and opens at most one bag per this many seconds (each container update
     // needs room on the wire).
-    private const double BagReadDelay = 5.0;
+    private const double BagReadDelay = 2.0;
     private const double BagOpenInterval = 1.5;
 
     private readonly BotApi _botApi;
@@ -300,9 +300,11 @@ public sealed class BotApiService
             var bags = new JArray();
             foreach (var c in Inventory.Containers ?? new List<Container>())
             {
-                // KNOWN vs UNKNOWN: a bag's contents arrive only when it is OPENED (the read-through
-                // below, or the sell flow). An unopened bag's count would be a guess.
-                var known = c.Items.Count > 0;
+                // KNOWN vs UNKNOWN: a bag's contents arrive only when it is OPENED (the login
+                // read-through, or the sell flow). The marker is the container's Handle (0 = the
+                // shell login plants, no answer yet) - NOT the item count: an OPENED bag that is
+                // empty is known-empty (0 items, all free), not unknown.
+                var known = c.IsOpen;
                 var n = numbered.FindIndex(b => b.UniqueIdentity == c.Identity) + 1;
                 var bag = new JObject
                 {
@@ -385,9 +387,9 @@ public sealed class BotApiService
             }
 
             var ct = Inventory.Containers?.FirstOrDefault(c => c.Identity == b.UniqueIdentity);
-            if (ct != null && ct.Items.Count > 0)
+            if (ct is { IsOpen: true })
             {
-                continue; // contents already cached
+                continue; // contents delivered (or known-empty): the open's Handle marks them read
             }
 
             GameCommands.OpenContainer(me, b.Slot);

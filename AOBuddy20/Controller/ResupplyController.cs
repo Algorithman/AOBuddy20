@@ -67,7 +67,7 @@ public sealed class ResupplyController : IPacketConsumer
 {
     private enum Phase { Idle, Approach, Opening, Adding, Settling, WaitMoney, Transit }
 
-    private enum Supply { Stim, Recharger }
+    private enum Supply { Stim, Recharger, Container }
 
     private sealed class Offer
     {
@@ -159,6 +159,10 @@ public sealed class ResupplyController : IPacketConsumer
     private bool _waitEstimated; // the price is Value-based, not one we've paid
     private double _nagAccum;
 
+    // A CONTAINER run ('resupply bags n' / the mission run's 'buybags'): buy n more bags than we
+    // carry now. 0 = the run is about stims/rechargers only.
+    private int _containerBuy;
+
     // The owner handing us credits in a player trade. Our answer to his accept, wire-proven:
     // Accept(owner) then Confirm(owner), each naming the owner with p34 empty (as the retail client
     // sends them). One Confirm closes it; a second opens a second confirm window.
@@ -192,6 +196,24 @@ public sealed class ResupplyController : IPacketConsumer
     public bool NeedsResupply()
     {
         return Have(Supply.Stim) <= _config.LowStimCount || Have(Supply.Recharger) <= _config.LowRechargerCount;
+    }
+
+    // A container run prefers terminals whose name says containers/backpacks over the supply keywords.
+    private bool NameSuggestsSupplies(string name)
+    {
+        if (string.IsNullOrEmpty(name))
+        {
+            return false;
+        }
+
+        if (_containerBuy > 0)
+        {
+            return name.IndexOf("Container", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                   name.IndexOf("Backpack", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        return _config.ResupplyMachineKeywords != null &&
+               _config.ResupplyMachineKeywords.Any(k => name.IndexOf(k, StringComparison.OrdinalIgnoreCase) >= 0);
     }
 
     /// <summary>OwnerChat proves the owner's chat id once per tell; async replies (buys, nags) use it.</summary>
@@ -258,6 +280,17 @@ public sealed class ResupplyController : IPacketConsumer
 
                 break;
             }
+            case "bags":
+            {
+                if (parts.Length < 3 || !int.TryParse(parts[2], out var bags) || bags < 1 || bags > 20)
+                {
+                    reply("Usage: resupply bags <1-20>");
+                    return;
+                }
+
+                StartContainers(me, bags, reply);
+                break;
+            }
             default:
                 Start(me, reply);
                 break;
@@ -276,6 +309,7 @@ public sealed class ResupplyController : IPacketConsumer
 
         _haveAtStart.Clear();
         _bought.Clear();
+        _containerBuy = 0;
         foreach (Supply s in new[] { Supply.Stim, Supply.Recharger })
         {
             _haveAtStart[s] = Have(s);
@@ -333,6 +367,67 @@ public sealed class ResupplyController : IPacketConsumer
 
         // else PlanShopTravel already set the Transit phase; the trip walks on the
         // MovementController's travel goals
+    }
+
+    /// <summary>
+    ///     The CONTAINER run ('resupply bags n', and the mission run's 'mission buybags n'): buy n
+    ///     more bags than we carry now - the loot bags for the mission run's rewards. The same shop
+    ///     protocol as the supplies, the same one-travel rule; the bought bag is the cheapest line
+    ///     of <see cref="AccountInfo.ResupplyContainerName" /> the terminal stocks.
+    /// </summary>
+    public void StartContainers(LocalPlayer me, int n, Action<string> reply)
+    {
+        if (Active)
+        {
+            reply("Already resupplying — " + Describe());
+            return;
+        }
+
+        Mem();
+
+        _haveAtStart.Clear();
+        _bought.Clear();
+        _containerBuy = n;
+        _haveAtStart[Supply.Container] = Have(Supply.Container);
+        _bought[Supply.Container] = 0;
+
+        var candidates = BuildCandidates(me, Needs());
+        var travel = ShopTravel.Local;
+        var travelLine = "";
+        if (candidates.Count == 0)
+        {
+            travel = PlanShopTravel(out travelLine);
+            if (travel == ShopTravel.Failed)
+            {
+                reply($"Nothing in reach within {_config.ResupplySearchRadius:0}m. {travelLine}");
+                return;
+            }
+
+            if (travel == ShopTravel.Local)
+            {
+                reply($"No shop terminals within {_config.ResupplySearchRadius:0}m that could sell bags.");
+                return;
+            }
+        }
+
+        _runPf = (int)Playfield.ModelId;
+        _opens = 0;
+        _retryCount = 0;
+        me.TryGetStat(Stat.Cash, out var cash);
+        var where = candidates.Count > 0
+            ? $"{candidates.Count} terminal(s) to check"
+            : $"traveling to {Zoning.Name(_config.ResupplyShopPf)}";
+        reply($"Buying {n} bag(s): I carry {_haveAtStart[Supply.Container]}, want " +
+              $"{_haveAtStart[Supply.Container] + n}. {cash} credits, {where}.");
+        _logger.LogInformation($"RESUPPLY: container run - carry {_haveAtStart[Supply.Container]}, " +
+                               $"buy {n}, cash {cash}, {where}.");
+
+        _controlArbiter.TakeControl(ControlPriority.Resupply);
+        if (candidates.Count > 0)
+        {
+            _candidates.AddRange(candidates);
+            NextMachine(me);
+        }
     }
 
     public void Stop(string why)
@@ -731,13 +826,19 @@ public sealed class ResupplyController : IPacketConsumer
         foreach (var need in Needs())
         {
             // Fitting = the highest QL whose First Aid / Treatment requirement he meets right now.
-            var best = offers.Where(o => Is(o.Item, need) && HealItems.MeetsHealReqs(o.Item, me))
-                .OrderByDescending(o => o.Item.Ql).FirstOrDefault();
+            // Bags take no skill check: the cheapest line of the wanted name is the one to buy.
+            var fitting = need == Supply.Container
+                ? offers.Where(o => Is(o.Item, need)).OrderBy(o => o.Item.Ql)
+                : offers.Where(o => Is(o.Item, need) && HealItems.MeetsHealReqs(o.Item, me))
+                    .OrderByDescending(o => o.Item.Ql);
+            var best = fitting.FirstOrDefault();
             if (best == null)
             {
                 if (sells.Contains(need))
                 {
-                    _logger.LogInformation($"RESUPPLY: '{_machineName}' has {Plural(need)} but none I have the skill for.");
+                    _logger.LogInformation(need == Supply.Container
+                        ? $"RESUPPLY: '{_machineName}' has no '{_config.ResupplyContainerName}'."
+                        : $"RESUPPLY: '{_machineName}' has {Plural(need)} but none I have the skill for.");
                 }
 
                 continue;
@@ -897,7 +998,9 @@ public sealed class ResupplyController : IPacketConsumer
 
         if (Needs().Count == 0)
         {
-            Finish(me, $"Resupplied: {Have(Supply.Stim)} stims, {Have(Supply.Recharger)} rechargers, {cashNow} credits left.");
+            Finish(me, _containerBuy > 0
+                ? $"Bags bought: carrying {Have(Supply.Container)} now, {cashNow} credits left."
+                : $"Resupplied: {Have(Supply.Stim)} stims, {Have(Supply.Recharger)} rechargers, {cashNow} credits left.");
             return;
         }
 
@@ -1061,12 +1164,6 @@ public sealed class ResupplyController : IPacketConsumer
         _candidates.AddRange(BuildCandidates(me, Needs()));
     }
 
-    private bool NameSuggestsSupplies(string name)
-    {
-        return !string.IsNullOrEmpty(name) && _config.ResupplyMachineKeywords != null &&
-               _config.ResupplyMachineKeywords.Any(k => name.IndexOf(k, StringComparison.OrdinalIgnoreCase) >= 0);
-    }
-
     private void NextMachine(LocalPlayer me)
     {
         _stock = null;
@@ -1087,8 +1184,10 @@ public sealed class ResupplyController : IPacketConsumer
 
             Finish(me, left.Count == 0
                 ? "Resupplied."
-                : $"Couldn't find a terminal here selling {string.Join(" or ", left.Select(Plural))} I can use. " +
-                  $"Have {Have(Supply.Stim)} stims, {Have(Supply.Recharger)} rechargers.");
+                : $"Couldn't find a terminal here selling {string.Join(" or ", left.Select(Plural))} I can use." +
+                  (_containerBuy > 0
+                      ? ""
+                      : $" Have {Have(Supply.Stim)} stims, {Have(Supply.Recharger)} rechargers."));
             return;
         }
 
@@ -1179,6 +1278,7 @@ public sealed class ResupplyController : IPacketConsumer
         _transitAt = -1;
         _travelPlanned = false;
         _runPf = -1;
+        _containerBuy = 0;
     }
 
     private void SetPhase(Phase p)
@@ -1273,14 +1373,25 @@ public sealed class ResupplyController : IPacketConsumer
     private bool Is(Item it, Supply s)
     {
         return it?.Name != null &&
-               string.Equals(it.Name, s == Supply.Stim ? _config.ResupplyStimName : _config.ResupplyRechargerName,
-                   StringComparison.OrdinalIgnoreCase);
+               string.Equals(it.Name, s switch
+               {
+                   Supply.Stim => _config.ResupplyStimName,
+                   Supply.Recharger => _config.ResupplyRechargerName,
+                   _ => _config.ResupplyContainerName,
+               }, StringComparison.OrdinalIgnoreCase);
     }
 
     // How many we carry that we can use: every stack of the item (main inventory and open bags)
-    // whose First Aid / Treatment requirement we meet, by stack count.
+    // whose First Aid / Treatment requirement we meet, by stack count. Bags are counted as what
+    // they are - every container in the main inventory - whatever it is named.
     private int Have(Supply s)
     {
+        if (s == Supply.Container)
+        {
+            return Inventory.Items?.Count(i => i != null && i.Slot.Type == IdentityType.Inventory &&
+                                               i.UniqueIdentity.Type == IdentityType.Container) ?? 0;
+        }
+
         var me = DynelManager.LocalPlayer;
         var items = HealItems.AllInvItems();
         return items.Where(it => Is(it, s) && HealItems.MeetsHealReqs(it, me))
@@ -1289,6 +1400,11 @@ public sealed class ResupplyController : IPacketConsumer
 
     private int Want(Supply s)
     {
+        if (s == Supply.Container)
+        {
+            return _haveAtStart.TryGetValue(Supply.Container, out var had) ? had + _containerBuy : _containerBuy;
+        }
+
         return s == Supply.Stim ? _config.ResupplyStimTarget : _config.ResupplyRechargerTarget;
     }
 
@@ -1308,12 +1424,17 @@ public sealed class ResupplyController : IPacketConsumer
 
     private List<Supply> Needs()
     {
-        return new[] { Supply.Stim, Supply.Recharger }.Where(s => Remaining(s) > 0).ToList();
+        return new[] { Supply.Stim, Supply.Recharger, Supply.Container }.Where(s => Remaining(s) > 0).ToList();
     }
 
     private static string Plural(Supply s)
     {
-        return s == Supply.Stim ? "stims" : "rechargers";
+        return s switch
+        {
+            Supply.Stim => "stims",
+            Supply.Recharger => "rechargers",
+            _ => "bags",
+        };
     }
 
     // ---- Prices and memory ------------------------------------------------------

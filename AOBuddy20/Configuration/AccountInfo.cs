@@ -36,6 +36,8 @@ public class AccountInfo
     {
         "Medic", "Health", "Stim", "Recharg", "First Aid", "Treatment", "Pharma",
     }; // a terminal name with one of these ranks first when nothing is remembered about it
+    public string ResupplyContainerName = "Large Backpack"; // what 'resupply bags n' / 'mission buybags n'
+    // buys (exact name; AOBuddy10's owner buy, template 143832)
     public int ResupplyShopPf = 1187; // nothing in reach: travel here to shop (Neutral Supermarket
     // Advanced, the Fair Trade instance - entered over proxy terminals; in-game an instance whose
     // playfield MODEL is 1187). The way back is not resupply's: follow/mission own the body next.
@@ -47,6 +49,18 @@ public class AccountInfo
     // stim's heal capacity no longer covers the missing health.
     public int HealNanoCombatPct = 50; // in combat: stim when nano falls under this % of max
     public int HealNanoOutOfCombatPct = 70; // out of combat: recharger when nano is under this % (more than 30% missing)
+
+    // --- Mission run (blitz mode, no combat): roll at a mission terminal, take a find-item /
+    // find-person mission, walk in, select the target, pocket the reward in a loot bag, walk out.
+    public int MissionDifficulty = 6; // the terminal's difficulty slider (captures show 1/6/11)
+    public int MissionSliderGoodBad = 0; // the six sliders as WIRE values -100..+100 (0 = middle =
+    public int MissionSliderOrderChaos = 0; //   the terminal default; -100 = left end, e.g. all credits)
+    public int MissionSliderOpenHidden = 0;
+    public int MissionSliderPhysicalMystical = 0;
+    public int MissionSliderHeadonStealth = 0;
+    public int MissionSliderCreditsXp = 0;
+    public float MissionTerminalRadius = 5f; // a terminal within this of the bot is used without the saved one
+    public List<string> MissionZones = new(); // zone names or ids a mission may sit in (empty = any)
 
     // Local control API (BotApi): /status /nav /inventory /log and POST /command on 127.0.0.1 only -
     // the monitor (tools/AOBuddyMonitor), the MCP (tools/aobuddy-mcp) and run-bot.ps1 talk to it. 0 = off.
