@@ -222,10 +222,18 @@ public sealed class MovementController : IPacketConsumer
     private volatile bool _standEchoPending; // a stand-up toggle is on the wire, no 0x57 echo yet
     private volatile bool _postureGivenUp; // the stand-up budget ran out: walk assumes standing,
                                            // _seated stays true so the next command re-arms
+    // What the next 0x57 echo is for: the sit WE sent, the stand we sent, or nothing (an
+    // unsolicited echo reads as a stand - the common forced one). The heal's rest cycle hangs
+    // its "really seated" proof (SeatedConfirmed) on the sit answer; without the split, the
+    // sit's echo would clear the track and stand a seated body on paper.
+    private volatile PostureAwait _postureAwait;
+    private volatile bool _sitConfirmed; // the server echoed the sit we asked for
     private double _standSentAt = -1;
     private int _standTries;
     private double _loginSeenAt = -1; // the walk clock's first tick with a body: the login-mode timeout runs from here
     private double _driftHeldSince = -1; // the drift hold began (the seated signature reads it)
+
+    private enum PostureAwait { None, Sit, Stand }
 
     // Published by the update thread, consumed by the walk thread. One immutable snapshot per tick
     // so the walk never sees a torn combination (LocalPlayer is swapped on zone-in).
@@ -353,19 +361,7 @@ public sealed class MovementController : IPacketConsumer
     public void SitNow()
     {
         ClearAllGoals();
-        var me = DynelManager.LocalPlayer;
-        if (me == null)
-        {
-            return;
-        }
-
-        me.MovementComponent.ChangeMovement(MovementAction.SwitchToSit);
-        _seated = true;
-        _standEchoPending = false; // the sit is ours; no stand-up is in flight any more
-        _postureGivenUp = false;
-        _standTries = 0;
-        _follow.BreakMirror("sitting");
-        _logger.LogInformation("Movement: sitting (owner command); goals cleared.");
+        Sit("owner command", clearGoalsAlreadyDone: true);
     }
 
     /// <summary>The owner's stand command - the explicit way out of a sit whose echo went missing.</summary>
@@ -379,6 +375,56 @@ public sealed class MovementController : IPacketConsumer
 
         _standTries = 0;
         SendStandUp(me, "owner command");
+    }
+
+    /// <summary>The posture track believes the body standing with no stand-up in flight - the only
+    /// state a NEW sit may be requested from: a sit raced against a stand-up toggle loses one of the two.</summary>
+    public bool Standing => !_seated && !_standEchoPending;
+
+    /// <summary>The server's echo confirmed the sit WE asked for - the "really seated" proof a
+    /// sit-only item's use waits for (a send alone proves nothing; stat 173 never updates after login).</summary>
+    public bool SeatedConfirmed => _sitConfirmed;
+
+    /// <summary>THE HEAL'S SIT: sit without touching goals, so the walk this interrupts resumes on the
+    /// stand-up. Tracked end to end: the server's echo marks <see cref="SeatedConfirmed"/>, and until
+    /// then nothing may be pressed that needs the sit.</summary>
+    public void Sit(string why)
+    {
+        Sit(why, clearGoalsAlreadyDone: false);
+    }
+
+    private void Sit(string why, bool clearGoalsAlreadyDone)
+    {
+        var me = DynelManager.LocalPlayer;
+        if (me == null)
+        {
+            return;
+        }
+
+        me.MovementComponent.ChangeMovement(MovementAction.SwitchToSit);
+        _seated = true;
+        _standEchoPending = false; // the sit is ours; no stand-up is in flight any more
+        _postureGivenUp = false;
+        _postureAwait = PostureAwait.Sit;
+        _sitConfirmed = false;
+        _standTries = 0;
+        _follow.BreakMirror("sitting");
+        _logger.LogInformation($"Movement: sitting ({why}); " +
+                               (clearGoalsAlreadyDone ? "goals cleared." : "goals kept (the walk resumes on the stand-up)."));
+    }
+
+    /// <summary>Ends a rest: the echo-driven stand-up campaign. Only to be called when the posture
+    /// track believes the body seated (after our own <see cref="Sit"/>, it does).</summary>
+    public void Stand(string why)
+    {
+        var me = DynelManager.LocalPlayer;
+        if (me == null)
+        {
+            return;
+        }
+
+        _standTries = 0;
+        SendStandUp(me, why);
     }
 
     // The stand-up toggle (action 87) and the campaign around it. Sent only when the posture track
@@ -396,6 +442,8 @@ public sealed class MovementController : IPacketConsumer
         me.MovementComponent.ChangeMovement(MovementAction.LeaveSit); // the StandUp toggle (action 87)
         _standEchoPending = true;
         _postureGivenUp = false;
+        _postureAwait = PostureAwait.Stand;
+        _sitConfirmed = false;
         _standSentAt = _wetClock.Elapsed.TotalSeconds;
         _standTries++;
         _logger.LogInformation($"Movement: standing up ({why}, try {_standTries}).");
@@ -626,18 +674,34 @@ public sealed class MovementController : IPacketConsumer
     }
 
     // The server's echo of the sit/stand toggle (action 0x57, Client.cs): the only reliable
-    // "the posture change took effect" signal there is. Evidence only - the stand-up decision
-    // itself is made once from the login mode and is never re-toggled.
+    // "the posture change took effect" signal there is. Which toggle it answers is what we sent
+    // last (_postureAwait): the sit answer is the heal's SeatedConfirmed proof, the stand answer
+    // releases the seated track. Evidence only - the login stand-up decision itself is made once
+    // from the login mode and is never re-toggled.
     private void OnPostureToggled(Identity identity)
     {
         var me = DynelManager.LocalPlayer;
-        if (me != null && identity == me.Identity)
+        if (me == null || identity != me.Identity)
         {
-            _standEchoPending = false; // the toggle we were waiting for landed
-            _seated = false;
-            _postureGivenUp = false;
-            _logger.LogInformation("Movement: server confirmed the posture change (stand-up echo).");
+            return;
         }
+
+        var awaited = _postureAwait;
+        _postureAwait = PostureAwait.None;
+        _postureGivenUp = false;
+        if (awaited == PostureAwait.Sit)
+        {
+            _seated = true;
+            _sitConfirmed = true;
+            _standEchoPending = false;
+            _logger.LogInformation("Movement: server confirmed the sit.");
+            return;
+        }
+
+        _standEchoPending = false; // the toggle we were waiting for landed (or an unsolicited one)
+        _seated = false;
+        _sitConfirmed = false;
+        _logger.LogInformation("Movement: server confirmed the posture change (stand-up echo).");
     }
 
     // Runs on the SDK update thread: the only place SDK state may be read (review.md #9).

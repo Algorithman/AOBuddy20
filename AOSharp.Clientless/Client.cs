@@ -420,6 +420,20 @@ public static class Client
                                $"nanos={fullCharMsg.UploadedNanoIds?.Length ?? -1} perks={(fullCharMsg.Perks == null ? "null" : fullCharMsg.Perks.Length.ToString())} " +
                                $"pets={fullCharMsg.Pets?.Length ?? -1}");
 
+            // The posture stats the login stand-up decision reads - 173 CurrentMovementMode, 174
+            // PrevMovementMode - logged RAW from the message's four stat sections: which section
+            // carried them and with what value. The walk reads the value back through the SDK's
+            // stat store; when that disagrees with the body in the world ('sat down this time',
+            // 2026-10-02) this line pins what the packet itself said. The two small byte-keyed
+            // sections are dumped whole: eight and fourteen entries, and 173 fits a byte.
+            string Posture(GameTuple<int, int>[] s) =>
+                s?.Where(t => t.Value1 is 0xAD or 0xAE).Select(t => $"{t.Value1}={t.Value2}").DefaultIfEmpty("absent").Aggregate((a, b) => a + " " + b) ?? "null";
+            string PostureSmall<T1, T2>(GameTuple<T1, T2>[] s) =>
+                s == null ? "null" : string.Join(" ", s.Select(t => $"{t.Value1}:{t.Value2}"));
+            Logger.Information($"FULLCHAR posture: 173/174 in stats1 [{Posture(fullCharMsg.Stats1)}], " +
+                               $"stats2 [{Posture(fullCharMsg.Stats2)}], stats3 [{PostureSmall(fullCharMsg.Stats3)}], " +
+                               $"stats4 [{PostureSmall(fullCharMsg.Stats4)}]");
+
             DynelManager.LocalPlayerProxy.ApplyFullCharUpdate(fullCharMsg);
 
             // AUTHORITATIVE pet ownership: our own FullCharacter lists our pets (decoded by the corrected

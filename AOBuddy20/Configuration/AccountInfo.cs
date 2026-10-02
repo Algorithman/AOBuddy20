@@ -49,6 +49,7 @@ public class AccountInfo
     // stim's heal capacity no longer covers the missing health.
     public int HealNanoCombatPct = 50; // in combat: stim when nano falls under this % of max
     public int HealNanoOutOfCombatPct = 70; // out of combat: recharger when nano is under this % (more than 30% missing)
+    public float HealRestMaxSeconds = 60f; // the recharger rest never sits longer than this, healed or not
 
     // --- Mission run (blitz mode, no combat): roll at a mission terminal, take a find-item /
     // find-person mission, walk in, select the target, pocket the reward in a loot bag, walk out.

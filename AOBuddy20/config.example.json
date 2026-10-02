@@ -33,9 +33,10 @@
   "ResupplyContainerName": "Large Backpack",
   "ResupplyShopPf": 1187,
 
-  "_comment_heal": "HEAL: popping the carried stims (combat) / rechargers (out of combat) when health or nano falls under these % of max.",
+  "_comment_heal": "HEAL: popping the carried stims (combat) / rechargers (out of combat) when health or nano falls under these % of max. The recharger is sit-only: the bot sits, waits for the server's echo, uses it and keeps sitting while it ticks, then stands - HealRestMaxSeconds caps one rest.",
   "HealNanoCombatPct": 50,
   "HealNanoOutOfCombatPct": 70,
+  "HealRestMaxSeconds": 60,
 
   "_comment_api": "LOCAL API: GET /status /nav /inventory /log and POST /command on 127.0.0.1. 0 = off.",
   "BotApiPort": 5591
