@@ -173,6 +173,16 @@ public sealed class MovementController : IPacketConsumer
     // MISSION INSTANCE nav, composed from the zone-in packet and handed in by the MissionController
     // (SetMissionNav) - a mission playfield has no disk data, so this is the only source for its walk
     // grid. Keyed by playfield; the cache is reset on every hand-in so a re-entry rebuilds.
+    /// <summary>Drops the loaded nav/grid so the next walk tick rebuilds them - the mission
+    /// controller re-hands a CORRECTED layout after its server-door corrections moved rooms
+    /// (owner, 2026-10-03).</summary>
+    public void ResetMissionNav()
+    {
+        _missionNav = null;
+        _missionNavPf = -1;
+        _nav.Reset();
+    }
+
     private volatile AOBuddyNav _missionNav;
     private volatile int _missionNavPf = -1;
 
@@ -201,6 +211,10 @@ public sealed class MovementController : IPacketConsumer
     // 'come' ran him into a door to another playfield). Replanned when the goal changes.
     private readonly Movement.StuckWatch _stuck = new();
     private readonly HashSet<int> _stuckCells = new(); // cells we got stuck walking into, this goal
+    private readonly HashSet<int> _serverNo = new(); // cells the server REFUSED walking into (a yank), this session
+    private Vector3 _lastPin; // the last correction landing, for the pinned-storm watch
+    private double _lastPinAt = -99;
+    private int _pins;
     private List<Vector3> _route = new();
     private int _routeIdx;
     private int _routePrio = -1; // the priority the route was planned for
@@ -474,6 +488,16 @@ public sealed class MovementController : IPacketConsumer
         lock (_goallock)
         {
             return goals.TryGetValue((int)priority, out var goal) && goal.Reached;
+        }
+    }
+
+    /// <summary>Is there a goal set at this priority at all (walking or reached)? The walk can take a
+    /// goal back on a yank give-up - a goal that is GONE is the owner's or a controller's to re-issue.</summary>
+    public bool HasGoal(ControlPriority priority)
+    {
+        lock (_goallock)
+        {
+            return goals.ContainsKey((int)priority);
         }
     }
 
@@ -1222,6 +1246,7 @@ public sealed class MovementController : IPacketConsumer
         }
 
         var extra = new HashSet<int>(_stuckCells);
+        extra.UnionWith(_serverNo); // spots the server already refused us, this session
 
         // The travel leg's own line stays open: its goal IS the crossing point beyond it (a travel
         // goal never matches by accident - a manual goal in the same spot cancelled the plan).
@@ -1253,6 +1278,20 @@ public sealed class MovementController : IPacketConsumer
 
         var route = grid.FindPath(from, goalPos, extra, SnapMeters, GoalReach, out var why)
                     ?? grid.FindPath(from, goalPos, extra, SnapMeters, WideGoalReach, out _);
+        if (route == null && grid is OverlandGrid overland)
+        {
+            // The body can stand where the stamps sealed the ground under it - a mission door
+            // (no zoning exit, so no kept-open disc) or any other placed spot. Reopen a disc at
+            // where the server has us RIGHT NOW and search once more; if that still finds
+            // nothing, the failure is honest (owner, 2026-10-03: out of a mission, every route
+            // out of the entrance pocket failed "walled off" with the body at the door).
+            overland.Reopen(from, 4f);
+            _routePrio = -1; // re-plan from scratch on the next tick with the reopened disc
+            _logger.LogInformation(
+                $"Movement: no grid route to the goal ({why}) - reopened the ground I stand on; trying again.");
+            return;
+        }
+
         if (route == null)
         {
             _logger.LogInformation($"Movement: no grid route to the goal ({why}) - holding; a beeline would cross walls.");
@@ -1751,9 +1790,70 @@ public sealed class MovementController : IPacketConsumer
             _yanks++;
             _routePrio = -1;
             _stuck.Reset();
+            // Mark what the server just refused: the segment we walked into, from where it pulled
+            // us back to where it hauled us back from. This goal's replan avoids it via
+            // _stuckCells - and _serverNo keeps it across goals, or a fresh goal (a manual 'goto'
+            // after a give-up) walks straight into the same refusal again
+            // (owner, 2026-10-03 Aegean: a descent the heightfield showed but the cliff hid -
+            // three yanks, goal given up, and every retry yanked identically).
+            var grid = _nav.Grid;
+            if (grid != null)
+            {
+                var walked = me.MovementComponent.Position;
+                grid.CellsAlong(pos, walked, 1f, _stuckCells);
+                if (_serverNo.Count > 128)
+                {
+                    _serverNo.Clear();
+                }
+
+                grid.CellsAlong(pos, walked, 1f, _serverNo);
+            }
             _holdWalkUntil = _wetClock.Elapsed.TotalSeconds + YankReholdSeconds;
             _movement.Hold(me, SendIntervalMs);
             _logger.LogInformation($"Movement: the server yanked the walk {yankDist:0.0} m - holding and re-planning (yank {_yanks}/{MaxYanks}).");
+        }
+
+        // A SetPos STORM: the server re-asserting (nearly) the same spot correction after
+        // correction - the body is wedged in something the grid walked it into. The stuck watch
+        // never sees this (each pull lands by a waypoint and reads as progress), so count the
+        // pins here: eight landings within ~1.5 m and 5 s of each other are one wedge -
+        // blacklist the spot, re-plan, and count it as a yank so the goal is given up honestly
+        // (owner, 2026-10-03: pinned for minutes at (39.2,92.4) under 1-2.4 m corrections).
+        if (_movement.Moving)
+        {
+            var now = _wetClock.Elapsed.TotalSeconds;
+            var chained = _pins > 0 && Movement.Flat(pos, _lastPin) < 1.5f && now - _lastPinAt < 5;
+            _lastPin = pos;
+            _lastPinAt = now;
+            if (chained && ++_pins >= 8)
+            {
+                _pins = 0;
+                _yanks++;
+                _routePrio = -1;
+                _stuck.Reset();
+                _holdWalkUntil = now + YankReholdSeconds;
+                _movement.Hold(me, SendIntervalMs);
+                var grid = _nav.Grid;
+                if (grid != null)
+                {
+                    var a = new Vector3(pos.X - 2.5f, 0, pos.Z - 2.5f);
+                    var b = new Vector3(pos.X + 2.5f, 0, pos.Z + 2.5f);
+                    grid.CellsAlong(a, b, 2f, _stuckCells);
+                    if (_serverNo.Count > 128)
+                    {
+                        _serverNo.Clear();
+                    }
+
+                    grid.CellsAlong(a, b, 2f, _serverNo);
+                }
+
+                _logger.LogInformation(
+                    $"Movement: the server keeps pinning me at ({pos.X:0.0} {pos.Z:0.0}) - wedged; blacklisted and re-planning (yank {_yanks}/{MaxYanks}).");
+            }
+            else if (!chained)
+            {
+                _pins = 1;
+            }
         }
 
         // A correction moved us off his stream: the mirror cannot copy what the server overrode

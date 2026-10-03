@@ -75,6 +75,12 @@ public sealed class FloorGrid : IWalkGrid
             bw.Write(b);
         }
 
+        bw.Write(_noEdge.Count);
+        foreach (long e in _noEdge)
+        {
+            bw.Write(e);
+        }
+
         bw.Write(_doorways.Count);
         foreach (int d in _doorways)
         {
@@ -111,6 +117,12 @@ public sealed class FloorGrid : IWalkGrid
         for (var i = 0; i < m; i++)
         {
             g._blocked.Add(br.ReadInt64());
+        }
+
+        int ne = br.ReadInt32();
+        for (var i = 0; i < ne; i++)
+        {
+            g._noEdge.Add(br.ReadInt64());
         }
 
         int nd = br.ReadInt32();
@@ -159,13 +171,20 @@ public sealed class FloorGrid : IWalkGrid
             mgrid.StampDoorways(nav.MissionDoorways);
             if (nav.Walls != null && nav.Walls.Length >= 9)
             {
-                mgrid.StampWalls(NavCollision.FromTriangles(nav.Walls));
+                // REAL 3D (owner, 2026-10-03: "the whole geometry, not flattened stuff - rooms
+                // double/triple height with multiple ramps"): the composed triangles are the truth,
+                // BOTH files. collision.bin carries the walkable surfaces - stairs, ramps, bridges,
+                // mezzanines - and a ramp sub-cell gets its true height, not its 2 m tile's.
+                // walls.bin (steep-only, checked: 57,116 triangles and not one flat) is bucketed and
+                // only ever forbids the EDGE a wall physically crosses - no cell is poisoned
+                // wholesale, so no sealed pockets and no keep-open patches. Furniture is render
+                // data and was never exported: no version of this knows a crate is there.
+                mgrid.UseComposedGeometry(nav.Walls, nav.Surfaces);
             }
 
-            mgrid.StampHeadroom();
             log?.Invoke($"FLOORGRID: mission grid for pf {pf} ({nav.Name}): {mw}x{mh} cells of {Cell} m, " +
-                        $"{mgrid._floors.Count} with floor, {mgrid._blocked.Count} blocked, " +
-                        $"{mgrid._doorways.Count} doorway cells kept open, {msw.ElapsedMilliseconds} ms");
+                        $"{mgrid._floors.Count} with floor, {mgrid._noEdge.Count} edges walled, " +
+                        $"{mgrid._doorways.Count} doorway cells bridged, {msw.ElapsedMilliseconds} ms");
             return mgrid;
         }
 
@@ -485,6 +504,272 @@ public sealed class FloorGrid : IWalkGrid
         }
     }
 
+    // ---- REAL 3D (composed missions): levels and walls from the placed triangle soup --------------
+    //
+    // The pool's walls.bin + collision triangles are the instance's structural truth: shells, door
+    // frames, stairs, ramps, mezzanines (furniture is render data and was never exported - no
+    // version of this data knows a crate is there). Instead of stamping steep triangles onto cells
+    // (which sealed pockets and fought the doorways), every walkable-slope triangle CONTRIBUTES a
+    // floor level sampled at each 0.5 m sub-cell it passes over - a ramp cell gets its true height
+    // - and every steep triangle only ever forbids the specific EDGE it physically crosses: the
+    // body band between the two step heights, sampled along the step. Nothing is blocked
+    // wholesale, so there are no pockets to keep open and double/triple height rooms are simply
+    // several levels, each with its own honest edges.
+
+    private const float WalkSlopeNy = 0.75f; // flatter than ~41 degrees is a surface, steeper a wall
+    private const float WallBucket = 4f;
+
+    private readonly HashSet<long> _noEdge = new HashSet<long>(); // (cell*8+floor)*32 + dir*8 + floor
+    private readonly Dictionary<long, float> _wallHug = new Dictionary<long, float>(); // missions: cells within a step of a wall cost extra
+    private readonly Dictionary<long, List<float[]>> _wallTris = new Dictionary<long, List<float[]>>();
+
+    public void UseComposedGeometry(float[] walls, float[] surfaces)
+    {
+        // collision.bin first: it carries the walkable truth (54,400 flat + 1,549 ramp triangles in
+        // pool 320 alone); walls.bin is steep-only and would sample nothing. Every triangle is still
+        // classified by its own normal, so a misfiled one lands where it belongs either way.
+        Classify(surfaces);
+        Classify(walls);
+        BuildEdges();
+        BuildWallHugCost();
+    }
+
+    // Routes through the middle of the room: cells whose body band stands within a step of a
+    // wall cost extra per step, so the A* only hugs walls when the geometry leaves no choice.
+    // Missions only - the wall buckets exist only where UseComposedGeometry ran.
+    private const float WallHugPenalty = 1.5f;
+
+    private void BuildWallHugCost()
+    {
+        foreach (var kv in _floors)
+        {
+            int k = kv.Key;
+            float x = (k % _w + _x0 + 0.5f) * Cell, z = (k / _w + _z0 + 0.5f) * Cell;
+            foreach (var probe in new[] { (0f, 0f), (0.6f, 0f), (-0.6f, 0f), (0f, 0.6f), (0f, -0.6f) })
+            {
+                for (int f = 0; f < kv.Value.Length; f++)
+                {
+                    var h = kv.Value[f];
+                    if (WallHits(x + probe.Item1, z + probe.Item2, h + 0.3f, h + 1.9f))
+                    {
+                        _wallHug[(long)k * 8 + f] = WallHugPenalty;
+                    }
+                }
+            }
+        }
+    }
+
+    private void Classify(float[] v)
+    {
+        if (v == null)
+        {
+            return;
+        }
+
+        for (int o = 0; o + 8 < v.Length; o += 9)
+        {
+            float ux = v[o + 3] - v[o], uy = v[o + 4] - v[o + 1], uz = v[o + 5] - v[o + 2];
+            float wx = v[o + 6] - v[o], wy = v[o + 7] - v[o + 1], wz = v[o + 8] - v[o + 2];
+            float nx = uy * wz - uz * wy, ny = uz * wx - ux * wz, nz = ux * wy - uy * wx;
+            float len = (float)Math.Sqrt(nx * nx + ny * ny + nz * nz);
+            if (len < 1e-9f)
+            {
+                continue;
+            }
+
+            if (ny / len >= WalkSlopeNy)
+            {
+                SampleSurface(v, o);
+            }
+            else
+            {
+                BucketWall(v, o);
+            }
+        }
+    }
+
+    // The triangle is walkable ground: every sub-cell its projection covers gets a level at the
+    // triangle's own height there - that is how a ramp becomes a slope instead of one 2 m tile step.
+    private void SampleSurface(float[] v, int o)
+    {
+        float x0 = Math.Min(v[o], Math.Min(v[o + 3], v[o + 6])), x1 = Math.Max(v[o], Math.Max(v[o + 3], v[o + 6]));
+        float z0 = Math.Min(v[o + 2], Math.Min(v[o + 5], v[o + 8])), z1 = Math.Max(v[o + 2], Math.Max(v[o + 5], v[o + 8]));
+        for (float z = z0; z <= z1; z += 0.4f)
+        {
+            for (float x = x0; x <= x1; x += 0.4f)
+            {
+                if (!TriContains(v, o, x, z, out var h))
+                {
+                    continue;
+                }
+
+                int k = Key(x, z);
+                if (k >= 0)
+                {
+                    AddLevel(k, h);
+                }
+            }
+        }
+    }
+
+    private void BucketWall(float[] v, int o)
+    {
+        var tri = new float[9];
+        Array.Copy(v, o, tri, 0, 9);
+        float x0 = Math.Min(tri[0], Math.Min(tri[3], tri[6])), x1 = Math.Max(tri[0], Math.Max(tri[3], tri[6]));
+        float z0 = Math.Min(tri[2], Math.Min(tri[5], tri[8])), z1 = Math.Max(tri[2], Math.Max(tri[5], tri[8]));
+        int bx0 = (int)Math.Floor(x0 / WallBucket), bx1 = (int)Math.Floor(x1 / WallBucket);
+        int bz0 = (int)Math.Floor(z0 / WallBucket), bz1 = (int)Math.Floor(z1 / WallBucket);
+        for (int bz = bz0; bz <= bz1; bz++)
+        {
+            for (int bx = bx0; bx <= bx1; bx++)
+            {
+                long key = ((long)(bx + 4096) << 16) | (uint)(bz + 4096);
+                if (!_wallTris.TryGetValue(key, out var list))
+                {
+                    _wallTris[key] = list = new List<float[]>();
+                }
+
+                list.Add(tri);
+            }
+        }
+    }
+
+    private void AddLevel(int k, float h)
+    {
+        if (!_floors.TryGetValue(k, out var fl))
+        {
+            _floors[k] = new[] { h };
+            return;
+        }
+
+        foreach (var f in fl)
+        {
+            if (Math.Abs(f - h) <= Merge)
+            {
+                return;
+            }
+        }
+
+        if (fl.Length >= MaxFloors)
+        {
+            return;
+        }
+
+        var merged = new float[fl.Length + 1];
+        Array.Copy(fl, merged, fl.Length);
+        merged[fl.Length] = h;
+        Array.Sort(merged);
+        _floors[k] = merged;
+    }
+
+    // Judge every step the tiles and surfaces make possible, once: the body band between the two
+    // step heights, sampled along the step, against the steep triangles.
+    private void BuildEdges()
+    {
+        int[][] dirs = { new[] { 1, 0 }, new[] { -1, 0 }, new[] { 0, 1 }, new[] { 0, -1 } };
+        foreach (var kv in _floors)
+        {
+            int k = kv.Key, i = k % _w, j = k / _w;
+            for (var d = 0; d < 4; d++)
+            {
+                int ni = i + dirs[d][0], nj = j + dirs[d][1];
+                if (!In(ni, nj) || !_floors.TryGetValue(nj * _w + ni, out var nfl))
+                {
+                    continue;
+                }
+
+                int nk = nj * _w + ni;
+                for (int f = 0; f < kv.Value.Length; f++)
+                {
+                    for (int nf = 0; nf < nfl.Length; nf++)
+                    {
+                        if (Math.Abs(nfl[nf] - kv.Value[f]) > MaxStep)
+                        {
+                            continue;
+                        }
+
+                        if (!EdgeClear(i, j, kv.Value[f], ni, nj, nfl[nf]))
+                        {
+                            _noEdge.Add(((long)k * 8 + f) * 32 + d * 8 + nf);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private bool EdgeClear(int i, int j, float ha, int ni, int nj, float hb)
+    {
+        int steps = Math.Max(1, (int)Math.Ceiling(Cell / 0.25f));
+        for (var s = 0; s <= steps; s++)
+        {
+            float t = s / steps;
+            float x = ((i + 0.5f) + (ni - i) * t + _x0) * Cell;
+            float z = ((j + 0.5f) + (nj - j) * t + _z0) * Cell;
+            float h = ha + (hb - ha) * t;
+            if (WallHits(x, z, h + BodyLow, h + BodyHigh))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private bool WallHits(float x, float z, float low, float high)
+    {
+        int bx = (int)Math.Floor(x / WallBucket), bz = (int)Math.Floor(z / WallBucket);
+        for (var dz = -1; dz <= 1; dz++)
+        {
+            for (var dx = -1; dx <= 1; dx++)
+            {
+                if (!_wallTris.TryGetValue(((long)(bx + dx + 4096) << 16) | (uint)(bz + dz + 4096), out var list))
+                {
+                    continue;
+                }
+
+                foreach (var tri in list)
+                {
+                    if (TriContains(tri, 0, x, z, out var hT) && hT >= low && hT <= high)
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private static bool TriContains(float[] v, int o, float x, float z, out float h)
+    {
+        h = 0f;
+        float ax = v[o], az = v[o + 2], bx = v[o + 3], bz = v[o + 5], cx = v[o + 6], cz = v[o + 8];
+        float d = (bz - cz) * (ax - cx) + (cx - bx) * (az - cz);
+        if (Math.Abs(d) < 1e-9f)
+        {
+            return false;
+        }
+
+        float l1 = ((bz - cz) * (x - cx) + (cx - bx) * (z - cz)) / d;
+        float l2 = ((cz - az) * (x - cx) + (ax - cx) * (z - cz)) / d;
+        float l3 = 1 - l1 - l2;
+        if (l1 < -0.001f || l2 < -0.001f || l3 < -0.001f)
+        {
+            return false;
+        }
+
+        h = l1 * v[o + 1] + l2 * v[o + 4] + l3 * v[o + 7];
+        return true;
+    }
+
+    private bool EdgeBlocked(int k, int f, int di, int dj, int nf)
+    {
+        int d = dj == 0 ? (di > 0 ? 0 : 1) : (dj > 0 ? 2 : 3);
+        return _noEdge.Contains(((long)k * 8 + f) * 32 + d * 8 + nf);
+    }
+
     private void StampWalls(NavCollision walls)
     {
         foreach (var ch in walls.Chunks)
@@ -740,6 +1025,7 @@ public sealed class FloorGrid : IWalkGrid
 
             int k = (int)(cur / 8), i = k % _w, j = k / _w;
             float y = Height(cur), gc = gScore[cur];
+            int ff = (int)(cur % 8);
             for (int dj = -1; dj <= 1; dj++)
             {
                 for (int di = -1; di <= 1; di++)
@@ -756,9 +1042,20 @@ public sealed class FloorGrid : IWalkGrid
                         continue;
                     }
 
-                    if (di != 0 && dj != 0 && (FloorAt(j * _w + i + di, y, MaxStep, extra) < 0 || FloorAt((j + dj) * _w + i, y, MaxStep, extra) < 0))
+                    if (di != 0 && dj != 0)
                     {
-                        continue;
+                        // no squeezing past a corner: both orthogonal steps must exist AND be clear
+                        int kx = j * _w + i + di, kz = (j + dj) * _w + i;
+                        int fx = FloorAt(kx, y, MaxStep, extra), fz = FloorAt(kz, y, MaxStep, extra);
+                        if (fx < 0 || fz < 0 ||
+                            EdgeBlocked(k, ff, di, 0, fx) || EdgeBlocked(k, ff, 0, dj, fz))
+                        {
+                            continue;
+                        }
+                    }
+                    else if (EdgeBlocked(k, ff, di, dj, f))
+                    {
+                        continue; // a wall physically crosses this step (real 3D edge test)
                     }
 
                     long nn = (long)nk * 8 + f;
@@ -767,7 +1064,8 @@ public sealed class FloorGrid : IWalkGrid
                         continue;
                     }
 
-                    float ng = gc + (di != 0 && dj != 0 ? 1.4142f : 1f);
+                    float hug = _wallHug.Count > 0 && _wallHug.TryGetValue((long)nk * 8 + f, out var hc) ? hc : 0f;
+                    float ng = gc + (di != 0 && dj != 0 ? 1.4142f : 1f) + hug;
                     if (gScore.TryGetValue(nn, out float old) && old <= ng)
                     {
                         continue;
@@ -885,6 +1183,25 @@ public sealed class FloorGrid : IWalkGrid
             if (f < 0)
             {
                 return false;
+            }
+
+            // A clear FLOOR line is not a clear LINE: a wall can cross it while the tiles run on
+            // - the A* respected the wall (the edge it blocks), and the smoothing must too, or
+            // the walk cuts the corner the route deliberately went around (owner, 2026-10-03:
+            // "pathfinds but runs at/through walls").
+            if (_wallTris.Count > 0)
+            {
+                int cell = Idx(x, z);
+                if (!_floors.TryGetValue(cell, out var fl2) || f >= fl2.Length)
+                {
+                    return false;
+                }
+
+                float h = fl2[f];
+                if (WallHits(x, z, h + BodyLow, h + BodyHigh))
+                {
+                    return false;
+                }
             }
 
             y = _floors[Idx(x, z)][f];

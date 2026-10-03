@@ -87,15 +87,55 @@ public sealed class PacketRouter
     }
 
 
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<N3MessageType, int> _unhandledN3 = new();
+    private int _rawDoor;
+
     public void Dispatch(object? sender, AOMessage e)
     {
         // A consumer that throws must not take the SDK's own handling of the packet down with it:
         // NetworkSession calls MessageReceived BEFORE its own callbacks, and its catch-all would skip
         // them for this packet (movement, stats, dynels all freeze for one message). Guard every
         // handler call; a throw counts as "not handled".
+        if (e.Body == null && e.RawPacket is { Length: > 20 } raw)
+        {
+            // A decode failure leaves the body empty and the message invisible to every typed
+            // consumer - say so, with the N3 type straight from the wire (big-endian at 16).
+            var t = (raw[16] << 24) | (raw[17] << 16) | (raw[18] << 8) | raw[19];
+            _unhandledN3.TryAdd((N3MessageType)t, 0);
+            if (_unhandledN3[(N3MessageType)t] < 3)
+            {
+                _unhandledN3[(N3MessageType)t]++;
+                _logger.LogInformation(
+                    $"ROUTER: N3 type {t} ({(N3MessageType)t}) arrived UNDECODABLE (body empty), {raw.Length} bytes: " +
+                    Convert.ToHexString(raw, 0, Math.Min(32, raw.Length)));
+            }
+        }
+
+        // The raw truth about door updates: counted straight off the wire, whatever the typed
+        // decode does with them (owner, 2026-10-03: none were reaching the mission controller).
+        if (e.RawPacket is { Length: > 20 } rw &&
+            rw[16] == 0x36 && rw[17] == 0x5A && rw[18] == 0x50 && rw[19] == 0x71)
+        {
+            _rawDoor++;
+            if (_rawDoor <= 3 || _rawDoor % 25 == 0)
+            {
+                _logger.LogInformation(
+                    $"ROUTER: raw DoorFullUpdate #{_rawDoor}, typed body: {e.Body?.GetType().Name ?? "none"}.");
+            }
+        }
+
         if (e.Body is N3Message n3Message)
         {
-            if (_n3Handlers.TryGetValue(n3Message.N3MessageType, out var list))
+            if (!_n3Handlers.ContainsKey(n3Message.N3MessageType))
+            {
+                _unhandledN3.TryAdd(n3Message.N3MessageType, 0);
+                if (_unhandledN3[n3Message.N3MessageType] < 3)
+                {
+                    _unhandledN3[n3Message.N3MessageType]++;
+                    _logger.LogInformation($"ROUTER: no handler for N3 type {n3Message.N3MessageType} ({n3Message.GetType().Name}).");
+                }
+            }
+            else if (_n3Handlers.TryGetValue(n3Message.N3MessageType, out var list))
             {
                 foreach (var entry in list.OrderBy(x => x.canEndSequence).ThenBy(x => x.receivePriority))
                 {

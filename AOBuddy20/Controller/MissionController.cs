@@ -93,6 +93,7 @@ public sealed class MissionController : IPacketConsumer
     private const double EnterSideTimeout = 30.0; // an approach that never gets there
     private const double DoorStandTimeout = 8.0; // on the door this long without a zone: next side
     private const double DoorSettle = 0.6; // stand still before judging the door
+    private const double SearchHopTimeout = 25.0; // a room walk this long without arriving: next room
     private const int DoorSides = 8; // 45° ladder, this many sides per round
     private const int DoorRounds = 2; // and this many rounds, then the door is given up
     private const double BlitzTimeout = 1200.0; // 20 minutes inside, then the mission is dropped
@@ -112,6 +113,7 @@ public sealed class MissionController : IPacketConsumer
     private const float SearchReach = 3f; // room-centre goals
     private const float TargetReach = 2f; // the last metres to the target
     private const float ButtonReach = 1.5f;
+    private const float TerminalReach = 0.5f; // the terminal walk: 4 m approach offset + this must stay inside MissionTerminalRadius
     private const int MaxPresses = 12; // button presses per building
     private const double RideWait = 4.0; // a button ride moves us more than RideMetres, in this long
     private const float RideMetres = 10f;
@@ -153,6 +155,21 @@ public sealed class MissionController : IPacketConsumer
     // same update thread - plain fields, no locks.
     private byte[] _zoneInRaw;
     private byte[] _questRaw;
+
+    // The server's doors (DoorFullUpdate): exact world positions and the two rooms each connects
+    // (Room indexes the packet's room table, 1-based; -1 = the door to the outside - the EXIT).
+    // Everything the template decode approximates, these state outright - and they ALL land in
+    // the zone-in burst, collected by playfield from the first packet on: a guard that waited
+    // for the composed layout dropped the whole burst in the Tick's blind window (owner,
+    // 2026-10-03: AOBuddy10 had the whole playfield at the entrance - no magic, we were
+    // throwing the doors away).
+    private readonly List<(short room, short adjoining, Vector3 pos, int pf)> _serverDoors = new();
+    private readonly Dictionary<int, Vector3> _serverExitByPf = new();
+    private Vector3? _serverExit => _serverExitByPf.TryGetValue(_missionPf, out var v) ? v : null;
+    private int _doorsApplied = -1;
+    private bool _navHandedOver;
+    private double _holdAccum;
+    private double _lastDoorApply;
 
     // Inside the building.
     private int _missionPf = -1;
@@ -315,8 +332,24 @@ public sealed class MissionController : IPacketConsumer
                 _resupply.StartContainers(me, bags, reply);
                 break;
             }
+            case "probe":
+            {
+                // What the composed building says stands around a point - the wedge question
+                // ("is there a wall just east of me?") answered from the placed walls themselves.
+                var px = me.Transform.Position.X;
+                var pz = me.Transform.Position.Z;
+                var py = me.Transform.Position.Y;
+                if (parts.Length >= 4 && float.TryParse(parts[2], out var qx) && float.TryParse(parts[3], out var qz))
+                {
+                    px = qx;
+                    pz = qz;
+                }
+
+                reply(Probe(px, py, pz));
+                break;
+            }
             default:
-                reply("Usage: mission run | stop | skip | status | roll | list | accept n | buybags n");
+                reply("Usage: mission run | stop | skip | status | probe x z | roll | list | accept n | buybags n");
                 break;
         }
     }
@@ -387,12 +420,14 @@ public sealed class MissionController : IPacketConsumer
         // A mission taken before a restart is still in the quest log: finish it first (AOBuddy10's
         // Start). The login log carries the whole mission back - the typed Quest has identity, type
         // code and reward items, the raw log has the door position - and the mission key in the
-        // packs names the building.
+        // packs names the building. Only the blitz TYPE is re-checked: the mission is already
+        // accepted (and zone-checked at accept time); a held mission inside MissionZones' blind
+        // spot must not read as deletable.
         var resumed = HeldMission();
-        if (resumed != null && resumed.MissionIcon != 0 && !Allowed(resumed, out var whyHeld))
+        if (resumed != null && resumed.MissionIcon != 0 && !BlitzCan(resumed.MissionIcon))
         {
             // e.g. taken by hand and a kill person: blitz can't do it - delete it and roll fresh.
-            Tell($"The mission I still hold ({Line(resumed)}) is not one I can blitz ({whyHeld}) - deleting it.");
+            Tell($"The mission I still hold ({Line(resumed)}) is not one I can blitz - deleting it.");
             DeleteHeld("not blitzable");
             resumed = null;
         }
@@ -411,6 +446,20 @@ public sealed class MissionController : IPacketConsumer
 
             StartToDoor();
             reply($"First finishing the mission I already have: {Line(resumed)} ({KeysText()}).");
+            return;
+        }
+
+        if (_nav != null)
+        {
+            // Logged in inside a mission with nothing left to do (done, or deleted elsewhere):
+            // walk out first. NO zoning route exists FROM a mission instance pf - the terminal
+            // travel below would dead-end in "nothing usable connects them" (owner, 2026-10-03).
+            _controlArbiter.TakeControl(ControlPriority.Mission);
+            _goalSet = false;
+            _doorStage = 0;
+            _exitStands = 0;
+            SetPhase(Phase.Leaving);
+            reply("I'm inside a mission building with nothing left to do here: walking out first.");
             return;
         }
 
@@ -435,7 +484,8 @@ public sealed class MissionController : IPacketConsumer
         _controlArbiter.TakeControl(ControlPriority.Mission);
         SetPhase(Phase.ToTerminal);
         var line = _movement.PlanTravel(_savedTerminal.pf, null);
-        if (_movement.TravelTargetPf != _savedTerminal.pf)
+        if (_movement.TravelTargetPf != _savedTerminal.pf &&
+            (int)Playfield.ModelId != _savedTerminal.pf)
         {
             Stop("no route to the terminal");
             reply($"Can't travel to the saved terminal ({Zoning.Name(_savedTerminal.pf)}): {Truncate(line, 200)}");
@@ -537,6 +587,7 @@ public sealed class MissionController : IPacketConsumer
         router.Register(CharacterActionHandler, N3MessageType.CharacterAction, 0);
         router.Register(SimpleItemHandler, N3MessageType.SimpleItemFullUpdate, 0);
         router.Register(ZoneInHandler, N3MessageType.PlayfieldAnarchyF, 0); // raw bytes: the building layout
+        router.Register(DoorFullUpdateHandler, N3MessageType.DoorFullUpdate, 0); // server doors: exact
     }
 
     // The zone-in's raw bytes: NavData composes the mission building's rooms out of the
@@ -544,6 +595,26 @@ public sealed class MissionController : IPacketConsumer
     private bool ZoneInHandler(AOMessage arg)
     {
         _zoneInRaw = arg.RawPacket;
+        return false;
+    }
+
+    private bool DoorFullUpdateHandler(AOMessage arg)
+    {
+        // No _nav guard here: the doors arrive right behind the zone-in packet, before the bot
+        // loop has composed anything - that guard dropped the whole burst in the blind window.
+        // No playfield filter here either: _missionPf is -1 until the first Tick composes the
+        // zone-in, and the doors land inside that blind window. The corrector filters by pf.
+        if (arg.Body is not DoorFullUpdateMessage door)
+        {
+            return false;
+        }
+
+        _serverDoors.Add((door.Room, door.AdjoiningRoom, door.Coordinate, door.Playfield));
+        if (door.Room == -1)
+        {
+            _serverExitByPf[door.Playfield] = door.Coordinate;
+        }
+
         return false;
     }
 
@@ -707,9 +778,64 @@ public sealed class MissionController : IPacketConsumer
             OnZoneIn(me, zone);
         }
 
+        // The server doors have had their moment (the zone-in burst lands well inside 2.5 s):
+        // correct the layout with them, THEN hand the nav over and let the grid build once,
+        // from server truth instead of the slot grid.
+        // The doors arrive over the first minute (3 by +3 s, the rest as the bot moves): re-apply
+        // whenever new ones landed, at most every 3 s. Idempotent - rooms already server-exact
+        // move 0 - and the grid only rebuilds when a room actually moved.
+        // The hold below sits before _phaseTime's increment, so it needs its own clock - a
+        // _phaseTime deadline never arrives while the hold is returning (owner, 2026-10-03:
+        // the run froze in the entrance, "finishing it first" and then nothing).
+        if (_nav != null && !_navHandedOver)
+        {
+            _holdAccum += dt;
+        }
+        else
+        {
+            _holdAccum = 0;
+        }
+
+        var myDoors = _serverDoors.Where(x => x.pf == _missionPf).ToList();
+        // Past 12 s with no doors at all, hand the layout over uncorrected - walking the
+        // composed building beats freezing in the entrance (owner, 2026-10-03).
+        var doorDeadline = _serverExitByPf.ContainsKey(_missionPf) || myDoors.Count > 0 ? 2.5 : 12.0;
+        var applyDoors = _nav != null &&
+                         (!_navHandedOver
+                             ? _holdAccum > doorDeadline || myDoors.Count >= 20
+                             : myDoors.Count > _doorsApplied && _phaseTime - _lastDoorApply > 3);
+        if (applyDoors)
+        {
+            _navHandedOver = true;
+            _doorsApplied = myDoors.Count;
+            _lastDoorApply = _phaseTime;
+            var lines = AOBuddyNav.CorrectWithServerDoors(
+                AppDomain.CurrentDomain.BaseDirectory, _nav,
+                myDoors.Select(x => (x.room, x.adjoining, x.pos)).ToList(), out var movedAny);
+            foreach (var line in lines)
+            {
+                _logger.LogInformation("MISSION: " + line);
+            }
+
+            if (movedAny)
+            {
+                _movement.ResetMissionNav(); // (re)build the grid from the corrected rooms
+            }
+
+            _movement.SetMissionNav(_missionPf, _nav);
+        }
+
+        // No corrected nav handed over yet: hold the phases - walking the uncorrected layout
+        // beelines through walls. The deadline releases it: uncorrected beats frozen. Idle
+        // claims nothing (false) - the hand-over itself runs above regardless.
         if (!Active)
         {
             return false;
+        }
+
+        if (_nav != null && !_navHandedOver && _holdAccum < doorDeadline + 2.0)
+        {
+            return true;
         }
 
         _phaseTime += dt;
@@ -767,7 +893,11 @@ public sealed class MissionController : IPacketConsumer
         {
             // INTO a mission instance.
             _missionPf = (int)Playfield.ModelId;
-            _movement.SetMissionNav(_missionPf, nav);
+            _serverDoors.RemoveAll(x => x.pf != _missionPf); // other instances' doors go
+            _doorsApplied = -1;
+            _navHandedOver = false;
+            // The nav is handed over once the server's doors arrived and the layout was
+            // corrected with them (the Tick below) - the grid then builds from server truth.
             _nav = nav;
             _items.Clear();
             _searchedRooms.Clear();
@@ -845,10 +975,13 @@ public sealed class MissionController : IPacketConsumer
 
         if ((int)Playfield.ModelId == saved.pf)
         {
-            // On foot the last metres: the terminal's body keeps travel a few metres out.
+            // On foot the last metres: the terminal's body keeps travel a few metres out. The radius
+            // must keep the stand-off inside the TerminalWithin ring (owner, 2026-10-03: arrive 2 m
+            // on the 4 m approach point parked the bot up to 6 m out - past the 5 m default ring -
+            // and the run stood "arrived" until it timed out, never rolling).
             if (!_goalSet)
             {
-                _movement.SetDesiredGoal(TerminalApproach(me, saved), saved.pf, ControlPriority.Mission, 2f);
+                _movement.SetDesiredGoal(TerminalApproach(me, saved), saved.pf, ControlPriority.Mission, TerminalReach);
                 _goalSet = true;
                 _goalWhat = "walking the last metres to the terminal";
                 _goalAt = _phaseTime;
@@ -867,7 +1000,8 @@ public sealed class MissionController : IPacketConsumer
         {
             // The plan died or a manual order took the body: try once more, then say no.
             var line = _movement.PlanTravel(saved.pf, null);
-            if (_movement.TravelTargetPf != saved.pf)
+            if (_movement.TravelTargetPf != saved.pf &&
+                (int)Playfield.ModelId != saved.pf)
             {
                 Stop("no route to the terminal");
                 Tell($"Travel to the mission terminal ({Zoning.Name(saved.pf)}) didn't work - run stopped. {Truncate(line, 200)}");
@@ -1123,9 +1257,13 @@ public sealed class MissionController : IPacketConsumer
         var door = _current.Location;
         var line = _movement.PlanTravel(_current.Playfield.Instance,
             new Vector3(door.X, _movement.CurrentPosition.Y, door.Z));
-        if (_movement.TravelTargetPf != _current.Playfield.Instance)
+        if (_movement.TravelTargetPf != _current.Playfield.Instance &&
+            (int)Playfield.ModelId != _current.Playfield.Instance)
         {
-            // No route to that door: the next candidate, else the round ends here.
+            // No route to that door: the next candidate, else the round ends here. A plan that
+            // COMPLETED on the spot is no failure - already in the door's playfield, PlanTravel
+            // keeps no plan and just walks the final leg (owner, 2026-10-03: the restart resume
+            // logged in beside the door and the run stopped itself on a working walk order).
             _offered.Remove(_current);
             var next = _offered.Where(m => Allowed(m, out _)).OrderBy(TripCost).FirstOrDefault();
             if (next != null)
@@ -1161,6 +1299,16 @@ public sealed class MissionController : IPacketConsumer
             _goalSet = false;
             SetPhase(Phase.EnterDoor);
             return;
+        }
+
+        if ((int)Playfield.ModelId == _current.Playfield.Instance && flat > 12f &&
+            !_movement.HasGoal(ControlPriority.Travel))
+        {
+            // In the door's playfield with no leg to walk: the walk gave the final leg up on a
+            // yank (owner, 2026-10-03 Aegean - the run then sat here until the trip timeout).
+            // Walk the stretch again: the refused cells are blacklisted, so this try routes round.
+            _movement.SetDesiredGoal(new Vector3(door.X, me.Transform.Position.Y, door.Z),
+                (int)Playfield.ModelId, ControlPriority.Travel, 1.5f);
         }
 
         if (_movement.TravelTargetPf != _current.Playfield.Instance &&
@@ -1341,7 +1489,19 @@ public sealed class MissionController : IPacketConsumer
         }
 
         // Not in sight. Search: the server sends a floor's items on arrival, so the room walk IS
-        // the search - and a button ride is the way to another floor.
+        // the search - and a button ride is the way to another floor. The current hop owns the
+        // walk until it ends: reached, or timed out when its centre proves unreachable (next room
+        // then; the room was marked searched on setting out). Without the gate every tick picked
+        // and marked the NEXT room - one room per frame: 21 rooms burned in 0.3 s, the mission
+        // dropped before the grid had loaded or the floor's items had landed
+        // (owner, 2026-10-03: "nothing left to search" 0.4 s after the zone-in).
+        if (_goalSet && _movement.HasGoal(ControlPriority.Mission) &&
+            !_movement.IsGoalReached(ControlPriority.Mission) &&
+            _phaseTime - _goalAt < SearchHopTimeout)
+        {
+            return; // the room (or button) walk is on - FindTarget re-checks every tick anyway
+        }
+
         var hop = NextSearch(pos);
         if (!hop.pos.HasValue)
         {
@@ -1358,7 +1518,10 @@ public sealed class MissionController : IPacketConsumer
 
     private void WalkTo(Vector3 from, Vector3 to, float radius, string what)
     {
-        if (_goalSet && _goalWhat == what)
+        // The goal must still EXIST: the walk's yank give-up clears it behind our back, and a
+        // matching _goalWhat alone would then no-op every tick forever (owner, 2026-10-03: three
+        // mobs held the bot in a Subway mission, the goal was given up, and the run stood still).
+        if (_goalSet && _goalWhat == what && _movement.HasGoal(ControlPriority.Mission))
         {
             return; // already walking there
         }
@@ -1842,7 +2005,7 @@ public sealed class MissionController : IPacketConsumer
         var landing = _nav?.Layout == null
             ? me.Transform.Position
             : new Vector3(_nav.Layout.LandX, _nav.Layout.LandY, _nav.Layout.LandZ);
-        var doorPos = ex != null ? new Vector3((float)ex.X, (float)ex.Y, (float)ex.Z) : landing;
+        var doorPos = _serverExit ?? (ex != null ? new Vector3((float)ex.X, (float)ex.Y, (float)ex.Z) : landing);
         var nx = ex?.Nx ?? 0f;
         var nz = ex?.Nz ?? 0f;
 
@@ -1976,8 +2139,11 @@ public sealed class MissionController : IPacketConsumer
         }
 
         var door = DoorFromQuestLog();
-        if (door == null)
+        if (door == null && _nav == null)
         {
+            // Outside the door matters; INSIDE a mission it does not (the exit comes from the
+            // composed building) and the raw login log may not carry it at all - owner,
+            // 2026-10-03: relogged inside the Subway, the held quest then read as unresumable.
             _logger.LogWarning("MISSION: the quest log holds a mission but its door could not be read from the raw log.");
             return null;
         }
@@ -1986,9 +2152,9 @@ public sealed class MissionController : IPacketConsumer
         {
             MissionIdentity = quest.QuestId,
             MissionIcon = quest.MissionIconId,
-            Playfield = new Identity(IdentityType.Playfield2, door.Value.pf),
+            Playfield = new Identity(IdentityType.Playfield2, door?.pf ?? _missionPf),
             MissionItemData = quest.MissionItemData ?? Array.Empty<MissionItemReward>(),
-            Location = door.Value.at,
+            Location = door?.at ?? new Vector3(0, 0, 0),
         };
         _logger.LogInformation("MISSION: the quest log holds " + Line(m) + $" [{m.MissionIdentity}]" +
                                (quest.MissionItemData == null || quest.MissionItemData.Length == 0
@@ -2269,6 +2435,137 @@ public sealed class MissionController : IPacketConsumer
     private static string Truncate(string s, int max)
     {
         return s.Length <= max ? s : s[..max];
+    }
+
+    // The composed building around a point: which rooms cover it, and where the placed WALL
+    // triangles (walls.bin through PlaceBin) stand in the body band on each axis - the ground
+    // truth "is there a wall just east of me" (owner, 2026-10-03: wedged inside geometry twice).
+    private string Probe(float px, float py, float pz)
+    {
+        if (_nav?.Dungeon == null)
+        {
+            return "Not in a mission - nothing composed to probe.";
+        }
+
+        var roomsHere = new List<string>();
+        var roomsEast = new List<string>();
+        foreach (var rm in _nav.Dungeon.Rooms)
+        {
+            if (!_nav.Dungeon.CellOf(rm, px, pz, out _, out _) ||
+                double.IsNaN(_nav.Dungeon.FloorHeight(rm, px, pz)))
+            {
+                continue;
+            }
+
+            roomsHere.Add($"{rm.PoolName} f{rm.Floor}");
+        }
+
+        foreach (var rm in _nav.Dungeon.Rooms)
+        {
+            if (!_nav.Dungeon.CellOf(rm, px + 3f, pz, out _, out _) ||
+                double.IsNaN(_nav.Dungeon.FloorHeight(rm, px + 3f, pz)))
+            {
+                continue;
+            }
+
+            // what room lies ~3 m east - a doorway there should be open, a wall is a wall
+            roomsEast.Add($"{rm.PoolName}@{rm.Pos[0]:0},{rm.Pos[2]:0}");
+        }
+
+        var sb = new System.Text.StringBuilder();
+        sb.Append($"probe ({px:0.0},{pz:0.0}) y {py:0.0} - rooms here: {(roomsHere.Count == 0 ? "NONE (void between rooms)" : string.Join(", ", roomsHere))}");
+        sb.Append($"; ~3 m east: {(roomsEast.Count == 0 ? "nothing tiled" : string.Join(", ", roomsEast))}");
+
+        // Every probe leaves the full composed layout behind: rooms, doors and server doors in
+        // one file for offline comparison against ground truth (the instance itself is gone once
+        // the run leaves, and each roll builds a new one).
+        try
+        {
+            var dump = new System.Text.StringBuilder();
+            dump.AppendLine($"layout {_nav.Name} pf {_missionPf}, {_nav.Dungeon.Rooms.Count} room(s):");
+            foreach (var rm in _nav.Dungeon.Rooms)
+            {
+                dump.AppendLine(
+                    $"  room {rm.Index} {rm.PoolName} f{rm.Floor} centre ({rm.Pos[0]:0.0},{rm.Pos[2]:0.0}) y {rm.Pos[1]:0.0} rot {rm.Rot}");
+            }
+
+            dump.AppendLine($"doorways: {string.Join(" | ", _nav.MissionDoorways.Select(dw => $"({dw.X:0.0},{dw.Z:0.0}) n({dw.Nx:0.0},{dw.Nz:0.0}) f{dw.Floor}"))}");
+            dump.AppendLine($"server doors: {string.Join(" | ", _serverDoors.Select(sd => $"Room={sd.room} Adj={sd.adjoining} ({sd.pos.X:0.0},{sd.pos.Z:0.0})"))}");
+            dump.AppendLine($"server exit: {(_serverExitByPf.TryGetValue(_missionPf, out var sx) ? $"{sx.X:0.0},{sx.Z:0.0}" : "none seen")}");
+            dump.AppendLine($"target: {(TryGetTargetPos(out var tp) ? $"{tp.X:0.0},{tp.Z:0.0}" : "not seen")}");
+            File.WriteAllText(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, $"mission-layout-{_missionPf}.txt"), dump.ToString());
+        }
+        catch
+        {
+            // a dump must never break a probe
+        }
+        foreach (var (label, dx, dz) in new[] { ("east(+x)", 1f, 0f), ("west(-x)", -1f, 0f), ("south(+z)", 0f, 1f), ("north(-z)", 0f, -1f) })
+        {
+            sb.Append($" | {label}: ");
+            var hits = new List<string>();
+            for (var dist = 0.5f; dist <= 4.01f; dist += 0.5f)
+            {
+                if (WallAt(px + dx * dist, pz + dz * dist, py))
+                {
+                    hits.Add($"{dist:0.0} m");
+                }
+            }
+
+            sb.Append(hits.Count == 0 ? "open" : $"wall at {string.Join(",", hits)}");
+        }
+
+        if (_nav.Walls == null)
+        {
+            sb.Append(" (no walls.bin placed)");
+        }
+
+        return sb.ToString();
+    }
+
+    private bool TryGetTargetPos(out Vector3 pos)
+    {
+        pos = default;
+        if (_record?.TargetA == null || !_items.TryGetValue(_record.TargetA.Value, out var seen))
+        {
+            return false;
+        }
+
+        pos = seen.Pos;
+        return true;
+    }
+
+    private bool WallAt(float x, float z, float y)
+    {
+        var w = _nav.Walls;
+        if (w == null)
+        {
+            return false;
+        }
+
+        for (var o = 0; o + 8 < w.Length; o += 9)
+        {
+            float ax = w[o], az = w[o + 2], bx = w[o + 3], bz = w[o + 5], cx = w[o + 6], cz2 = w[o + 8];
+            var det = (bz - cz2) * (ax - cx) + (cx - bx) * (az - cz2);
+            if (Math.Abs(det) < 1e-9f)
+            {
+                continue;
+            }
+
+            float l1 = ((bz - cz2) * (x - cx) + (cx - bx) * (z - cz2)) / det;
+            float l2 = ((cz2 - az) * (x - cx) + (ax - cx) * (z - cz2)) / det;
+            if (l1 < -0.001f || l2 < -0.001f || 1 - l1 - l2 < -0.001f)
+            {
+                continue;
+            }
+
+            var h = l1 * w[o + 1] + l2 * w[o + 4] + (1 - l1 - l2) * w[o + 7];
+            if (h >= y + 0.3f && h <= y + 1.9f)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>One saved mission terminal, missionterminal.json beside the executable (AOBuddy10's shape).</summary>

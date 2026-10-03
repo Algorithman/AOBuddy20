@@ -760,6 +760,40 @@ public sealed class OverlandGrid : IWalkGrid
         }
     }
 
+    // A runtime version of the exit discs, for a spot the server PUTS the body on without the
+    // zoning data knowing it: the mission door. The bot lands there on every mission exit and can
+    // relog standing at it - walls.bin stamps the whole door assembly solid and a mission entrance
+    // is no zoning exit, so nothing kept its cells open (owner, 2026-10-03: back out of a mission,
+    // every route out of the entrance pocket failed "walled off" - the pocket reached 8 m out).
+    public void Reopen(Vector3 at, float radius)
+    {
+        int cx = CellX(at.X), cz = CellZ(at.Z);
+        int r = (int)Math.Ceiling(radius / Cell);
+        for (var dz = -r; dz <= r; dz++)
+        {
+            for (var dx = -r; dx <= r; dx++)
+            {
+                int x = cx + dx, z = cz + dz;
+                if (!In(x, z) || dx * dx + dz * dz > r * r)
+                {
+                    continue;
+                }
+
+                int k = z * _w + x;
+                _blocked[k] = false;
+                if (_ch[k] != 0f)
+                {
+                    _terrainTop?.Remove(k);
+                }
+
+                for (int f = 0; f < FloorCount(k); f++)
+                {
+                    _blockedFl.Remove(((long)k << FloorShift) | f);
+                }
+            }
+        }
+    }
+
     // ---- queries ------------------------------------------------------------------------------------------
 
     private int CellX(float x) => (int)Math.Floor(x / Cell);
@@ -865,6 +899,58 @@ public sealed class OverlandGrid : IWalkGrid
     }
 
     /// <summary>
+    ///     The nearest (floor, cell) that can be stood on, ring by ring out to maxR metres: the open cell's open
+    ///     floor closest to p's height, preferring the nearer ring, then the smaller height gap. For a body
+    ///     standing on cells whose floors are all stamped blocked (a mission-entrance disc) - the walk has to
+    ///     start somewhere, and the server's SetPos takes over from the first step. Null when there is none.
+    /// </summary>
+    private (int floor, int cell)? NearestOpenFloor(Vector3 p, float maxR, HashSet<int> extra)
+    {
+        int cx = CellX(p.X), cz = CellZ(p.Z);
+        int R = (int)Math.Ceiling(maxR / Cell);
+        for (var r = 0; r <= R; r++)
+        {
+            (int floor, int cell)? best = null;
+            float bd = float.MaxValue;
+            for (int dz = -r; dz <= r; dz++)
+            {
+                for (int dx = -r; dx <= r; dx++)
+                {
+                    int x = cx + dx, z = cz + dz;
+                    if (Math.Max(Math.Abs(dx), Math.Abs(dz)) != r || x < 0 || z < 0 || x >= _w || z >= _h ||
+                        !Open(x, z, extra))
+                    {
+                        continue;
+                    }
+
+                    int cell = z * _w + x;
+                    for (int i = 0; i < FloorCount(cell); i++)
+                    {
+                        if (!FloorOpen(cell, i))
+                        {
+                            continue;
+                        }
+
+                        float d = Math.Abs(FloorH(cell, i) - p.Y);
+                        if (best == null || d < bd)
+                        {
+                            bd = d;
+                            best = (i, cell);
+                        }
+                    }
+                }
+            }
+
+            if (best.HasValue)
+            {
+                return best;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
     ///     A walkable path from a to within reach metres of b (ground heights on the points), smoothed to its
     ///     corners. The start snaps to the nearest open cell within snap metres. The path ends at the first open
     ///     cell within reach of b. The first point is a itself; the last is b when b's cell is open and
@@ -898,8 +984,21 @@ public sealed class OverlandGrid : IWalkGrid
         int startFloor = NearestFloor(startCell, a.Y);
         if (startFloor < 0)
         {
-            why = "every floor under me is blocked";
-            return null;
+            // The body can stand where the data has nothing open to stand on: a mission entrance
+            // is no zoning exit, so KeepExitsOpen reopens no disc for it and walls.bin stamps the
+            // whole door assembly solid (owner, 2026-10-03: relogged standing 1.3 m from the
+            // mission door, "every floor under me is blocked" for every goal). The body IS there
+            // and the server walks it - seed from the nearest open floor there is, and the
+            // server's SetPos takes over from the first step.
+            var f = NearestOpenFloor(a, snap, extra);
+            if (f == null)
+            {
+                why = "every floor under me is blocked";
+                return null;
+            }
+
+            startFloor = f.Value.floor;
+            startCell = f.Value.cell;
         }
 
         long start = ((long)startCell << FloorShift) | startFloor;
