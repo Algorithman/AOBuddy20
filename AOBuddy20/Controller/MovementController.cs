@@ -1854,7 +1854,18 @@ public sealed class MovementController : IPacketConsumer
             return y;
         }
 
-        h += _yBias;
+        // THE BIAS IS A LAND WAGE (Varmint Woods 600, 2026-10-03 17:49): it lifts our claims onto the
+        // server's decks above the heightfield - and it must NEVER ride into the water. There the bed
+        // comes back as bed + bias, which hovers just UNDER the liquid plane, so neither the floating
+        // nor the swim branch of WalkStep fires and the wade claim sits below the server's surface:
+        // every step into the river refused, the body pinned on the bank, wedged through four yanks.
+        // Over water the raw bed and the absolute SwimY plane rule.
+        var wet = _nav.Nav?.Ground != null ? _nav.Nav.Ground.SwimY(x, z, 0.05f) : double.NaN;
+        if (double.IsNaN(wet))
+        {
+            h += _yBias;
+        }
+
         return Math.Abs(h - y) > 4f ? y : h; // a jump of more than 4 m is a roof or a cave, not our floor
     }
 
