@@ -3,7 +3,7 @@
 // Project: AOBuddy20
 // Filename: NavData.cs
 //
-// Last modified: 2026-10-01
+// Last modified: 2026-10-03
 // Created:       2026-10-01 (ported from AOBuddy10 AOBuddyNav.cs)
 //
 // Long live OmniCell and AOBuddy
@@ -231,7 +231,14 @@ public sealed class AOBuddyNav
     /// <summary>
     ///     The floor height under (x, z) nearest to a known height y (the character's own Y, say):
     ///     tiles/heightfield first, then collision triangles. NaN when nothing is under the point.
+    ///     OUTDOOR ANCHOR (owner, 2026-10-03: "y is off, too high" - the walk staircased up the
+    ///     trees): with a heightfield, a collision floor more than AnchorMetres above or below it is
+    ///     a branch or a canopy, not the ground under a walker, and is not a candidate. The
+    ///     heightfield itself always is - it is the top surface, so bridge decks and wall walks sit
+    ///     IN it. Dungeons (no heightfield) consider everything, as before.
     /// </summary>
+    public const double AnchorMetres = 1.5;
+
     public double FloorNear(double x, double y, double z, out string source)
     {
         double best = double.NaN;
@@ -245,9 +252,10 @@ public sealed class AOBuddyNav
             }
         }
 
+        double anchor = Ground?.HeightAt(x, z) ?? double.NaN;
         if (Ground != null)
         {
-            Consider(Ground.HeightAt(x, z), "ground");
+            Consider(anchor, "ground");
         }
 
         if (Dungeon != null)
@@ -255,7 +263,7 @@ public sealed class AOBuddyNav
             foreach (var rm in Dungeon.Rooms)
             {
                 double h = Dungeon.FloorHeight(rm, x, z);
-                if (!double.IsNaN(h))
+                if (!double.IsNaN(h) && (double.IsNaN(anchor) || Math.Abs(h - anchor) <= AnchorMetres))
                 {
                     Consider(h, "room " + rm.Index + (rm.Name.Length > 0 ? " " + rm.Name : ""));
                 }
@@ -266,7 +274,10 @@ public sealed class AOBuddyNav
         {
             foreach (double h in Collision.HeightsUnder(x, z))
             {
-                Consider(h, "collision");
+                if (double.IsNaN(anchor) || Math.Abs(h - anchor) <= AnchorMetres)
+                {
+                    Consider(h, "collision");
+                }
             }
         }
 
@@ -1628,6 +1639,146 @@ public sealed class NavCollision
                 }
             }
         }
+    }
+
+    // ---- exact line clearance ------------------------------------------------------------------------------
+
+    /// <summary>
+    ///     True when any kept triangle crosses the walk line (x0,z0)->(x1,z1) inside the body band the
+    ///     caller's h(t) describes: h is the FLOOR height along the line at parameter t (0..1), and a
+    ///     triangle blocks where its height at the crossing reaches into [h(t)+low, h(t)+high]. The test
+    ///     is EXACT - segment-vs-edge crossings, not point samples - so a perfectly vertical wall (a
+    ///     zero-width projection no point sample ever lands inside, which TriContains was blind to)
+    ///     blocks the line it physically crosses (owner, 2026-10-03: "pathfinds but runs at/through
+    ///     walls"). Triangles are found through the 8 m buckets along the line, so the cost is the
+    ///     triangles near it, not the zone's.
+    /// </summary>
+    public bool LineBlocked(double x0, double z0, double x1, double z1, Func<double, double> h, double low, double high)
+    {
+        if (Chunks.Count == 0)
+        {
+            return false;
+        }
+
+        double len = Math.Sqrt((x1 - x0) * (x1 - x0) + (z1 - z0) * (z1 - z0));
+        if (len < 1e-6)
+        {
+            return false;
+        }
+
+        var seen = new HashSet<long>();
+        const double bucket = 8.0;
+        int steps = Math.Max(1, (int)Math.Ceiling(len / (bucket / 2)));
+        for (var s = 0; s <= steps; s++)
+        {
+            double t = (double)s / steps;
+            int bx = (int)Math.Floor((x0 + (x1 - x0) * t) / bucket), bz = (int)Math.Floor((z0 + (z1 - z0) * t) / bucket);
+            for (var dz = -1; dz <= 1; dz++)
+            {
+                for (var dx = -1; dx <= 1; dx++)
+                {
+                    if (!_buckets.TryGetValue(Key(bx + dx, bz + dz), out var l))
+                    {
+                        continue;
+                    }
+
+                    foreach (int id in l)
+                    {
+                        if (!seen.Add(id))
+                        {
+                            continue;
+                        }
+
+                        float[] v = Chunks[id >> TriBits].Verts;
+                        if (TriBlocksLine(v, (id & ((1 << TriBits) - 1)) * 9, x0, z0, x1, z1, h, low, high))
+                        {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    ///     The one-triangle core of <see cref="LineBlocked" />: does this triangle's projection cross the
+    ///     walk line inside the body band? Each of the three edges is tested as a 2D segment-segment
+    ///     crossing; a crossing on a vertical edge (a wall face) blocks over the edge's full height span,
+    ///     one on a slanted edge at the edge's interpolated height there. The fallback for a line END
+    ///     inside a non-degenerate projection (no crossing detects it) uses the triangle's whole height
+    ///     range - conservative, and a line ending inside a wall deserves it.
+    /// </summary>
+    internal static bool TriBlocksLine(float[] v, int o, double x0, double z0, double x1, double z1,
+        Func<double, double> h, double low, double high)
+    {
+        double rx = x1 - x0, rz = z1 - z0;
+        for (var k = 0; k < 3; k++)
+        {
+            int a = o + k * 3, b = o + (k + 1) % 3 * 3;
+            double ax = v[a], ay = v[a + 1], az = v[a + 2], bx = v[b], by = v[b + 1], bz = v[b + 2];
+            double sx = bx - ax, sz = bz - az;
+            double den = rx * sz - rz * sx;
+            if (Math.Abs(den) < 1e-12)
+            {
+                continue; // parallel: no single crossing (a collinear graze blocks nothing)
+            }
+
+            double t = ((ax - x0) * sz - (az - z0) * sx) / den;
+            double u = ((ax - x0) * rz - (az - z0) * rx) / den;
+            if (t < -1e-9 || t > 1 + 1e-9 || u < -1e-9 || u > 1 + 1e-9)
+            {
+                continue;
+            }
+
+            double yLo, yHi;
+            if (sx * sx + sz * sz < 1e-8)
+            {
+                yLo = Math.Min(ay, by); // the edge stands up: this (x,z) is the whole face
+                yHi = Math.Max(ay, by);
+            }
+            else
+            {
+                yLo = yHi = ay + u * (by - ay);
+            }
+
+            double bandLo = h(t) + low, bandHi = h(t) + high;
+            if (yLo <= bandHi && yHi >= bandLo)
+            {
+                return true;
+            }
+        }
+
+        // the line ends inside the projection: no edge leaves to be crossed
+        if (Covers(v, o, x1, z1))
+        {
+            double mn = Math.Min(v[o + 1], Math.Min(v[o + 4], v[o + 7]));
+            double mx = Math.Max(v[o + 1], Math.Max(v[o + 4], v[o + 7]));
+            double bandLo = h(1) + low, bandHi = h(1) + high;
+            if (mn <= bandHi && mx >= bandLo)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>Is (x, z) inside the triangle's ground projection? False for a degenerate (zero-area) one.</summary>
+    private static bool Covers(float[] v, int o, double x, double z)
+    {
+        double ax = v[o], az = v[o + 2], bx = v[o + 3], bz = v[o + 5], cx = v[o + 6], cz = v[o + 8];
+        double d = (bz - cz) * (ax - cx) + (cx - bx) * (az - cz);
+        if (Math.Abs(d) < 1e-9)
+        {
+            return false;
+        }
+
+        double l1 = ((bz - cz) * (x - cx) + (cx - bx) * (z - cz)) / d;
+        double l2 = ((cz - az) * (x - cx) + (ax - cx) * (z - cz)) / d;
+        double l3 = 1 - l1 - l2;
+        return l1 >= -0.001 && l2 >= -0.001 && l3 >= -0.001;
     }
 
     /// <summary>Heights of every kept triangle directly under world (x, z).</summary>

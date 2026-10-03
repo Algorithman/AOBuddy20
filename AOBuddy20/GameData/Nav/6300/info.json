@@ -25,6 +25,9 @@
   "heightVerifiable": true,
   "waterPlanes": [
    0
+  ],
+  "waterPolygons": [
+   39.1
   ]
  },
  "collision": {

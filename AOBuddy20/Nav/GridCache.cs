@@ -3,7 +3,7 @@
 // Project: AOBuddy20
 // Filename: GridCache.cs
 //
-// Last modified: 2026-10-01
+// Last modified: 2026-10-03
 // Created:       2026-10-01 (ported from AOBuddy10 GridCache.cs)
 //
 // Long live OmniCell and AOBuddy
@@ -29,7 +29,13 @@ namespace AOBuddy20.Nav;
 /// </summary>
 public static class GridCache
 {
-    public const int CodeVersion = 11; // 11: OverlandGrid keeps the contact exits' cells open
+    public const int CodeVersion = 12; // 12: FloorGrid's wall test is EXACT - segment-edge crossings
+                                       // (NavCollision.TriBlocksLine) instead of point samples, so a
+                                       // perfectly vertical wall (zero-width projection) blocks the
+                                       // edges it physically crosses now. Cached grids carry _noEdge
+                                       // sets from the sampling test: rebuild (owner, 2026-10-03,
+                                       // "pathfinds but runs at/through walls")
+                                       // 11: OverlandGrid keeps the contact exits' cells open
                                        // (KeepExitsOpen) - the wall-stamped shop fronts sealed proxy
                                        // landings into unroutable pockets (Newland Desert 2026-10-02)
                                        // 10: FloorGrid serializes its doorway keep-open cells and the

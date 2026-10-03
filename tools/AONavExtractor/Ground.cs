@@ -66,68 +66,91 @@ namespace AONavExtractor
         /// Desert, a level no stored plane has. Each liquid is a flat ring of 3-12 (x,z) points at one
         /// level, serialized in 12-byte rows just before the arrival table:
         ///
-        ///   [count][x1][level] [z1][x2][level] ... [z(n-1)][xn][level] [zn][2][flags]
+        ///   [count][x1][level] [z1][x2][level] ... [z(n-1)][xn][level] [zn][type][flags]
         ///
-        /// i.e. a flat ring whose consecutive points are (row.slot1, nextRow.slot0), bracketed by rows
-        /// of small flag ints. Walked backwards from the last ring's closer row; the count in the opener
-        /// row names the ring's size, which is what makes the walk unambiguous.
+        /// i.e. a flat ring whose consecutive points are (row.slot1, nextRow.slot0).
         ///
-        /// Verified against ground truth on both installs: 565's quad at 18.3 spans (2267..2416,
-        /// 1052..1180) — the owner's lake exactly; 567 Newland's one quad at 32.1 is the captured swim
-        /// (32.09); 656 Coast of Tranquility's ocean is ONE quad spanning its whole map (its fan map is
-        /// 51% water); 696 Wailing Wastes is a whole-map water table at 5.0; 655 ICC's canal at 15.41;
-        /// 695 Lush Fields' "river" is one small 9.4 quad. The acid river/pools of 565 are in here too
-        /// (the 11.9/12.4 rings in the south-east) — the record lists liquids, not just water; a ring's
-        /// level can slope slightly along a river (±0.35 m), and the max is kept.
+        /// 2026-10-03 rewrite, after the owner found a river at (2551,2188) in Varmint Woods the
+        /// extractor had missed: the old backward walk kept only the LAST ring of a record. It broke
+        /// at the first gap of unrelated record data (~450 bytes sit between 600's river block and
+        /// its last quad) and hardcoded the closer's type int as 2, while 600's river/lake uses 1
+        /// (triangle patches), 2 (quads), 3 (pentagons) and 4 (a hexagon) — 49 liquids in that one
+        /// record, one kept. Now: a forward scan over the tail region (below the plane table, where
+        /// the liquids live), each candidate validated in full — count 3-12, plausible liquid Y in
+        /// every row (real floats only: an int that strays in reads as a denormal and fails), every
+        /// coordinate under 9000, a closer of [z][1..2^21][small] — and the scan steps past each
+        /// accepted ring, so gaps cost nothing. The scan steps by TWO bytes between candidates: the
+        /// pads after odd-count rings are 6 bytes, so ring starts sit at even offsets that are not
+        /// 4-aligned (a 4-byte step lost half of 600's rings and 656's ocean). The per-row slot is
+        /// the liquid's Y at that vertex, not a constant level — Penumbra's waterfalls descend tens
+        /// of metres down their rings — so only the opener row carries the strict 0.2-300 gate and
+        /// the ring's level is the max of its rows (a flat lake repeats one Y; a river slopes a
+        /// little; a fall slopes a lot).
+        ///
+        /// Verified against ground truth: 565's quad at 18.3 spans (2267..2416, 1052..1180) — the
+        /// owner's lake exactly; 567 Newland's one quad at 32.1 is the captured swim (32.09); 656
+        /// Coast of Tranquility's ocean is ONE quad spanning its whole map (its fan map is 51%
+        /// water); 696 Wailing Wastes is a whole-map water table at 5.0; 655 ICC's canal at 15.41;
+        /// 695 Lush Fields' "river" is one small 9.4 quad; 600's river quad chain carries (2551,2188)
+        /// at 4.406 and its lake pentagon carries (2633,2576) at 4.451 — the owner's river and lake.
+        /// The acid river/pools of 565 are in here too (the 11.9/12.4 rings in the south-east) — the
+        /// record lists liquids, not just water.
         /// </summary>
         public static List<double[]> WaterPolygons(byte[] playfieldBlob)
         {
             var outl = new List<double[]>();
             int pos = playfieldBlob.Length - 4, k = 0;
             while (pos >= 4 && BitConverter.ToInt32(playfieldBlob, pos) != k) { k++; pos -= 28; }
-            int e = pos - 58;                                   // the last ring's closer row
-            while (e >= 24)
+            int start = Math.Max(12, pos - (1 << 16));          // the liquid block lives in the record's tail
+            for (int o = start; o + 48 <= pos; )
             {
-                float closerZ = BitConverter.ToSingle(playfieldBlob, e);
-                if (BitConverter.ToInt32(playfieldBlob, e + 4) != 2
-                    || Math.Abs(BitConverter.ToInt32(playfieldBlob, e + 8)) > 1 << 21
-                    || Math.Abs(closerZ) >= 9000f) break;
-                int op = -1, C = 0;
-                for (int c = 3; c <= 12; c++)
-                {
-                    int at = e - c * 12;
-                    if (at < 12 || BitConverter.ToInt32(playfieldBlob, at) != c) continue;
-                    float ox = BitConverter.ToSingle(playfieldBlob, at + 4), lv = BitConverter.ToSingle(playfieldBlob, at + 8);
-                    if (!(lv > 0.2f && lv < 300f) || Math.Abs(ox) >= 9000f) continue;
-                    bool ok = true;
-                    for (int r = 1; r < c && ok; r++)
-                        if (Math.Abs(BitConverter.ToSingle(playfieldBlob, at + r * 12)) >= 9000f
-                            || Math.Abs(BitConverter.ToSingle(playfieldBlob, at + r * 12 + 4)) >= 9000f) ok = false;
-                    if (ok) { op = at; C = c; break; }
-                }
-                if (op < 0) break;
+                int c = BitConverter.ToInt32(playfieldBlob, o);
+                if (c < 3 || c > 12 || o + (c + 1) * 12 > pos || !LevelOk(playfieldBlob, o + 8)) { o += 2; continue; }
+                if (Math.Abs(BitConverter.ToSingle(playfieldBlob, o + 4)) >= 9000f) { o += 2; continue; }
+                bool ok = true;
+                for (int r = 1; r < c && ok; r++)
+                    if (!YOk(playfieldBlob, o + r * 12 + 8)
+                        || Math.Abs(BitConverter.ToSingle(playfieldBlob, o + r * 12)) >= 9000f
+                        || Math.Abs(BitConverter.ToSingle(playfieldBlob, o + r * 12 + 4)) >= 9000f) ok = false;
+                int cl = o + c * 12;                            // the closer: [zn][type][flags]
+                if (ok && (BitConverter.ToInt32(playfieldBlob, cl + 4) < 1
+                    || BitConverter.ToInt32(playfieldBlob, cl + 4) > 1 << 21
+                    || Math.Abs(BitConverter.ToInt32(playfieldBlob, cl + 8)) > 1 << 21
+                    || Math.Abs(BitConverter.ToSingle(playfieldBlob, cl)) >= 9000f)) ok = false;
+                if (!ok) { o += 2; continue; }
                 float level = 0;
-                for (int r = 0; r < C; r++) level = Math.Max(level, BitConverter.ToSingle(playfieldBlob, op + r * 12 + 8));
-                var ring = new double[1 + 2 * C];
+                for (int r = 0; r < c; r++) level = Math.Max(level, BitConverter.ToSingle(playfieldBlob, o + r * 12 + 8));
+                var ring = new double[1 + 2 * c];
                 ring[0] = level;
-                ring[1] = BitConverter.ToSingle(playfieldBlob, op + 4);
-                ring[2] = BitConverter.ToSingle(playfieldBlob, op + 12);
-                for (int r = 1; r < C - 1; r++)
+                ring[1] = BitConverter.ToSingle(playfieldBlob, o + 4);
+                ring[2] = BitConverter.ToSingle(playfieldBlob, o + 12);
+                for (int r = 1; r < c - 1; r++)
                 {
-                    ring[1 + 2 * r] = BitConverter.ToSingle(playfieldBlob, op + r * 12 + 4);
-                    ring[2 + 2 * r] = BitConverter.ToSingle(playfieldBlob, op + (r + 1) * 12);
+                    ring[1 + 2 * r] = BitConverter.ToSingle(playfieldBlob, o + r * 12 + 4);
+                    ring[2 + 2 * r] = BitConverter.ToSingle(playfieldBlob, o + (r + 1) * 12);
                 }
-                ring[1 + 2 * (C - 1)] = BitConverter.ToSingle(playfieldBlob, op + (C - 1) * 12 + 4);
-                ring[2 + 2 * (C - 1)] = closerZ;
+                ring[1 + 2 * (c - 1)] = BitConverter.ToSingle(playfieldBlob, o + (c - 1) * 12 + 4);
+                ring[2 + 2 * (c - 1)] = BitConverter.ToSingle(playfieldBlob, cl);
                 outl.Add(ring);
-                int prev = op - 12;                              // a flag-ints row brackets each liquid
-                if (prev >= 12 && Math.Abs(BitConverter.ToInt32(playfieldBlob, prev)) < 1 << 21
-                    && Math.Abs(BitConverter.ToInt32(playfieldBlob, prev + 4)) < 1 << 21
-                    && Math.Abs(BitConverter.ToInt32(playfieldBlob, prev + 8)) < 1 << 21) prev -= 12;
-                e = prev;
+                o = cl + 12;                                    // step past the accepted ring
             }
-            outl.Reverse();
             return outl;
+        }
+
+        /// <summary>A real liquid level: a float 0.2-300 (an int in the slot reads as a denormal and fails).</summary>
+        private static bool LevelOk(byte[] b, int at) => BitConverter.ToSingle(b, at) > 0.2f && BitConverter.ToSingle(b, at) < 300f;
+
+        /// <summary>
+        ///     A row's plausible liquid Y. The per-row slot is the liquid's height AT THAT VERTEX, not a
+        ///     constant: 4320 Penumbra Forest's waterfalls run 47 -> -6.5 and 74 -> -52.5 down their rings
+        ///     (found 2026-10-03 when the strict level check dropped them), so rows accept any real
+        ///     height -1000..1000 while still failing the body-data defense: an int that strays in reads
+        ///     as a DENORMAL (under 1e-30) and fails this.
+        /// </summary>
+        private static bool YOk(byte[] b, int at)
+        {
+            float v = BitConverter.ToSingle(b, at);
+            return Math.Abs(v) > 1e-30f && Math.Abs(v) < 1000f;
         }
 
         public static Ground Read(Rdb rdb, int gid)

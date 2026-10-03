@@ -3,7 +3,7 @@
 // Project: AOBuddy20
 // Filename: OverlandGrid.cs
 //
-// Last modified: 2026-10-01
+// Last modified: 2026-10-03
 // Created:       2026-10-01 (ported from AOBuddy10 OverlandGrid.cs)
 //
 // Long live OmniCell and AOBuddy
@@ -26,6 +26,13 @@ public interface IWalkGrid
 
     /// <summary>Standable ground at p — the front-ray test that finds a doorway exit's open side.</summary>
     bool OpenAt(Vector3 p);
+
+    /// <summary>
+    ///     The STUCK ESCAPE: the grid's verdict set aside, the geometry answers — the clear straight
+    ///     line from `from` that best improves the distance to `goal` (null with why when every
+    ///     direction is walled in the real geometry too). Implemented per grid; see OverlandGrid.
+    /// </summary>
+    Vector3? Escape(Vector3 from, Vector3 goal, out string why);
 }
 
 /// <summary>
@@ -92,6 +99,11 @@ public sealed class OverlandGrid : IWalkGrid
     // Sparse: a cell with no structure on it has only the terrain floor and costs nothing extra.
     private Dictionary<int, float[]> _extra;
 
+    // The zone's walls.bin, retained for GeometryLine's exact line verdicts (Build keeps the instance
+    // it stamped from; a cache-loaded grid lazy-loads it from the folder on first need).
+    private NavCollision _walls;
+    private string _pluginDir; // set by Build only: where walls.bin lives, for GeometryLine's lazy load
+
     private OverlandGrid(int pf, float cell, int w, int h, NavGround g)
     {
         Pf = pf;
@@ -126,13 +138,15 @@ public sealed class OverlandGrid : IWalkGrid
         }
 
         var grid = new OverlandGrid(pf, cell, (int)Math.Ceiling(sizeX / cell), (int)Math.Ceiling(sizeZ / cell), g);
+        grid._pluginDir = pluginDir;
         grid.StampGround();
         grid.FillCentreHeights();
         grid.StampFloors(nav?.Collision); // structures first: the walls below block per floor
         string wp = Path.Combine(AOBuddyNav.FolderFor(pluginDir, pf), "walls.bin");
         if (File.Exists(wp))
         {
-            grid.StampWalls(NavCollision.Read(wp));
+            grid._walls = NavCollision.Read(wp); // retained: GeometryLine judges straight lines against it
+            grid.StampWalls(grid._walls);
             grid.HasWalls = true;
         }
 
@@ -1134,7 +1148,9 @@ public sealed class OverlandGrid : IWalkGrid
 
         if (!found)
         {
-            why = $"walled off: no open ground within {reach:0} m of ({b.X:0},{b.Z:0}) that I can walk to";
+            // the explored count is the diagnosis: a few hundred cells = the START is sealed (the
+            // search died where it stood); hundreds of thousands = the goal region is what's closed
+            why = $"walled off (explored {closed.Count} cells): no open ground within {reach:0} m of ({b.X:0},{b.Z:0}) that I can walk to";
             return null;
         }
 
@@ -1187,6 +1203,144 @@ public sealed class OverlandGrid : IWalkGrid
         }
 
         return pts;
+    }
+
+    /// <summary>
+    ///     Can the body walk the STRAIGHT line a->b in the real geometry, the grid's verdict aside?
+    ///     The blocked-verdict fallback (owner, 2026-10-03): a pocket sealed by the stamps - a one-cell
+    ///     doorway at a big-map cell size, a landing on stamped ground, a yank band's own cells - is
+    ///     still open in the triangles. The line walks when the terrain is under it end to end and no
+    ///     walls.bin triangle crosses the body band (EXACT segment-edge crossings, so a vertical wall
+    ///     is caught). False when the zone has no walls.bin: without it nothing can vouch for a line.
+    /// </summary>
+    public bool GeometryLine(Vector3 a, Vector3 b, out string why)
+    {
+        why = "";
+        if (_ground == null)
+        {
+            why = "no heightfield in this grid - the line cannot be vouched for";
+            return false;
+        }
+
+        _walls ??= LazyWalls();
+        if (_walls == null)
+        {
+            why = "no walls.bin for this zone - the line cannot be vouched for";
+            return false;
+        }
+
+        double dx = b.X - a.X, dz = b.Z - a.Z;
+        double len = Math.Sqrt(dx * dx + dz * dz);
+        if (len < 0.01)
+        {
+            return true;
+        }
+
+        int n = Math.Max(1, (int)Math.Ceiling(len / 0.5));
+        var floors = new List<float>(n + 1);
+        for (var s = 0; s <= n; s++)
+        {
+            double t = (double)s / n;
+            double h = _ground.HeightAt(a.X + dx * t, a.Z + dz * t);
+            if (double.IsNaN(h))
+            {
+                why = $"no terrain {t * len:0.0} m along the line (off the map)";
+                return false;
+            }
+
+            floors.Add((float)h);
+        }
+
+        if (_walls.LineBlocked(a.X, a.Z, b.X, b.Z, t => Profile(floors, t), BodyLow, BodyHigh))
+        {
+            why = "a wall crosses the line at body height";
+            return false;
+        }
+
+        return true;
+    }
+
+    // walls.bin of a cache-loaded grid (no plugin dir at Build): loaded once on first need from
+    // where the playfield's folder is. Benign race - both loaders read the same immutable content.
+    private NavCollision LazyWalls()
+    {
+        if (_pluginDir == null)
+        {
+            return null;
+        }
+
+        var wp = Path.Combine(AOBuddyNav.FolderFor(_pluginDir, Pf), "walls.bin");
+        return File.Exists(wp) ? NavCollision.Read(wp) : null;
+    }
+
+    // THE STUCK ESCAPE (owner, 2026-10-03: "we need an exacter way to pathfind if he's stuck" -
+    // the same session left the body pinned while every re-plan died in 30 ms, state the log
+    // could not name). The grid's verdict is set aside and the GEOMETRY answers: a fan of
+    // straight lines from the body, each judged by GeometryLine (terrain end to end, no wall in
+    // the band), the reachable point that best improves the distance to the goal wins. Known
+    // water costs EscapeWetPenalty extra, so a dry way round beats a straight swim when both
+    // exist. Null when every direction is walled in the real geometry too - the body is then
+    // genuinely trapped and the honest give-up stands.
+    private const float EscapeReach = 20f;
+    private const float EscapeWetPenalty = 15f;
+
+    public Vector3? Escape(Vector3 from, Vector3 goal, out string why)
+    {
+        why = "";
+        _walls ??= LazyWalls();
+        if (_walls == null)
+        {
+            why = "no walls.bin - no geometry to escape by";
+            return null;
+        }
+
+        double baseDist = Math.Sqrt((goal.X - from.X) * (goal.X - from.X) + (goal.Z - from.Z) * (goal.Z - from.Z));
+        Vector3? best = null;
+        var bestScore = float.MaxValue;
+        var clear = 0;
+        for (var deg = 0; deg < 360; deg += 15)
+        {
+            var rad = deg * Math.PI / 180.0;
+            var p = new Vector3(from.X + (float)Math.Cos(rad) * EscapeReach, from.Y,
+                from.Z + (float)Math.Sin(rad) * EscapeReach);
+            if (!GeometryLine(from, p, out _))
+            {
+                continue;
+            }
+
+            clear++;
+            var wet = _ground != null && !double.IsNaN(_ground.SwimY((from.X + p.X) / 2, (from.Z + p.Z) / 2, WadeDepth));
+            double dx = p.X - goal.X, dz = p.Z - goal.Z;
+            var score = (float)(Math.Sqrt(dx * dx + dz * dz) + (wet ? EscapeWetPenalty : 0));
+            if (score < bestScore)
+            {
+                bestScore = score;
+                best = p;
+            }
+        }
+
+        if (best == null)
+        {
+            why = "no clear line in any of 24 directions - trapped in the geometry too";
+            return null;
+        }
+
+        why = clear == 1 ? "one clear line" : $"{clear} clear lines";
+        return best;
+    }
+
+    // Piecewise-linear floor height at line parameter t over the caller's even samples.
+    private static double Profile(List<float> ys, double t)
+    {
+        double s = t * (ys.Count - 1);
+        int i = (int)s;
+        if (i >= ys.Count - 1)
+        {
+            return ys[ys.Count - 1];
+        }
+
+        double f = s - i;
+        return ys[i] * (1 - f) + ys[i + 1] * f;
     }
 
     // A thin line of cells with no wall or cliff on it (zone-line cells don't hide anything).

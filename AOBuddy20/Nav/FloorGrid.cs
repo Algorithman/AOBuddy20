@@ -3,7 +3,7 @@
 // Project: AOBuddy20
 // Filename: FloorGrid.cs
 //
-// Last modified: 2026-10-01
+// Last modified: 2026-10-03
 // Created:       2026-10-01 (ported from AOBuddy10 FloorGrid.cs)
 //
 // Long live OmniCell and AOBuddy
@@ -38,6 +38,8 @@ public sealed class FloorGrid : IWalkGrid
     private readonly Dictionary<int, float[]> _floors = new Dictionary<int, float[]>(); // cell -> floor heights, ascending
     private readonly HashSet<long> _blocked = new HashSet<long>(); // cell * 8 + floor index
     private readonly int _x0, _z0, _w, _h;
+    private NavCollision _walls; // static dungeons: the zone's walls.bin, for GeometryLine (missions use _wallTris)
+    private string _pluginDir; // set by Build only: where walls.bin lives, for GeometryLine's lazy load
 
     private FloorGrid(int pf, int x0, int z0, int w, int h)
     {
@@ -220,6 +222,7 @@ public sealed class FloorGrid : IWalkGrid
         }
 
         var grid = new FloorGrid(pf, x0, z0, w, h);
+        grid._pluginDir = pluginDir;
         grid.StampFloors(nav.Collision);
         grid.StampRoomFloors(nav.Dungeon);
         string wp = Path.Combine(AOBuddyNav.FolderFor(pluginDir, pf), "walls.bin");
@@ -231,7 +234,8 @@ public sealed class FloorGrid : IWalkGrid
             // shop's section doors walled the bot into the entrance room (Neutral Supermarket 1187,
             // 2026-10-02: half the room-to-room connections had no path across their doors).
             grid.StampDoorways(AOBuddyNav.StaticDoorways(nav.Dungeon));
-            grid.StampWalls(NavCollision.Read(wp));
+            grid._walls = NavCollision.Read(wp); // retained: GeometryLine judges straight lines against it
+            grid.StampWalls(grid._walls);
         }
 
         grid.StampHeadroom();
@@ -701,20 +705,71 @@ public sealed class FloorGrid : IWalkGrid
 
     private bool EdgeClear(int i, int j, float ha, int ni, int nj, float hb)
     {
-        int steps = Math.Max(1, (int)Math.Ceiling(Cell / 0.25f));
+        double x0 = (i + 0.5f + _x0) * Cell, z0 = (j + 0.5f + _z0) * Cell;
+        double x1 = (ni + 0.5f + _x0) * Cell, z1 = (nj + 0.5f + _z0) * Cell;
+        return !LineHitsWall(x0, z0, x1, z1, t => ha + (hb - ha) * t);
+    }
+
+    // EXACT wall clearance over a walk line (owner, 2026-10-03: "pathfinds but runs at/through
+    // walls"): the point-sampled WallHits was blind to a perfectly vertical wall - its ground
+    // projection is a zero-width sliver no sample ever lands inside (TriContains needs area). The
+    // line is tested against the wall triangles NEAR it by segment-edge crossings instead
+    // (NavCollision.TriBlocksLine): a crossing IS the wall, wherever the wall stands. h(t) is the
+    // floor height along the line; the body band rides on it.
+    private bool LineHitsWall(double x0, double z0, double x1, double z1, Func<double, double> h)
+    {
+        if (_wallTris.Count == 0)
+        {
+            return false;
+        }
+
+        double len = Math.Sqrt((x1 - x0) * (x1 - x0) + (z1 - z0) * (z1 - z0));
+        if (len < 1e-6)
+        {
+            return false;
+        }
+
+        var seen = new HashSet<float[]>();
+        int steps = Math.Max(1, (int)Math.Ceiling(len / (WallBucket / 2)));
         for (var s = 0; s <= steps; s++)
         {
-            float t = s / steps;
-            float x = ((i + 0.5f) + (ni - i) * t + _x0) * Cell;
-            float z = ((j + 0.5f) + (nj - j) * t + _z0) * Cell;
-            float h = ha + (hb - ha) * t;
-            if (WallHits(x, z, h + BodyLow, h + BodyHigh))
+            double t = (double)s / steps;
+            int bx = (int)Math.Floor((x0 + (x1 - x0) * t) / WallBucket), bz = (int)Math.Floor((z0 + (z1 - z0) * t) / WallBucket);
+            for (var dz = -1; dz <= 1; dz++)
             {
-                return false;
+                for (var dx = -1; dx <= 1; dx++)
+                {
+                    if (!_wallTris.TryGetValue(((long)(bx + dx + 4096) << 16) | (uint)(bz + dz + 4096), out var list))
+                    {
+                        continue;
+                    }
+
+                    foreach (var tri in list)
+                    {
+                        if (seen.Add(tri) && NavCollision.TriBlocksLine(tri, 0, x0, z0, x1, z1, h, BodyLow, BodyHigh))
+                        {
+                            return true;
+                        }
+                    }
+                }
             }
         }
 
-        return true;
+        return false;
+    }
+
+    // Piecewise-linear floor height at line parameter t over the caller's even samples.
+    private static double Profile(List<float> ys, double t)
+    {
+        double s = t * (ys.Count - 1);
+        int i = (int)s;
+        if (i >= ys.Count - 1)
+        {
+            return ys[ys.Count - 1];
+        }
+
+        double f = s - i;
+        return ys[i] * (1 - f) + ys[i + 1] * f;
     }
 
     private bool WallHits(float x, float z, float low, float high)
@@ -872,6 +927,130 @@ public sealed class FloorGrid : IWalkGrid
     ///     no headroom rule, no doorway exception pending - the doorway keep-open is already baked in).
     /// </summary>
     public bool WalkableAt(float x, float z, float y, float tol) => FloorAt(Key(x, z), y, tol, null) >= 0;
+
+    /// <summary>
+    ///     Can the body walk the STRAIGHT line a->b in the real geometry, the grid's verdict aside?
+    ///     The blocked-verdict fallback (owner, 2026-10-03): a plan that found no route may still be
+    ///     a straight walk the cells never saw. The line walks when there is floor to stand on every
+    ///     step (each within MaxStep of the one before: no level change, no leaving the platform)
+    ///     and no wall crosses the body band - EXACT segment-edge crossings, so a vertical wall is
+    ///     caught. Missions judge by their composed wall triangles; static dungeons by their
+    ///     walls.bin (loaded for the grid at build, or from the folder on first need); anything else
+    ///     answers false - nothing in memory can vouch for the line.
+    /// </summary>
+    public bool GeometryLine(Vector3 a, Vector3 b, out string why)
+    {
+        why = "";
+        if (_wallTris.Count == 0)
+        {
+            _walls ??= LazyWalls(); // a cache-loaded grid loads its walls.bin on first need
+            if (_walls == null)
+            {
+                why = "no wall triangles in memory - the line cannot be vouched for";
+                return false;
+            }
+        }
+
+        int startK = Key(a.X, a.Z);
+        int start = FloorAt(startK, a.Y, 2.5f, null);
+        if (start < 0)
+        {
+            why = $"no floor within 2.5 m of me at height {a.Y:0}";
+            return false;
+        }
+
+        double dx = b.X - a.X, dz = b.Z - a.Z;
+        double len = Math.Sqrt(dx * dx + dz * dz);
+        if (len < 0.01)
+        {
+            return true;
+        }
+
+        int n = Math.Max(1, (int)Math.Ceiling(len / 0.25));
+        var floors = new List<float>(n + 1) { _floors[startK][start] };
+        float y = floors[0];
+        for (var s = 1; s <= n; s++)
+        {
+            double t = (double)s / n;
+            int k = Key((float)(a.X + dx * t), (float)(a.Z + dz * t));
+            int f = FloorAt(k, y, MaxStep, null);
+            if (f < 0)
+            {
+                why = $"no floor {t * len:0.0} m along the line (a hole or a level change)";
+                return false;
+            }
+
+            y = _floors[k][f];
+            floors.Add(y);
+        }
+
+        // missions: the composed buckets; static dungeons: the whole walls.bin through NavCollision's
+        bool hit = _wallTris.Count > 0
+            ? LineHitsWall(a.X, a.Z, b.X, b.Z, t => Profile(floors, t))
+            : _walls.LineBlocked(a.X, a.Z, b.X, b.Z, t => Profile(floors, t), BodyLow, BodyHigh);
+        if (hit)
+        {
+            why = "a wall crosses the line at body height";
+            return false;
+        }
+
+        return true;
+    }
+
+    // walls.bin of a cache-loaded grid (no plugin dir at Build): loaded once on first need from
+    // where the playfield's folder is. Benign race - both loaders read the same immutable content.
+    private NavCollision LazyWalls()
+    {
+        if (_pluginDir == null)
+        {
+            return null;
+        }
+
+        var wp = Path.Combine(AOBuddyNav.FolderFor(_pluginDir, Pf), "walls.bin");
+        return File.Exists(wp) ? NavCollision.Read(wp) : null;
+    }
+
+    // THE STUCK ESCAPE, indoor form: the same fan of GeometryLine probes (see OverlandGrid). In a
+    // building most directions hit a wall within 20 m and the fan returns null - right, because
+    // indoors the doorway-splitting A* is the finer instrument and the escape is only for when it
+    // said no.
+    private const float EscapeReach = 20f;
+
+    public Vector3? Escape(Vector3 from, Vector3 goal, out string why)
+    {
+        why = "";
+        Vector3? best = null;
+        var bestScore = float.MaxValue;
+        var clear = 0;
+        for (var deg = 0; deg < 360; deg += 15)
+        {
+            var rad = deg * Math.PI / 180.0;
+            var p = new Vector3(from.X + (float)Math.Cos(rad) * EscapeReach, from.Y,
+                from.Z + (float)Math.Sin(rad) * EscapeReach);
+            if (!GeometryLine(from, p, out _))
+            {
+                continue;
+            }
+
+            clear++;
+            double dx = p.X - goal.X, dz = p.Z - goal.Z;
+            var score = (float)Math.Sqrt(dx * dx + dz * dz);
+            if (score < bestScore)
+            {
+                bestScore = score;
+                best = p;
+            }
+        }
+
+        if (best == null)
+        {
+            why = "no clear line in any of 24 directions - trapped in the geometry too";
+            return null;
+        }
+
+        why = clear == 1 ? "one clear line" : $"{clear} clear lines";
+        return best;
+    }
 
     public HashSet<int> CellsAlong(Vector3 a, Vector3 b, float radius, HashSet<int> into = null)
     {
@@ -1080,7 +1259,9 @@ public sealed class FloorGrid : IWalkGrid
 
         if (goal < 0)
         {
-            why = $"no walkway from my level to within {reach:0.0} m of ({b.X:0},{(anyLevel ? "?" : b.Y.ToString("0"))},{b.Z:0})";
+            // the explored count is the diagnosis: a few hundred cells = the START is sealed; hundreds
+            // of thousands = the goal region is what is closed
+            why = $"no walkway (explored {closed.Count} cells) from my level to within {reach:0.0} m of ({b.X:0},{(anyLevel ? "?" : b.Y.ToString("0"))},{b.Z:0})";
             return null;
         }
 
@@ -1176,6 +1357,7 @@ public sealed class FloorGrid : IWalkGrid
         float px = -(z1 - z0) / len * 0.6f, pz = (x1 - x0) / len * 0.6f; // 0.3 m either side, in cells
         int n = Math.Max(1, (int)Math.Ceiling(len * 3));
         float y = Height(n0);
+        var floors = new List<float>(n + 1) { y }; // the floor profile, for the exact wall test below
         for (int s = 1; s <= n; s++)
         {
             float t = s / (float)n, x = x0 + (x1 - x0) * t, z = z0 + (z1 - z0) * t;
@@ -1185,30 +1367,23 @@ public sealed class FloorGrid : IWalkGrid
                 return false;
             }
 
-            // A clear FLOOR line is not a clear LINE: a wall can cross it while the tiles run on
-            // - the A* respected the wall (the edge it blocks), and the smoothing must too, or
-            // the walk cuts the corner the route deliberately went around (owner, 2026-10-03:
-            // "pathfinds but runs at/through walls").
-            if (_wallTris.Count > 0)
-            {
-                int cell = Idx(x, z);
-                if (!_floors.TryGetValue(cell, out var fl2) || f >= fl2.Length)
-                {
-                    return false;
-                }
-
-                float h = fl2[f];
-                if (WallHits(x, z, h + BodyLow, h + BodyHigh))
-                {
-                    return false;
-                }
-            }
-
             y = _floors[Idx(x, z)][f];
+            floors.Add(y);
             if (FloorAt(Idx(x + px, z + pz), y, MaxStep, extra) < 0 || FloorAt(Idx(x - px, z - pz), y, MaxStep, extra) < 0)
             {
                 return false;
             }
+        }
+
+        // A clear FLOOR line is not a clear LINE: a wall can cross it while the tiles run on - the
+        // A* respected the wall (the edge it blocks), and the smoothing must too, or the walk cuts
+        // the corner the route deliberately went around. The test is EXACT segment-edge crossings,
+        // not point samples: a perfectly vertical wall is a zero-width projection no sample lands
+        // inside, and the sampled line walked straight through it (owner, 2026-10-03: "pathfinds
+        // but runs at/through walls").
+        if (_wallTris.Count > 0 && LineHitsWall(x0, z0, x1, z1, t => Profile(floors, t)))
+        {
+            return false;
         }
 
         return true;

@@ -7,10 +7,57 @@ using AOSharp.Common.GameData;
 // Nav-data probe for a dungeon playfield's walk grid and the monitor's plan rendering:
 //   gridprobe <pluginDir> <pf>                          - FindPath across every rooms.json door connection
 //   gridprobe <pluginDir> <pf> <cx> <cz> [span]         - OpenAt lattice around a world point
+//   gridprobe <pluginDir> <pf> water <x> <z> [span]      - wet/dry lattice around a world point
+//                                                          (SwimY: the liquid polygons, wade 1.0)
 //   gridprobe <pluginDir> <pf> <x1> <z1> <x2> <z2> [any]- one FindPath with its points
 //   gridprobe <pluginDir> <pf> plan <cx> <cz> [span]    - the monitor's floor-0 plan as ASCII
 //                                                         ('.' room floor, 't' threshold, '#' wall, ' ' void)
-var pluginDir = args[0];
+//   gridprobe selftest                                  - synthetic checks of the exact line-wall test
+//   gridprobe mission <poolPf> <layout.txt>             - rebuild a saved mission instance
+//                                                         (Build/mission-layout-*.txt) and sweep it
+var pluginDir = args.Length > 0 ? args[0] : "";
+
+if (args.Length > 0 && args[0] == "selftest")
+{
+    return LineSelfTest.Run();
+}
+
+if (args.Length > 0 && args[0] == "mission")
+{
+    return MissionSweep.Run(args[1], args[2], args[3]);
+}
+
+if (args.Length > 0 && args[0] == "overland")
+{
+    return OverlandProbe.Run(args[1], args);
+}
+
+if (args.Length > 2 && args[2] == "water")
+{
+    var inv = System.Globalization.CultureInfo.InvariantCulture;
+    int wPf = int.Parse(args[1], inv);
+    float wx = float.Parse(args[3], inv), wz = float.Parse(args[4], inv);
+    var span = args.Length > 5 ? float.Parse(args[5], inv) : 16f;
+    var wNav = AOBuddyNav.Load(pluginDir, wPf);
+    if (wNav?.Ground == null) { Console.WriteLine($"no ground data for pf {wPf} under {pluginDir}"); return 1; }
+    var g = wNav.Ground;
+    // The bot's own rule (OverlandGrid.WadeDepth 1.0) plus the polygon truth at any depth.
+    double floor = g.HeightAt(wx, wz), swim = g.SwimY(wx, wz, 1.0), poly = g.SwimY(wx, wz, 0);
+    Console.WriteLine($"pf {wPf} ({wx:0.0},{wz:0.0}): terrain {(double.IsNaN(floor) ? "none (off-map)" : floor.ToString("0.00") + " m")}" +
+        $", liquid polygon: {(double.IsNaN(poly) ? "none" : "y " + poly.ToString("0.00") + $" ({(poly - floor).ToString("0.00")} m over terrain)")}" +
+        $", verdict: {(double.IsNaN(swim) ? "DRY (walkable)" : $"WATER (swim, {((swim - floor).ToString("0.00"))} m deep)")}");
+    for (float z = wz + span; z >= wz - span - 1e-3f; z -= span / 8)
+    {
+        var row = "";
+        for (float x = wx - span; x <= wx + span + 1e-3f; x += span / 8)
+            row += double.IsNaN(g.HeightAt(x, z)) ? ' ' : double.IsNaN(g.SwimY(x, z, 1.0)) ? '.' : 'W';
+        Console.WriteLine($"z={z,7:0.0}  {row}");
+    }
+    Console.WriteLine($"           x {wx - span:0.0} -> {wx + span:0.0} (centre {wx}; '.' dry, 'W' water, ' ' off-map)");
+    return 0;
+}
+
+if (args.Length < 2) { Console.WriteLine("usage: gridprobe <pluginDir> <pf> [...] | gridprobe selftest | gridprobe mission <poolPf> <layout.txt>"); return 2; }
 var pf = int.Parse(args[1]);
 var nav = AOBuddyNav.Load(pluginDir, pf);
 if (nav?.Dungeon == null) { Console.WriteLine("no dungeon data"); return 1; }
@@ -153,3 +200,285 @@ foreach (var rm in d.Rooms)
 }
 Console.WriteLine($"  {ok} of {ok + fail} door connections pathable");
 return 0;
+// Synthetic checks of the exact line-wall test (NavCollision.LineBlocked), 2026-10-03. The wall
+// triangles here are hand-built, so every verdict is known: this is the regression net for the
+// geometry core the smoothing, the edge test and the geometry-direct fallback all stand on.
+internal static class LineSelfTest
+{
+    private const double Low = 0.3, High = 1.9;
+
+    // A wall face on the plane x=wx: a quad split into two triangles (vertical end edges carry the
+    // face's height span - how real wall meshes are built).
+    private static float[] Quad(float wx, float z0, float z1, float y0, float y1) => new float[]
+    {
+        wx, y0, z0, wx, y1, z0, wx, y1, z1,
+        wx, y0, z0, wx, y1, z1, wx, y0, z1,
+    };
+
+    private static bool Blocked(float[] tris, double x0, double z0, double x1, double z1, double floor = 0)
+        => NavCollision.FromTriangles(tris).LineBlocked(x0, z0, x1, z1, _ => floor, Low, High);
+
+    private static int _failed;
+
+    private static void Check(string name, bool got, bool want)
+    {
+        if (got == want)
+        {
+            Console.WriteLine($"  ok   {name}: {(got ? "BLOCK" : "clear")}");
+        }
+        else
+        {
+            _failed++;
+            Console.WriteLine($"  FAIL {name}: got {(got ? "BLOCK" : "clear")}, want {(want ? "BLOCK" : "clear")}");
+        }
+    }
+
+    public static int Run()
+    {
+        Console.WriteLine("line-wall selftest (floor 0, body band 0.3-1.9):");
+
+        // A 3 m wall across the line - the EXACTLY VERTICAL case, whose ground projection is a
+        // zero-width line and which the point-sampled test was blind to altogether.
+        var wall = Quad(5, -2, 2, 0, 3);
+        Check("vertical wall across the line", Blocked(wall, 0, 0, 10, 0), true);
+        Check("vertical wall off to the side", Blocked(wall, 0, 5, 10, 5), false);
+        Check("line parallel to the wall face", Blocked(wall, 4.9, -5, 4.9, 5), false);
+
+        // A doorway: two jambs and a lintel over a 1.6 m gap. Under it the line passes; the same
+        // line at lintel height does not (the band rides on the caller's floor).
+        var door = new float[0].Concat(Quad(5, -2, -0.8f, 0, 3)).Concat(Quad(5, 0.8f, 2, 0, 3))
+            .Concat(Quad(5, -0.8f, 0.8f, 2f, 3)).ToArray();
+        Check("doorway: through the gap", Blocked(door, 0, 0, 10, 0), false);
+        Check("doorway: the line at lintel height", Blocked(door, 0, 0, 10, 0, 1.5), true);
+
+        // A waist-high wall (1.5 m): the band catches it at floor level, and its top edge blocks a
+        // line walked one floor up.
+        Check("waist-high wall at floor 0", Blocked(Quad(5, -2, 2, 0, 1.5f), 0, 0, 10, 0), true);
+        Check("wall from 2 to 3.5 m, floor 0", Blocked(Quad(5, -2, 2, 2f, 3.5f), 0, 0, 10, 0), false);
+        Check("wall from 2 to 3.5 m, floor 1.5", Blocked(Quad(5, -2, 2, 2f, 3.5f), 0, 0, 10, 0, 1.5), true);
+
+        // A line that ENDS inside a surface's projection: no edge is left to cross - the
+        // containment fallback must catch it.
+        var slab = new float[] { 0, 1, 0, 10, 1, 0, 0, 1, 10 };
+        Check("line ends inside a slab at band height", Blocked(slab, 2, 2, 3, 2), true);
+        Check("line crossing a slab ABOVE the band", Blocked(new float[] { 0, 2.5f, 0, 10, 2.5f, 0, 0, 2.5f, 10 }, -2, 5, 12, 5), false);
+        Check("the 2.5 m slab from one floor up", Blocked(new float[] { 0, 2.5f, 0, 10, 2.5f, 0, 0, 2.5f, 10 }, -2, 5, 12, 5, 2.0), true);
+
+        Console.WriteLine(_failed == 0 ? "all line-wall checks pass" : $"{_failed} check(s) FAILED");
+        return _failed == 0 ? 0 : 1;
+    }
+}
+
+// Mission-instance sweep (2026-10-03): rebuild a saved mission from its layout dump
+// (Build/mission-layout-<pf>.txt), compose it exactly as the zone-in would, build the walk
+// grid through the REAL-3D path (the only place the exact edge test runs), then check what
+// matters: every doorway's approach/exit standoff pair must be a clear straight line, and
+// every room's doorway-to-doorway routes must path. Over-blocking walls shows up as fails.
+internal static class MissionSweep
+{
+    public static int Run(string pluginDir, string poolPfArg, string layoutPath)
+    {
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        int poolPf = int.Parse(poolPfArg, inv);
+        var pool = AOBuddyNav.Load(pluginDir, poolPf) ?? throw new Exception($"no pool data for pf {poolPf}");
+        var byName = new Dictionary<string, NavDungeon.Room>();
+        foreach (var r in pool.Dungeon.Rooms) byName[r.Name] = r;
+
+        // parse the dump: room N <PoolName> fF centre (cx,cz) y Y rot R  (de-DE comma decimals)
+        var rooms = new List<(string name, double cx, double cz, int rot)>();
+        foreach (var line in System.IO.File.ReadAllLines(layoutPath))
+        {
+            var mt = System.Text.RegularExpressions.Regex.Match(line,
+                @"room (\d+) (\S+) f(-?\d+) centre \(([\d,]+)\) y ([\d,]+) rot (\d)");
+            if (!mt.Success) continue;
+            double D(string s) => double.Parse(s.Replace(',', '.'), inv);
+            var parts = mt.Groups[4].Value.Split(',');
+            // "(11,0,64,0)" is Pos[0]=11.0, Pos[2]=64.0 in the dump's comma decimals
+            double cx = parts.Length >= 4 ? D(parts[0] + "." + parts[1]) : D(parts[0]);
+            double cz = parts.Length >= 4 ? D(parts[^2] + "." + parts[^1]) : D(parts[^1]);
+            rooms.Add((mt.Groups[2].Value, cx, cz, int.Parse(mt.Groups[6].Value)));
+        }
+
+        if (rooms.Count == 0) { Console.WriteLine("no rooms parsed from " + layoutPath); return 1; }
+
+        // invert ComposeMission's placement: ox = cx - tx - tw + 1, oz = cz - tz - th - 1
+        // (Cell 2 m, slot 10 m); Z = H - (oz + 2*th) / 10 - find the H that makes every slot land
+        // on whole numbers.
+        var tw = new int[rooms.Count];
+        var th = new int[rooms.Count];
+        var ox = new double[rooms.Count];
+        var oz = new double[rooms.Count];
+        for (var i = 0; i < rooms.Count; i++)
+        {
+            if (!byName.TryGetValue(rooms[i].name, out var pr)) { Console.WriteLine($"pool has no room '{rooms[i].name}'"); return 1; }
+            int w = pr.Rect[2] - pr.Rect[0] + 1, h = pr.Rect[3] - pr.Rect[1] + 1;
+            tw[i] = rooms[i].rot % 2 == 0 ? w : h;
+            th[i] = rooms[i].rot % 2 == 0 ? h : w;
+            int turns = ((-rooms[i].rot) % 4 + 4) % 4;
+            double tx = 1, tz = 1;
+            for (var k = 0; k < turns; k++) (tx, tz) = (-tz, tx);
+            ox[i] = rooms[i].cx - tx - tw[i] + 1;
+            oz[i] = rooms[i].cz - tz - th[i] - 1;
+        }
+
+        int bestH = -1;
+        double bestErr = double.MaxValue;
+        for (var H = 1; H <= 256; H++)
+        {
+            double err = 0;
+            for (var i = 0; i < rooms.Count; i++)
+            {
+                err += Math.Abs(ox[i] / 10 - Math.Round(ox[i] / 10));
+                err += Math.Abs(H - (oz[i] + 2 * th[i]) / 10 - Math.Round(H - (oz[i] + 2 * th[i]) / 10));
+            }
+            if (err < bestErr) { bestErr = err; bestH = H; }
+        }
+
+        if (bestErr > rooms.Count * 0.15) { Console.WriteLine($"slot reconstruction failed (err {bestErr:0.00})"); return 1; }
+        var m = new AOBuddyNav.MissionLayout
+        {
+            Instance = 14624428, TemplatePlayfield = poolPf, Width = 64, Height = bestH, WorldHeight = 12,
+        };
+        for (var i = 0; i < rooms.Count; i++)
+        {
+            m.Rooms.Add(new[] { byName[rooms[i].name].Index, 0,
+                (int)Math.Round(ox[i] / 10), (int)Math.Round(bestH - (oz[i] + 2 * th[i]) / 10), rooms[i].rot });
+        }
+
+        var nav = AOBuddyNav.ComposeMission(pluginDir, m);
+        var grid = FloorGrid.Build(pluginDir, m.Instance, nav, s => Console.WriteLine("  [grid] " + s));
+        if (nav == null || grid == null) { Console.WriteLine("compose/build failed"); return 1; }
+        Console.WriteLine("doorway meeting: " + AOBuddyNav.DoorCheck);
+
+        // 1. every doorway: standoff-in -> standoff-out must be a clear geometry line
+        int lineOk = 0, lineBad = 0;
+        foreach (var dw in nav.MissionDoorways)
+        {
+            var a = new Vector3((float)(dw.X + dw.Nx * 1.5), (float)dw.Y, (float)(dw.Z + dw.Nz * 1.5));
+            var b = new Vector3((float)(dw.X - dw.Nx * 1.5), (float)dw.Y, (float)(dw.Z - dw.Nz * 1.5));
+            if (grid.GeometryLine(a, b, out var gwhy)) lineOk++;
+            else { lineBad++; Console.WriteLine($"  doorway ({dw.X:0.0},{dw.Z:0.0}) f{dw.Floor} NOT clear: {gwhy}"); }
+        }
+        Console.WriteLine($"  doorways with a clear straight crossing: {lineOk} of {lineOk + lineBad}");
+
+        // 2. per room, doorway -> doorway through the interior must path
+        var at = new Dictionary<int, List<AOBuddyNav.Doorway>>(); // room index -> its doorways
+        foreach (var dw in nav.MissionDoorways)
+        {
+            foreach (var side in new[] { 1.5, -1.5 })
+            {
+                double px = dw.X + dw.Nx * side, pz = dw.Z + dw.Nz * side;
+                foreach (var rm in nav.Dungeon.Rooms)
+                    if (!double.IsNaN(nav.Dungeon.FloorHeight(rm, px, pz)))
+                    {
+                        if (!at.TryGetValue(rm.Index, out var l)) at[rm.Index] = l = new List<AOBuddyNav.Doorway>();
+                        l.Add(dw);
+                    }
+            }
+        }
+
+        int ok = 0, fail = 0;
+        foreach (var (rmIdx, doorways) in at)
+        {
+            var rm = nav.Dungeon.Rooms[rmIdx];
+            for (var a = 0; a < doorways.Count; a++)
+            for (var b = a + 1; b < doorways.Count; b++)
+            {
+                if (doorways[a] == doorways[b]) continue;
+                var pa = new Vector3((float)(doorways[a].X + doorways[a].Nx * 1.5), (float)doorways[a].Y, (float)(doorways[a].Z + doorways[a].Nz * 1.5));
+                var pb = new Vector3((float)(doorways[b].X + doorways[b].Nx * 1.5), (float)doorways[b].Y, (float)(doorways[b].Z + doorways[b].Nz * 1.5));
+                var pts = grid.FindPath(pa, pb, null, 3f, 2f, out var why);
+                if (pts != null) ok++;
+                else { fail++; Console.WriteLine($"  room {rm.PoolName} f{rm.Floor} door->door NO PATH - {why}"); }
+            }
+        }
+        Console.WriteLine($"  {ok} of {ok + fail} in-room door->door routes pathable");
+        return fail == 0 && lineBad == 0 ? 0 : 1;
+    }
+}
+
+// Overland replay (2026-10-03, Varmint Woods): rebuild the zone's OverlandGrid and re-run the
+// planner's own queries from a live session - the clean plan, then the same plan under a
+// simulated yank band (the cells CellsAlong(pos, walked, 1f) would blacklist). The verdicts and
+// their timings are the offline copy of what the log shows.
+internal static class OverlandProbe
+{
+    public static int Run(string pluginDir, string[] args)
+    {
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        // overland <pluginDir> <pf> <x0> <z0> <x1> <z1> [yankToX yankToZ]
+        int pf = int.Parse(args[2], inv);
+        float F(string s) => float.Parse(s, inv);
+        // args: overland <pluginDir> <pf> <x0> <z0> <x1> <z1> [yankToX yankToZ [yFrom yGoal]]
+        var from = new Vector3(F(args[3]), args.Length > 9 ? F(args[9]) : 0, F(args[4]));
+        var goal = new Vector3(F(args[5]), args.Length > 10 ? F(args[10]) : 0, F(args[6]));
+        Console.WriteLine($"from ({from.X:0.0},{from.Y:0.0},{from.Z:0.0}) -> goal ({goal.X:0.0},{goal.Y:0.0},{goal.Z:0.0})");
+        var nav = AOBuddyNav.Load(pluginDir, pf);
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var grid = OverlandGrid.Build(pluginDir, pf, nav, s => Console.WriteLine("  [grid] " + s));
+        if (grid == null) { Console.WriteLine("no overland grid"); return 1; }
+        Console.WriteLine($"grid built in {sw.ElapsedMilliseconds} ms");
+
+        var clean = grid.FindPath(from, goal, null, 15f, 3f, out var whyClean);
+        Console.WriteLine($"clean: {(clean != null ? clean.Count + " pts" : "NO PATH - " + whyClean)}");
+
+        if (args.Length >= 9)
+        {
+            var walked = new Vector3(F(args[7]), 0, F(args[8]));
+            // replicate PlanRoute's exact extra: zone-line corridors, exit discs (with its
+            // exemptions), then the yank band, then the 3 m unseal
+            try { Zoning.Load(pluginDir, s => { }); } catch { }
+            var extra = new HashSet<int>();
+            foreach (var e in Zoning.ExitsFrom(pf))
+            {
+                if (e.Kind == AOBuddy20.Enums.ExitKind.ZoneLine)
+                {
+                    grid.CellsAlong(e.A, e.B, 2f, extra);
+                }
+                else if (e.Kind != AOBuddy20.Enums.ExitKind.Line && AOBuddy20.Components.Movement.Flat(e.A, goal) > 1.5f && AOBuddy20.Components.Movement.Flat(e.A, from) > 3.5f)
+                {
+                    grid.CellsAlong(e.A, e.A, 3f, extra);
+                }
+            }
+
+            var zoneBand = extra.Count;
+            grid.CellsAlong(from, walked, 1f, extra); // the yank band: server pos -> walked-from
+            var unseal = new HashSet<int>();
+            grid.CellsAlong(from, from, 3f, unseal);
+            extra.ExceptWith(unseal);
+            Console.WriteLine($"extra: {extra.Count} blacklisted cell(s) (zoning {zoneBand}, yank band incl.)");
+            var sw2 = System.Diagnostics.Stopwatch.StartNew();
+            var banded = grid.FindPath(from, goal, extra, 15f, 3f, out var whyBand);
+            Console.WriteLine($"banded: {(banded != null ? banded.Count + " pts" : "NO PATH - " + whyBand)} in {sw2.ElapsedMilliseconds} ms");
+
+            // the geometry escape: the grid's own stuck fan, judged from this exact spot
+            var swE = System.Diagnostics.Stopwatch.StartNew();
+            var esc = grid.Escape(from, goal, out var ewhy);
+            swE.Stop();
+            Console.WriteLine(esc != null
+                ? $"geometry escape: clear line to ({esc.Value.X:0.0},{esc.Value.Z:0.0}) ({ewhy}) in {swE.ElapsedMilliseconds} ms"
+                : $"geometry escape: NONE ({ewhy}) in {swE.ElapsedMilliseconds} ms");
+
+            // the exact live re-plan `from` is unknown (the body slid after the SetPos): sweep a
+            // lattice around the yank spot and report every start that fails, with its timing
+            Console.WriteLine("from sweep (dx, dz in [-8..8] m, y 11.5 / 12.1):");
+            var fails = 0;
+            for (var dy = 11.5f; dy <= 12.11f; dy += 0.6f)
+            for (var dz = -8f; dz <= 8.01f; dz += 2f)
+            for (var dx = -8f; dx <= 8.01f; dx += 2f)
+            {
+                var p = new Vector3(from.X + dx, dy, from.Z + dz);
+                var sw3 = System.Diagnostics.Stopwatch.StartNew();
+                var r = grid.FindPath(p, goal, extra, 15f, 3f, out var whyS);
+                sw3.Stop();
+                if (r == null)
+                {
+                    fails++;
+                    Console.WriteLine($"  FAIL ({p.X:0.0},{p.Y:0.0},{p.Z:0.0}): {whyS} ({sw3.ElapsedMilliseconds} ms)");
+                }
+            }
+            Console.WriteLine(fails == 0 ? "  no failing start in the lattice" : $"  {fails} failing start(s)");
+        }
+        return 0;
+    }
+}

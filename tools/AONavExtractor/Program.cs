@@ -28,6 +28,7 @@ namespace AONavExtractor
             {
                 if (args.Length >= 1 && args[0] == "--collision-worker") return CollisionWorker(args);
                 if (args.Length >= 3 && args[0] == "--hostwater") return HostWater(args[1], int.Parse(args[2]));
+                if (args.Length >= 3 && args[0] == "--waterprobe") return WaterProbe(args[1], int.Parse(args[2]));
                 if (args.Length >= 3 && args[0] == "--grounddump") return HostGround(args[1], int.Parse(args[2]));
                 if (args.Length >= 3 && args[0] == "--tilemapdump") return TileMapDump(args[1], int.Parse(args[2]));
                 if (args.Length >= 3 && args[0] == "--saavick") return SaavicksMap.Run(args);
@@ -320,6 +321,31 @@ namespace AONavExtractor
         }
 
         static void ZeroMem(IntPtr p, int n) { for (int i = 0; i < n; i += 8) Marshal.WriteInt64(p, i, 0); }
+
+        /// <summary>
+        /// waterprobe: the record's liquid polygons as Ground.WaterPolygons now sees them (no DLLs,
+        /// pure RDB read) — the quick check of a zone's water before/after an extractor change.
+        /// </summary>
+        static int WaterProbe(string client, int pf)
+        {
+            string db = Path.Combine(client, "cd_image", "data", "db");
+            using (var rdb = new Rdb(db))
+            {
+                if (!rdb.Has(1000001, pf)) { Console.WriteLine($"pf {pf}: no 1000001 record"); return 1; }
+                byte[] blob = rdb.Read(1000001, pf);
+                var planes = Ground.WaterPlanes(blob);
+                var polys = Ground.WaterPolygons(blob);
+                Console.WriteLine($"pf {pf}: record {blob.Length} B, {planes.Length} plane(s) [{string.Join("/", planes.Select(y => y.ToString("0.##")))}], {polys.Count} liquid polygon(s):");
+                foreach (var w in polys)
+                {
+                    int n = (w.Length - 1) / 2;
+                    var xs = new double[n]; var zs = new double[n];
+                    for (int i = 0; i < n; i++) { xs[i] = w[1 + 2 * i]; zs[i] = w[2 + 2 * i]; }
+                    Console.WriteLine($"  lvl {w[0],7:0.###}  n={n}  x[{xs.Min(),7:0.#}..{xs.Max(),7:0.#}] z[{zs.Min(),7:0.#}..{zs.Max(),7:0.#}]");
+                }
+            }
+            return 0;
+        }
 
         // ---------------------------------------------------------------- tilemapdump: the client's own tile->texture answer
 

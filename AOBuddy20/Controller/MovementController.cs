@@ -3,7 +3,7 @@
 // Project: AOBuddy20
 // Filename: MovementController.cs
 //
-// Last modified: 2026-10-01
+// Last modified: 2026-10-03
 // Created:       2026-09-30 10:09
 //
 // Long live OmniCell and AOBuddy
@@ -126,6 +126,28 @@ public sealed class MovementController : IPacketConsumer
     private const float YankMetres = 5f;
     private const int MaxYanks = 3;
 
+    // Grid-route plan failures in a row before the goal is given up (the overland reopen loop):
+    // a plan that finds no route walks nothing, so no yank ever lands - without this counter a
+    // sealed-in body re-plans at forty plans a second forever (Varmint Woods, 2026-10-03).
+    private const int MaxNoRoute = 5;
+
+    // How far the geometry outranks the grid: a failed plan this close to the goal gets its straight
+    // line judged against the real triangles (GeometryLine) before the stamps' verdict stands. The
+    // grid's near-field failures - a one-cell doorway at big-map cell size, a landing on stamped
+    // ground, the yank band's own cells - are all inside this radius; beyond it, long-range routing
+    // is the grid's job and the stamps steer the long way around.
+    private const float GeometryLineMaxMeters = 25f;
+
+    // Escape legs in a row before the escapes are declared circling (a pocket walked round in
+    // 20 m hops would never terminate otherwise); the give-up path takes over after that.
+    private const int MaxEscapes = 6;
+
+    // How long the SAME goal stays refused after a no-route give-up: the mission travel tick
+    // re-sets the identical goal 1-5 ms after the give-up, which turned the give-up into a
+    // 30-plans-a-second loop (Varmint Woods 2026-10-03 14:41). Within the cooldown the goal is
+    // not accepted, and the escape legs get the time to actually walk.
+    private const float GiveUpCooldownSeconds = 6f;
+
     // Server's CurrentMovementMode (Stat 173) values — OmniCell MoveModes (AOBuddy10 Main.cs:48-50). A
     // character in a SEATED mode cannot move: the server rejects every move packet and snaps him back
     // to where he sat. You log out by sitting, so you can log back in seated.
@@ -162,6 +184,11 @@ public sealed class MovementController : IPacketConsumer
     private Vector3? _pendingCorrection; // SetPos the walk thread will apply
     private bool _pendingYank; // that SetPos overrode a big drift: hold and re-plan after applying
     private int _yanks; // yanks on the current goal (reset when a new goal is set)
+    private int _noRoute; // consecutive grid-route plan failures (reset when a route is found)
+    private int _escapes; // consecutive geometry escape legs (reset when a route is found)
+    private int _giveUpPf = -1; // the goal the last no-route give-up abandoned,
+    private Vector3 _giveUpGoal; // ...refused again for GiveUpCooldownSeconds (the re-set loop)
+    private double _giveUpAt = -1;
     private bool _driftHeld; // the drift guard is holding the body
     private double _holdWalkUntil = -1; // post-zone / post-yank: no walking before this (wet clock)
 
@@ -338,12 +365,26 @@ public sealed class MovementController : IPacketConsumer
     {
         lock (_goallock)
         {
+            // THE GIVE-UP COOLDOWN: the same goal refused for a while after its no-route give-up.
+            // The mission travel tick re-sets the identical goal 1-5 ms after the give-up, and
+            // that re-set was the 30-plans-a-second loop (Varmint Woods 2026-10-03 14:41). A
+            // moved goal, another playfield, or an expired cooldown passes untouched.
+            var since = _wetClock.Elapsed.TotalSeconds - _giveUpAt;
+            if (_giveUpPf == playfieldId && since >= 0 && since < GiveUpCooldownSeconds &&
+                Movement.Flat(_giveUpGoal, desiredGoal) < 1f)
+            {
+                _logger.LogDebug($"Goal refused for {GiveUpCooldownSeconds - since:0.0} s more: the priority {priority} " +
+                                 $"goal at ({desiredGoal.X:0.0} {desiredGoal.Z:0.0}) was given up {since:0.0} s ago (no route).");
+                return;
+            }
+
             goals[(int)priority] = new GoalLocation
             {
                 Position = desiredGoal,
                 PlayfieldId = playfieldId,
                 ArriveRadius = arriveRadius,
             };
+            _escapes = 0;
             _logger.LogDebug($"Goal set: priority {priority} ({(int)priority}), playfield {playfieldId}, " +
                              $"arrive {arriveRadius:0.0} m, ({desiredGoal.X:0.0} {desiredGoal.Y:0.0} {desiredGoal.Z:0.0}).");
         }
@@ -369,6 +410,7 @@ public sealed class MovementController : IPacketConsumer
         }
 
         _yanks = 0; // a fresh order starts with a clean yank count
+        _noRoute = 0;
     }
 
     /// <summary>The owner's sit command: stop (goals go) and sit. The posture track follows the order.</summary>
@@ -887,6 +929,7 @@ public sealed class MovementController : IPacketConsumer
             _routePrio = -1;
             _routePf = -1;
             _stuckCells.Clear();
+            _serverNo.Clear(); // its cells are grid-local keys: last playfield's marks are noise here
             _stuck.Reset();
             _logger.LogInformation($"Movement: playfield {_pf}, run state cleared (server stopped).");
             lock (_poslock)
@@ -1168,11 +1211,24 @@ public sealed class MovementController : IPacketConsumer
 
         var dir = flat.Normalize();
 
-        // WATER - the captured client's contract: probe just ahead for the surface verdict.
+        // WATER - the captured client's contract: probe just ahead for the surface verdict. The
+        // SWIM GAIT is part of the verdict, not just the speed: deep water refuses run-mode steps
+        // outright and the server holds the body on the shore (Newland lake, 2026-09-24 20:46) -
+        // so the verdict comes from the data AND from the gait we are already in (a river the
+        // liquids never mapped reads dry forever, and only EnterSwim gets it crossed; Varmint
+        // Woods 2026-10-03 15:00, pinned at (2541.9,2175.4) under corrections alone).
         var probe = Math.Min(dist, WadeProbeMeters);
         var plane = _nav.Nav?.Ground != null
             ? _nav.Nav.Ground.SwimY(pos.X + dir.X * probe, pos.Z + dir.Z * probe, WadeDepth)
             : double.NaN;
+        if (double.IsNaN(plane) && _movement.Swimming)
+        {
+            // data-dry water we are already swimming: the surface is the server's last word on
+            // our height (fresh corrections), or our own height standing in for it
+            var fresh = _wetClock.Elapsed.TotalSeconds - _wetYAt < 8;
+            plane = fresh ? _wetY : pos.Y;
+        }
+
         var inWater = !double.IsNaN(plane);
         var speed = inWater ? RunVelocity(snap) * SwimSpeedFactor : RunVelocity(snap);
         var step = Movement.CappedStep(speed, dt, MaxStep, dist);
@@ -1217,6 +1273,20 @@ public sealed class MovementController : IPacketConsumer
             {
                 nextY = sf;
             }
+        }
+        else if (_movement.Swimming && _nav.Nav?.Ground != null &&
+                 double.IsNaN(_nav.Nav.Ground.SwimY(nx, nz, WadeDepth)) && floorY > pos.Y - 0.6f &&
+                 now - _wetYAt > 2)
+        {
+            // THE FAR BANK (the data-dry river, Varmint Woods 2026-10-03): the floor has risen to
+            // the body where the liquids still say dry - land under the next step, back to the run
+            // gait. AND ONLY THERE: this river's server holds the body ON the bed (floor +-0.0 in
+            // the corrections), so floor-near-body is true MID-RIVER too - the first version left
+            // the swim on the very next step and the gait flip-flopped, pinned, forever. The 2 s
+            // without a refusal correction is the tell that steps are being ACCEPTED here (refusals
+            // re-mark _wetYAt every few hundred ms). Mid-river sandbars leave the swim and the next
+            // refusal re-enters it.
+            _movement.LeaveSwim(me, SendIntervalMs);
         }
 
         var want = Movement.SafeLook(dir, me.MovementComponent.Heading);
@@ -1276,8 +1346,69 @@ public sealed class MovementController : IPacketConsumer
             }
         }
 
+        // THE BLACKLISTS NEVER SEAL THE BODY IN (owner, 2026-10-03: "shouldn't blacklist cells
+        // which were walked already"): every cell within ~3 m of where the server has us right
+        // now is walkable again for THIS plan. A yank band runs from where the server pulled us
+        // back THROUGH the cells the walk claimed - and those cells can be the body's only way
+        // out of a landing pocket: the Varmint Woods zone-in yank blacklisted the pocket's exit,
+        // and every re-plan after failed "walled off" at the goal 1.2 km on with south and east
+        // wide open - no walk, no further yank, so the give-up never came. The marks still steer
+        // the route away from refused ground further out, and a spot that is truly bad collects
+        // its yank and its share of the give-up honestly. Unsealed LAST, so it wins over every
+        // band added above (a zone line we stand on included).
+        var unseal = new HashSet<int>();
+        grid.CellsAlong(from, from, 3f, unseal);
+        extra.ExceptWith(unseal);
+
         var route = grid.FindPath(from, goalPos, extra, SnapMeters, GoalReach, out var why)
                     ?? grid.FindPath(from, goalPos, extra, SnapMeters, WideGoalReach, out _);
+
+        // THE GEOMETRY OUTRANKS THE GRID AT CLOSE RANGE (owner, 2026-10-03): a plan that found no
+        // route may still be a straight walk the cells never saw. Within reach of the goal the
+        // triangles answer exactly - floor end to end, no wall crossing the body band - and that
+        // line is the route; the blacklists don't apply to it (a sealed-in body needs its way out,
+        // the same reasoning as the unseal above). Beyond the radius the answer is the grid's.
+        if (route == null && Movement.Flat(from, goalPos) <= GeometryLineMaxMeters)
+        {
+            var gwhy = "";
+            var lineClear = grid switch
+            {
+                OverlandGrid og => og.GeometryLine(from, goalPos, out gwhy),
+                FloorGrid fg => fg.GeometryLine(from, goalPos, out gwhy),
+                _ => false,
+            };
+            if (lineClear)
+            {
+                _noRoute = 0;
+                _route = new List<Vector3> { from, goalPos };
+                _logger.LogInformation($"Movement: geometry-direct {Movement.Flat(from, goalPos):0} m line to the goal " +
+                                       $"- the grid had no route ({why}).");
+                return;
+            }
+        }
+
+        // THE STUCK ESCAPE (owner, 2026-10-03: "we need an exacter way to pathfind if he's
+        // stuck"): the grid found nothing and the goal is beyond the near line - the fan of
+        // geometry-clear lines is the exacter instrument now. One 20 m leg of real ground, then
+        // the next tick re-plans from there. Counted: MaxEscapes in a row and the escapes are
+        // circling, not escaping - the give-up below takes over honestly.
+        if (route == null)
+        {
+            var esc = grid.Escape(from, goalPos, out var ewhy);
+            if (esc.HasValue && ++_escapes <= MaxEscapes)
+            {
+                _noRoute = 0;
+                _route = new List<Vector3> { from, esc.Value };
+                _logger.LogWarning($"Movement: no grid route ({why}) - geometry escape leg to " +
+                                   $"({esc.Value.X:0.0} {esc.Value.Z:0.0}) ({_escapes}/{MaxEscapes}; {ewhy}).");
+                return;
+            }
+
+            _logger.LogWarning(esc.HasValue
+                ? $"Movement: escape leg refused - {_escapes} in a row is circling, not escaping."
+                : $"Movement: no grid route ({why}) and no geometry escape ({ewhy}).");
+        }
+
         if (route == null && grid is OverlandGrid overland)
         {
             // The body can stand where the stamps sealed the ground under it - a mission door
@@ -1287,8 +1418,25 @@ public sealed class MovementController : IPacketConsumer
             // out of the entrance pocket failed "walled off" with the body at the door).
             overland.Reopen(from, 4f);
             _routePrio = -1; // re-plan from scratch on the next tick with the reopened disc
+            if (++_noRoute >= MaxNoRoute)
+            {
+                // The reopened disc bought no route either. Re-planning on from here loops at
+                // forty plans a second forever: no walk means no yank, so the yank give-up
+                // never fires (Varmint Woods, same day - four minutes pinned between re-plans).
+                // Give the goal up the way that path does; the owner can re-order.
+                ClearDesiredGoal((ControlPriority)priority);
+                _yanks = 0;
+                _noRoute = 0;
+                _giveUpPf = _pf; // refused again for a while: the travel tick re-sets the identical
+                _giveUpGoal = goalPos; // goal in milliseconds, and that was the 30-plans loop
+                _giveUpAt = _wetClock.Elapsed.TotalSeconds;
+                _logger.LogWarning($"Movement: no grid route after {MaxNoRoute} tries ({why}) - giving up the " +
+                                   $"priority {priority} goal at ({goalPos.X:0.0} {goalPos.Z:0.0}).");
+                return;
+            }
+
             _logger.LogInformation(
-                $"Movement: no grid route to the goal ({why}) - reopened the ground I stand on; trying again.");
+                $"Movement: no grid route to the goal ({why}) - reopened the ground I stand on; trying again ({_noRoute}/{MaxNoRoute}).");
             return;
         }
 
@@ -1298,6 +1446,8 @@ public sealed class MovementController : IPacketConsumer
             return;
         }
 
+        _noRoute = 0;
+        _escapes = 0;
         _route = route;
         _logger.LogInformation($"Movement: {route.Count}-point route to the priority {priority} goal.");
     }
@@ -1825,32 +1975,62 @@ public sealed class MovementController : IPacketConsumer
             var chained = _pins > 0 && Movement.Flat(pos, _lastPin) < 1.5f && now - _lastPinAt < 5;
             _lastPin = pos;
             _lastPinAt = now;
-            if (chained && ++_pins >= 8)
+            if (chained)
             {
-                _pins = 0;
-                _yanks++;
-                _routePrio = -1;
-                _stuck.Reset();
-                _holdWalkUntil = now + YankReholdSeconds;
-                _movement.Hold(me, SendIntervalMs);
-                var grid = _nav.Grid;
-                if (grid != null)
+                _pins++;
+                // THE DATA MISSED THIS WATER (owner, 2026-10-03, the Varmint Woods river, pinned
+                // at (2541.9,2175.4) under corrections alone): run-mode steps refused with only
+                // SetPos coming back, at a spot the liquids call dry. The gait is the fix, not
+                // the blacklist - enter the swim and cross at the surface the server holds us
+                // at, from the FOURTH chained pin (every extra second pinned is a second lost).
+                // A real wedge (a fence, a crate) gains nothing from the swim, and its pins keep
+                // chaining while Swimming, so the wedge blacklist at eight still gets its turn.
+                if (_pins >= 4 && _nav.Nav?.Ground != null && !_movement.Swimming &&
+                    double.IsNaN(_nav.Nav.Ground.SwimY(pos.X, pos.Z, WadeDepth)))
                 {
-                    var a = new Vector3(pos.X - 2.5f, 0, pos.Z - 2.5f);
-                    var b = new Vector3(pos.X + 2.5f, 0, pos.Z + 2.5f);
-                    grid.CellsAlong(a, b, 2f, _stuckCells);
-                    if (_serverNo.Count > 128)
-                    {
-                        _serverNo.Clear();
-                    }
-
-                    grid.CellsAlong(a, b, 2f, _serverNo);
+                    _pins = 0;
+                    // The surface estimate is the pin itself: the server refuses steps ON the
+                    // depth-threshold contour (capture 20261003-152301: the body pinned at bed
+                    // 3.38 with the walked surface at 4.39 = bed + 1.0), so one wade-depth above
+                    // the bed we stand on IS the water level. Corrections re-anchor it from here.
+                    _wetY = pos.Y + WadeDepth;
+                    _wetYAt = now;
+                    _movement.EnterSwim(me, SendIntervalMs);
+                    _logger.LogWarning($"Movement: run steps refused at ({pos.X:0.0} {pos.Z:0.0}) where the liquids say " +
+                                       $"dry - the data missed this water; swimming at the {_wetY:0.0} surface.");
+                    _follow.BreakMirror("server correction");
+                    Movement.SetPose(me, pos, me.MovementComponent.Heading);
+                    _movement.ResetKeepGait();
+                    return; // the correction is applied; the wedge blacklist is not the cure here
                 }
 
-                _logger.LogInformation(
-                    $"Movement: the server keeps pinning me at ({pos.X:0.0} {pos.Z:0.0}) - wedged; blacklisted and re-planning (yank {_yanks}/{MaxYanks}).");
+                if (_pins >= 8)
+                {
+                    _pins = 0;
+                    _yanks++;
+                    _routePrio = -1;
+                    _stuck.Reset();
+                    _holdWalkUntil = now + YankReholdSeconds;
+                    _movement.Hold(me, SendIntervalMs);
+                    var grid = _nav.Grid;
+                    if (grid != null)
+                    {
+                        var a = new Vector3(pos.X - 2.5f, 0, pos.Z - 2.5f);
+                        var b = new Vector3(pos.X + 2.5f, 0, pos.Z + 2.5f);
+                        grid.CellsAlong(a, b, 2f, _stuckCells);
+                        if (_serverNo.Count > 128)
+                        {
+                            _serverNo.Clear();
+                        }
+
+                        grid.CellsAlong(a, b, 2f, _serverNo);
+                    }
+
+                    _logger.LogInformation(
+                        $"Movement: the server keeps pinning me at ({pos.X:0.0} {pos.Z:0.0}) - wedged; blacklisted and re-planning (yank {_yanks}/{MaxYanks}).");
+                }
             }
-            else if (!chained)
+            else
             {
                 _pins = 1;
             }

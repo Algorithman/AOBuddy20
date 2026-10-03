@@ -26,6 +26,10 @@
   "waterPlanes": [
    17,
    0
+  ],
+  "waterPolygons": [
+   51.6,
+   17.01
   ]
  },
  "collision": {
