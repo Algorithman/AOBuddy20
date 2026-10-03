@@ -2162,6 +2162,26 @@ public sealed class MovementController : IPacketConsumer
 
         var onNav = _nav.LoadedPf == _pf;
         var off = Movement.Flat(me.MovementComponent.Position, m.Position);
+
+        // WHAT the correction landed on decides what its height is worth (Varmint Woods 600, capture
+        // 2026-10-03 16:42). ON A WATER PLANE it is the swim surface holding a body, not the land floor -
+        // the far-bank SetPos pinned him at the river surface 4.406 over bed 2.87, and the +1.53 "bias"
+        // floated him a metre and a half above the terrain for the rest of the walk (the owner watched him
+        // fall that ~2 m over and over; 189 of 228 float samples had no collision floor under them). The
+        // Swimming flag misses this: riding the surface via _wetY needs no swim gait, so the flag was off
+        // when the bank correction landed. And a YANK's Y is our own claim echoed back from wherever it
+        // pulled us to, so it re-learns any float we already carry - the seq-1858 yank re-armed the same
+        // +1.53. Only a dry, in-place correction vouches for a floor offset.
+        if (bias != 0f)
+        {
+            var plane = onNav && _nav.Nav?.Ground != null
+                ? _nav.Nav.Ground.SwimY(m.Position.X, m.Position.Z, 0.05f)
+                : double.NaN;
+            if ((!double.IsNaN(plane) && Math.Abs(m.Position.Y - plane) <= 0.6f) || off >= YankMetres)
+            {
+                bias = 0f;
+            }
+        }
         if (onNav || off >= 10f || !_movement.Moving)
         {
             lock (_poslock)
